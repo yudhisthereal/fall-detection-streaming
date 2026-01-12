@@ -103,17 +103,34 @@ namespace FallDetection.Streaming.Controllers
         {
             try
             {
+                // Validate camera_id parameter
+                if (string.IsNullOrWhiteSpace(camera_id))
+                {
+                    _logger.LogWarning("GetFrame called with empty camera_id");
+                    return BadRequest(new { status = "error", message = "Camera ID is required" });
+                }
+                
+                // Validate camera_id format
+                if (!System.Text.RegularExpressions.Regex.IsMatch(camera_id, @"^camera_\d{4}$"))
+                {
+                    _logger.LogWarning("GetFrame called with invalid camera_id format: {CameraId}", camera_id);
+                    return BadRequest(new { status = "error", message = "Invalid camera ID format. Expected format: camera_XXXX" });
+                }
+
                 var frame = _cameraService.GetCameraFrame(camera_id);
                 if (frame != null && frame.Length > 0)
                 {
                     return File(frame, "image/jpeg");
                 }
-                return NotFound();
+                
+                // Camera exists but has no frame yet - return a placeholder
+                _logger.LogDebug("No frame available for camera {CameraId}", camera_id);
+                return StatusCode(204, new { status = "no_content", message = "No frame available yet for this camera" });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Get frame error");
-                return StatusCode(500, new { status = "error", message = ex.Message });
+                _logger.LogError(ex, "Get frame error for camera {CameraId}", camera_id);
+                return StatusCode(500, new { status = "error", message = "Internal server error" });
             }
         }
 

@@ -13,14 +13,24 @@ class WebRTCStreamer {
     async initialize(cameraId) {
         this.cameraId = cameraId;
         
+        // ICE servers configuration - STUN + TURN for NAT traversal
+        // NOTE: Replace with your TURN server credentials in production
+        const iceServers = [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: 'stun:stun2.l.google.com:19302' },
+            // Free public TURN servers (limited capacity)
+            // { urls: 'turn:turn.bitergia.com:3478', username: 'test', credential: 'test' },
+            // { urls: 'turn:turn.xirsys.com:80?transport=udp', username: 'guest', credential: 'guest' },
+            {
+                urls: "turn:103.150.93.198:3478?transport=udp",
+                username: "biofyntnuturn",
+                credential: "3Fyx4ENB6AQZhvmo"
+            }
+        ];
+
         const configuration = {
-            iceServers: [
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' },
-                { urls: 'stun:stun2.l.google.com:19302' },
-                // Add TURN servers for better connectivity (uncomment and configure if you have TURN servers)
-                // { urls: 'turn:your-turn-server.com:3478', username: 'user', credential: 'password' }
-            ],
+            iceServers: iceServers,
             iceCandidatePoolSize: 10
         };
 
@@ -43,6 +53,20 @@ class WebRTCStreamer {
                     candidate: event.candidate,
                     cameraId: this.cameraId
                 });
+            }
+        };
+
+        // Handle ICE connection state changes
+        this.peerConnection.oniceconnectionstatechange = () => {
+            console.log('ICE connection state:', this.peerConnection.iceConnectionState);
+            if (this.peerConnection.iceConnectionState === 'connected' || 
+                this.peerConnection.iceConnectionState === 'completed') {
+                console.log('ICE connection established');
+            } else if (this.peerConnection.iceConnectionState === 'failed' ||
+                       this.peerConnection.iceConnectionState === 'disconnected') {
+                console.log('ICE connection lost, attempting TURN fallback...');
+                // Try to get more candidates
+                this.peerConnection.restartIce();
             }
         };
 

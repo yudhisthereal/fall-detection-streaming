@@ -6,6 +6,22 @@
     <title>MaixCAM Analytics Dashboard</title>
     <link rel="stylesheet" href="~/css/style.css">
     <script src="~/lib/signalr/signalr.min.js"></script>
+    
+    <!-- Modular JavaScript files - loaded in dependency order -->
+    <script src="~/js/config.js"></script>
+    <script src="~/js/state.js"></script>
+    <script src="~/js/dom.js"></script>
+    <script src="~/js/connectionStatus.js"></script>
+    <script src="~/js/signalr.js"></script>
+    <script src="~/js/cameraManager.js"></script>
+    <script src="~/js/streamController.js"></script>
+    <script src="~/js/commandManager.js"></script>
+    <script src="~/js/uiControls.js"></script>
+    <script src="~/js/safeAreaEditor.js"></script>
+    <script src="~/js/cameraRegistration.js"></script>
+    <script src="~/js/cameraManagement.js"></script>
+    <script src="~/js/poseDisplay.js"></script>
+    <script src="~/js/algorithmInfo.js"></script>
     <script src="~/js/webrtc.js"></script>
 </head>
 <body>
@@ -79,7 +95,7 @@
 
         <!-- Algorithm Info (hidden by default) -->
         <div class="algorithm-info" id="algorithmInfo" style="display: none;">
-            <h3>📊 Fall Detection Algorithms</h3>
+            <h3>Fall Detection Algorithms</h3>
             <div class="algorithm-cards">
                 <div class="card" data-algorithm="1">
                     <h4>Method 1: BBox Motion Only</h4>
@@ -188,9 +204,12 @@
             .configureLogging(signalR.LogLevel.Information)
             .build();
 
-        // Current camera ID - synced with script.js
-        let currentCameraId = "camera_000";
-        let streamUrl = `rtmp://103.150.93.198:1935/live/${currentCameraId}`;
+        // Use global camera state from script.js - DO NOT redefine locally
+        // The currentCameraId is initialized as "camera_000" in script.js
+        // and will be updated when cameras are loaded
+        
+        // Stream URL - will be updated by switchCamera function in script.js
+        let streamUrl = `rtmp://103.150.93.198:1935/live/${window.currentCameraId}`;
         
         // Global variables for UI
         let ANALYTICS_HTTP_URL = window.location.origin;
@@ -220,10 +239,10 @@
                 });
             });
             
-            // Initialize from current camera state
+            // Initialize from current camera state using global currentCameraId
             setTimeout(function() {
                 if (window.fetchCameraState && window.currentCameraId) {
-                    fetch(ANALYTICS_HTTP_URL + '/api/stream/camera-state?camera_id=' + currentCameraId)
+                    fetch(ANALYTICS_HTTP_URL + '/api/stream/camera-state?camera_id=' + window.currentCameraId)
                         .then(function(response) { return response.json(); })
                         .then(function(flags) {
                             if (flags && flags.fall_algorithm !== undefined) {
@@ -235,7 +254,7 @@
                 }
             }, 1000);
             
-            // Start WebRTC stream
+            // Start WebRTC stream (initialized in script.js)
             if (typeof initializeWebRTC === 'function') {
                 initializeWebRTC();
             }

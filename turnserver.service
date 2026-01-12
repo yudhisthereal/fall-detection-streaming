@@ -1,0 +1,14 @@
+[Unit]
+Description=Coturn TURN Server
+After=network.target
+
+[Service]
+Type=simple
+User=turnserver
+Group=turnserver
+ExecStart=/usr/bin/turnserver -c /etc/turnserver.conf
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

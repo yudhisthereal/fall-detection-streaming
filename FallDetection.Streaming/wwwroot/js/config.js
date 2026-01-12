@@ -1,0 +1,30 @@
+// config.js - Configuration and constants
+
+const STREAMING_HTTP_URL = window.location.origin;
+
+// Valid commands whitelist for security
+const VALID_COMMANDS = [
+    'toggle_record', 'toggle_raw', 'auto_update_bg', 'set_background',
+    'toggle_safe_area_display', 'toggle_safety_check', 'toggle_hme',
+    'set_fall_algorithm', 'update_safe_areas'
+];
+
+// Command value validators
+const COMMAND_VALIDATORS = {
+    'toggle_record': (v) => typeof v === 'boolean',
+    'toggle_raw': (v) => typeof v === 'boolean',
+    'auto_update_bg': (v) => typeof v === 'boolean',
+    'set_background': (v) => typeof v === 'boolean',
+    'toggle_safe_area_display': (v) => typeof v === 'boolean',
+    'toggle_safety_check': (v) => typeof v === 'boolean',
+    'toggle_hme': (v) => typeof v === 'boolean',
+    'set_fall_algorithm': (v) => typeof v === 'number' && v >= 1 && v <= 3,
+    'update_safe_areas': (v) => Array.isArray(v)
+};
+
+// Stream settings
+const REFRESH_INTERVAL_MS = 200;
+const MAX_ERRORS = 10;
+const CONNECTION_STABILITY_DELAY = 3000;
+const CONNECTION_STATUS_DEBOUNCE = 1000;
+
