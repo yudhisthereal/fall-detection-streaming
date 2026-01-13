@@ -219,7 +219,7 @@ http_server {
 rtc_server {
     enabled on;
     listen 8000;
-    candidate \$CANDIDATE;
+    candidate 103.150.93.198;
 }
 
 vhost __defaultVhost__ {
@@ -535,4 +535,11 @@ else
   echo -e "  sudo systemctl start turnserver"
   echo -e "  sudo systemctl start $SRS_SERVICE_NAME"
   echo -e "  sudo systemctl start $SERVICE_NAME"
+  sudo systemctl daemon-reload
+  sudo systemctl restart fall-detection-streaming
+  echo "executed daemon-reload and restart fall-detection-streaming"
+  echo -e "${YELLOW}turnserver and $SRS_SERVICE_NAME are not restarted${NC}"
+  sudo systemctl status turnserver
+  sudo systemctl status srs-server
+  sudo systemctl status fall-detection-streaming
 fi

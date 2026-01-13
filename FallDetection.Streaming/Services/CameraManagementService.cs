@@ -7,9 +7,11 @@ namespace FallDetection.Streaming.Services
     {
         private readonly HttpClient _httpClient;
         private readonly Dictionary<string, CameraState> _cameraStates = new();
-        private readonly Dictionary<string, byte[]> _cameraFrames = new();
-        private readonly Dictionary<string, (DateTime timestamp, string sourceAddr, long lastUpload)> _frameInfo = new();
-        private readonly object _frameLock = new();
+        private readonly object _cameraStatesLock = new();
+        
+        // Camera ping tracking for connection status (1 second timeout)
+        private readonly Dictionary<string, long> _cameraPings = new();
+        private readonly object _cameraPingsLock = new();
         
         // Camera Registry Storage
         private Dictionary<string, CameraRegistration> _cameraRegistry = new();
@@ -378,108 +380,174 @@ namespace FallDetection.Streaming.Services
         {
             var cameras = new List<CameraInfo>();
             var currentTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            var pingTimeoutSeconds = 1;
 
-            lock (_frameLock)
+            // Clean up stale cameras first (mark as disconnected after 1 second of no ping)
+            CleanupStaleCameras(currentTime);
+
+            foreach (var kvp in _cameraRegistry)
             {
-                foreach (var (cameraId, info) in _frameInfo)
+                var cameraId = kvp.Key;
+                var cameraData = kvp.Value;
+                var lastPing = GetCameraLastPing(cameraId);
+                var isConnected = lastPing > 0 && (currentTime - lastPing) <= pingTimeoutSeconds;
+
+                cameras.Add(new CameraInfo
                 {
-                    var isConnected = (currentTime - info.lastUpload) < 30;
-                    
-                    // Check if camera is registered
-                    bool isRegistered = false;
-                    lock (_registryLock)
-                    {
-                        isRegistered = _cameraRegistry.ContainsKey(cameraId);
-                    }
-                    
-                    // If camera has sent frames but is not in registered list, it's pending
-                    bool isPending = !isRegistered;
-                    
-                    cameras.Add(new CameraInfo
-                    {
-                        CameraId = cameraId,
-                        CameraName = _cameraRegistry.TryGetValue(cameraId, out var reg) ? reg.CameraName : $"Camera {cameraId.Split('_').Last()}",
-                        IpAddress = info.sourceAddr,
-                        LastSeen = info.lastUpload,
-                        Online = isConnected,
-                        Status = isConnected ? "connected" : "disconnected",
-                        AgeSeconds = currentTime - info.lastUpload,
-                        Registered = isRegistered,
-                        Pending = isPending
-                    });
-                }
+                    CameraId = cameraId,
+                    CameraName = cameraData.CameraName,
+                    IpAddress = cameraData.IpAddress,
+                    LastSeen = lastPing > 0 ? lastPing : cameraData.LastSeen,
+                    Online = isConnected,
+                    Status = isConnected ? "connected" : "disconnected",
+                    AgeSeconds = lastPing > 0 ? currentTime - lastPing : currentTime - cameraData.LastSeen,
+                    Registered = true,
+                    Pending = false
+                });
+            }
+
+            // Also include any cameras that have sent pings but are not in registry
+            // Thread-safe access to _cameraPings
+            List<KeyValuePair<string, long>> pingEntries;
+            lock (_cameraPingsLock)
+            {
+                pingEntries = _cameraPings.ToList();
+            }
+
+            foreach (var kvp in pingEntries)
+            {
+                var cameraId = kvp.Key;
+                var lastPing = kvp.Value;
+                var isConnected = (currentTime - lastPing) <= pingTimeoutSeconds;
+
+                // Skip if already added from registry
+                if (_cameraRegistry.ContainsKey(cameraId))
+                    continue;
+
+                cameras.Add(new CameraInfo
+                {
+                    CameraId = cameraId,
+                    CameraName = $"Camera {cameraId.Split('_').Last()}",
+                    IpAddress = string.Empty,
+                    LastSeen = lastPing,
+                    Online = isConnected,
+                    Status = isConnected ? "connected" : "disconnected",
+                    AgeSeconds = currentTime - lastPing,
+                    Registered = false,
+                    Pending = true
+                });
             }
 
             return Task.FromResult(cameras);
         }
 
-        public void UpdateCameraFrame(string cameraId, byte[] frameData, string sourceAddr)
+        public void UpdateCameraPing(string cameraId)
         {
-            lock (_frameLock)
+            var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            
+            // Thread-safe update of ping timestamp
+            lock (_cameraPingsLock)
             {
-                _cameraFrames[cameraId] = frameData;
-                _frameInfo[cameraId] = (DateTime.UtcNow, sourceAddr, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
-                
-                // Update last seen in registry if camera is registered
-                lock (_registryLock)
+                _cameraPings[cameraId] = timestamp;
+            }
+            
+            // Update last seen in registry if camera is registered
+            lock (_registryLock)
+            {
+                if (_cameraRegistry.TryGetValue(cameraId, out var cameraRegistration))
                 {
-                    if (_cameraRegistry.TryGetValue(cameraId, out var cameraRegistration))
-                    {
-                        cameraRegistration.LastSeen = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-                    }
+                    cameraRegistration.LastSeen = timestamp;
                 }
             }
         }
 
-        public byte[]? GetCameraFrame(string cameraId)
+        public long GetCameraLastPing(string cameraId)
         {
-            lock (_frameLock)
+            lock (_cameraPingsLock)
             {
-                if (_cameraFrames.TryGetValue(cameraId, out var frame))
+                return _cameraPings.TryGetValue(cameraId, out var timestamp) ? timestamp : 0;
+            }
+        }
+
+        public bool IsCameraConnected(string cameraId)
+        {
+            var currentTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            var lastPing = GetCameraLastPing(cameraId);
+            return lastPing > 0 && (currentTime - lastPing) <= 1;
+        }
+
+        /// <summary>
+        /// Gets the connection status based on ping activity.
+        /// Returns true if camera has sent a ping within the last 1 second.
+        /// </summary>
+        public bool GetIsConnected(string cameraId)
+        {
+            return IsCameraConnected(cameraId);
+        }
+
+        public void CleanupStaleCameras(long? currentTime = null)
+        {
+            var now = currentTime ?? DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            var pingTimeoutSeconds = 5;
+
+            // Thread-safe removal of stale ping entries
+            lock (_cameraPingsLock)
+            {
+                // Remove or mark stale ping entries (older than 5 seconds)
+                var staleCameras = _cameraPings
+                    .Where(kvp => (now - kvp.Value) > pingTimeoutSeconds)
+                    .Select(kvp => kvp.Key)
+                    .ToList();
+
+                foreach (var cameraId in staleCameras)
                 {
-                    return frame;
+                    _cameraPings.Remove(cameraId);
                 }
-                return null;
             }
         }
 
         public CameraState? GetCameraState(string cameraId)
         {
-            if (_cameraStates.TryGetValue(cameraId, out var state))
+            lock (_cameraStatesLock)
             {
-                return state;
+                if (_cameraStates.TryGetValue(cameraId, out var state))
+                {
+                    return state;
+                }
+
+                // Initialize default state
+                var defaultState = new CameraState
+                {
+                    ControlFlags = new Dictionary<string, bool>
+                    {
+                        ["record"] = false,
+                        ["show_raw"] = false,
+                        ["set_background"] = false,
+                        ["auto_update_bg"] = false,
+                        ["show_safe_area"] = false,
+                        ["use_safety_check"] = false,
+                        ["analytics_mode"] = true,
+                        ["hme"] = false
+                    },
+                    ControlFlagsInt = new Dictionary<string, int>
+                    {
+                        ["fall_algorithm"] = 3
+                    },
+                    SafeAreas = new List<List<List<double>>>(),
+                    LastSeen = 0
+                };
+
+                _cameraStates[cameraId] = defaultState;
+                return defaultState;
             }
-
-            // Initialize default state
-            var defaultState = new CameraState
-            {
-                ControlFlags = new Dictionary<string, bool>
-                {
-                    ["record"] = false,
-                    ["show_raw"] = false,
-                    ["set_background"] = false,
-                    ["auto_update_bg"] = false,
-                    ["show_safe_area"] = false,
-                    ["use_safety_check"] = true,
-                    ["analytics_mode"] = true,
-                    ["hme"] = false
-                },
-                ControlFlagsInt = new Dictionary<string, int>
-                {
-                    ["fall_algorithm"] = 3
-                },
-                SafeAreas = new List<List<List<double>>>(),
-                Connected = false,
-                LastSeen = 0
-            };
-
-            _cameraStates[cameraId] = defaultState;
-            return defaultState;
         }
 
         public void UpdateCameraState(string cameraId, CameraState state)
         {
-            _cameraStates[cameraId] = state;
+            lock (_cameraStatesLock)
+            {
+                _cameraStates[cameraId] = state;
+            }
         }
 
         #endregion

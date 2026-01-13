@@ -1,9 +1,11 @@
 // cameraManager.js - Camera management operations
 
 const CameraManager = {
-    async loadCameraList() {
+    async syncAllCameraData(showLoading = true) {
         try {
-            if (DOMElements.cameraInfoSpan) DOMElements.cameraInfoSpan.textContent = 'Loading cameras...';
+            if (showLoading && DOMElements.cameraInfoSpan) {
+                DOMElements.cameraInfoSpan.textContent = 'Loading cameras...';
+            }
             
             // Load cameras and pending registrations simultaneously
             const [camerasResponse, pendingResponse] = await Promise.all([
@@ -42,18 +44,42 @@ const CameraManager = {
                 // Update registration button
                 DOMHelpers.updatePendingButton(AppState.pendingRegistrations.length);
                 
+                console.log(`Synced: ${AppState.availableCameras.length} cameras, ${AppState.pendingRegistrations.length} pending`);
                 return true;
             } else {
                 throw new Error(`HTTP error: cameras=${camerasResponse.status}, pending=${pendingResponse.status}`);
             }
         } catch (error) {
-            console.error('Failed to load camera list:', error);
+            console.error('Failed to sync camera data:', error);
             if (DOMElements.cameraInfoSpan) {
                 DOMElements.cameraInfoSpan.textContent = 'Connection error';
                 DOMElements.cameraInfoSpan.style.color = '#ff4444';
             }
             return false;
         }
+    },
+
+    // Alias for backward compatibility (optional)
+    async loadCameraList() {
+        return this.syncAllCameraData(true);
+    },
+
+    async loadPendingRegistrations() {
+        try {
+            const response = await fetch(`${STREAMING_HTTP_URL}/api/stream/pending`);
+            if (response.ok) {
+                const data = await response.json();
+                AppState.pendingRegistrations = data.pending || [];
+                console.log(`Loaded ${AppState.pendingRegistrations.length} pending registrations:`, AppState.pendingRegistrations);
+                DOMHelpers.updatePendingButton(AppState.pendingRegistrations.length);
+                return AppState.pendingRegistrations;
+            } else {
+                console.error(`Failed to load pending registrations: HTTP ${response.status}`);
+            }
+        } catch (error) {
+            console.error('Failed to load pending registrations:', error);
+        }
+        return [];
     },
 
     updateCameraSelect(cameras) {
@@ -218,52 +244,6 @@ const CameraManager = {
         ConnectionStatus.updateConnectionStatusDebounced(cameraId, true);
     },
 
-    async loadPendingRegistrations() {
-        try {
-            const response = await fetch(`${STREAMING_HTTP_URL}/api/stream/pending`);
-            if (response.ok) {
-                const data = await response.json();
-                AppState.pendingRegistrations = data.pending || [];
-                console.log(`Loaded ${AppState.pendingRegistrations.length} pending registrations:`, AppState.pendingRegistrations);
-                DOMHelpers.updatePendingButton(AppState.pendingRegistrations.length);
-                return AppState.pendingRegistrations;
-            } else {
-                console.error(`Failed to load pending registrations: HTTP ${response.status}`);
-            }
-        } catch (error) {
-            console.error('Failed to load pending registrations:', error);
-        }
-        return [];
-    },
-
-    async syncAllCameraData() {
-        try {
-            console.log('Syncing all camera data...');
-            
-            const [camerasResponse, pendingResponse] = await Promise.all([
-                fetch(`${STREAMING_HTTP_URL}/api/stream/cameras`),
-                fetch(`${STREAMING_HTTP_URL}/api/stream/pending`)
-            ]);
-            
-            if (camerasResponse.ok && pendingResponse.ok) {
-                const camerasData = await camerasResponse.json();
-                const pendingData = await pendingResponse.json();
-                
-                AppState.availableCameras = camerasData.cameras || [];
-                AppState.pendingRegistrations = pendingData.pending || [];
-                
-                this.updateCameraSelect(AppState.availableCameras);
-                DOMHelpers.updatePendingButton(AppState.pendingRegistrations.length);
-                
-                console.log(`Synced: ${AppState.availableCameras.length} cameras, ${AppState.pendingRegistrations.length} pending`);
-                return true;
-            }
-        } catch (error) {
-            console.error('Failed to sync camera data:', error);
-        }
-        return false;
-    },
-
     async getAvailableCameras() {
         try {
             const response = await fetch(`${STREAMING_HTTP_URL}/api/stream/cameras`);
@@ -280,4 +260,3 @@ const CameraManager = {
 
 // Export
 window.CameraManager = CameraManager;
-

@@ -8,21 +8,21 @@
     <script src="~/lib/signalr/signalr.min.js"></script>
     
     <!-- Modular JavaScript files - loaded in dependency order -->
-    <script src="~/js/config.js"></script>
-    <script src="~/js/state.js"></script>
-    <script src="~/js/dom.js"></script>
-    <script src="~/js/connectionStatus.js"></script>
-    <script src="~/js/signalr.js"></script>
-    <script src="~/js/cameraManager.js"></script>
-    <script src="~/js/streamController.js"></script>
-    <script src="~/js/commandManager.js"></script>
-    <script src="~/js/uiControls.js"></script>
-    <script src="~/js/safeAreaEditor.js"></script>
-    <script src="~/js/cameraRegistration.js"></script>
-    <script src="~/js/cameraManagement.js"></script>
-    <script src="~/js/poseDisplay.js"></script>
-    <script src="~/js/algorithmInfo.js"></script>
-    <script src="~/js/webrtc.js"></script>
+    <script src="~/js/config.js" defer></script>
+    <script src="~/js/state.js" defer></script>
+    <script src="~/js/dom.js" defer></script>
+    <script src="~/js/connectionStatus.js" defer></script>
+    <script src="~/js/signalr.js" defer></script>
+    <script src="~/js/cameraManager.js" defer></script>
+    <script src="~/js/streamController.js" defer></script>
+    <script src="~/js/commandManager.js" defer></script>
+    <script src="~/js/uiControls.js" defer></script>
+    <script src="~/js/safeAreaEditor.js" defer></script>
+    <script src="~/js/cameraRegistration.js" defer></script>
+    <script src="~/js/cameraManagement.js" defer></script>
+    <script src="~/js/poseDisplay.js" defer></script>
+    <script src="~/js/algorithmInfo.js" defer></script>
+    <script src="~/js/webrtc.js" defer></script>
 </head>
 <body>
     <h1>📹 MaixCAM Analytics Dashboard</h1>
@@ -74,7 +74,7 @@
                 <input type="checkbox" id="showSafeArea">
                 <label for="showSafeArea" class="toggle-label">Show Safe Areas</label>
                 
-                <input type="checkbox" id="useSafetyCheck" checked>
+                <input type="checkbox" id="useSafetyCheck">
                 <label for="useSafetyCheck" class="toggle-label">Use Safety Check</label>
                 
                 <input type="checkbox" id="toggleHME">
@@ -119,7 +119,7 @@
     </div> <!-- End of .main-container -->
     
     <!-- Floating button for algorithm info -->
-    <button id="showInfoBtn" class="btn btn-floating" onclick="showAlgorithmInfo()">ℹ️ Algorithm Info</button>
+    <button id="showInfoBtn" class="btn btn-floating" onclick="showAlgorithmInfo()">ℹ️ Algorithms</button>
 
     <!-- Status Indicator -->
     <div id="stream-status" class="status-indicator">

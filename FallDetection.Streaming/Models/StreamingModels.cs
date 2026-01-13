@@ -16,24 +16,23 @@ namespace FallDetection.Streaming.Models
     public class CameraState
     {
         public Dictionary<string, bool> ControlFlags { get; set; } = new();
-        public Dictionary<string, int> ControlFlagsInt { get; set; } = new(); // Added this line
+        public Dictionary<string, int> ControlFlagsInt { get; set; } = new();
         public List<List<List<double>>> SafeAreas { get; set; } = new();
         public string? IpAddress { get; set; }
         public long LastSeen { get; set; }
         public long LastReport { get; set; }
-        public bool Connected { get; set; }
+        
+        // Camera status properties reported by camera
+        public bool IsRecording { get; set; }
+        public bool RtmpConnected { get; set; }
+        public string? CameraStatus { get; set; } // "online", "offline", etc.
+        public long Timestamp { get; set; }
     }
 
     public class StreamCommand
     {
         public string Command { get; set; } = string.Empty;
         public object? Value { get; set; }
-        public string CameraId { get; set; } = string.Empty;
-    }
-
-    public class FrameUploadRequest
-    {
-        public byte[] FrameData { get; set; } = Array.Empty<byte>();
         public string CameraId { get; set; } = string.Empty;
     }
 
@@ -63,5 +62,14 @@ namespace FallDetection.Streaming.Models
         public string Candidate { get; set; } = string.Empty;
         public string SdpMid { get; set; } = string.Empty;
         public int SdpMLineIndex { get; set; }
+    }
+
+    public class StateReportRequest
+    {
+        public string CameraId { get; set; } = string.Empty;
+        public long Timestamp { get; set; }
+        public string Status { get; set; } = "online";
+        public bool IsRecording { get; set; }
+        public bool RtmpConnected { get; set; }
     }
 }
