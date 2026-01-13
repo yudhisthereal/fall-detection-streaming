@@ -523,20 +523,29 @@ h1 {
     transition: all 0.3s ease;
 }
 
-#stream-status.connected {
+/* Connected and stable - Green */
+#stream-status.connected,
+#stream-status.connected.stable {
     background: linear-gradient(135deg, #28a745 0%, #34ce57 100%);
     border-color: #2ecc71;
 }
 
+/* Disconnected - Red */
 #stream-status.disconnected {
     background: linear-gradient(135deg, #dc3545 0%, #e4606d 100%);
     border-color: #e74c3c;
 }
 
+/* Connecting (connected but not yet stable) - Yellow/Orange */
 #stream-status.connecting {
     background: linear-gradient(135deg, #ffc107 0%, #ffd54f 100%);
     border-color: #f39c12;
+    color: #333;
     animation: pulse 2s infinite;
+}
+
+#stream-status.connecting::before {
+    content: '⏳ ';
 }
 
 @keyframes pulse {

@@ -240,7 +240,6 @@ const CameraManager = {
         
         // Reset connection stability for new camera
         AppState.isConnectionStable = false;
-        await CommandManager.fetchCameraState(cameraId);
         ConnectionStatus.updateConnectionStatusDebounced(cameraId, true);
     },
 

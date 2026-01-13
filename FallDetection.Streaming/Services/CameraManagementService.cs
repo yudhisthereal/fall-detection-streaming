@@ -22,6 +22,7 @@ namespace FallDetection.Streaming.Services
         
         private readonly string _registryFilePath;
         private readonly string _pendingRegistryFilePath;
+        private readonly string _cameraStatesFilePath;
         
         // Analytics server URL for forwarding analytics data
         private readonly string _analyticsServerUrl = "http://103.127.136.213:5000";
@@ -37,6 +38,7 @@ namespace FallDetection.Streaming.Services
             var dataDir = Path.Combine(Directory.GetCurrentDirectory(), "Data");
             _registryFilePath = Path.Combine(dataDir, "camera_registry.json");
             _pendingRegistryFilePath = Path.Combine(dataDir, "pending_cam_registrations.json");
+            _cameraStatesFilePath = Path.Combine(dataDir, "camera_states.json");
             
             // Create Data directory if it doesn't exist
             if (!Directory.Exists(dataDir))
@@ -44,9 +46,10 @@ namespace FallDetection.Streaming.Services
                 Directory.CreateDirectory(dataDir);
             }
             
-            // Load existing registrations
+            // Load existing registrations and camera states
             LoadCameraRegistry();
             LoadPendingRegistrations();
+            LoadCameraStates();
         }
 
         #region Camera Registry Management
@@ -289,6 +292,10 @@ namespace FallDetection.Streaming.Services
                 // Save pending registrations and registry
                 SavePendingRegistrations();
                 SaveCameraRegistry();
+
+                // Initialize camera state with default flags and set IsRegistered=true
+                // This prevents the camera from updating its own control flags
+                InitializeCameraState(cameraId);
 
                 Console.WriteLine($"Camera registered: {cameraId} ({cameraName}) at {ipAddress}");
 
@@ -547,6 +554,166 @@ namespace FallDetection.Streaming.Services
             lock (_cameraStatesLock)
             {
                 _cameraStates[cameraId] = state;
+            }
+        }
+
+        #endregion
+
+        #region Camera States Persistence
+
+        private void LoadCameraStates()
+        {
+            try
+            {
+                if (File.Exists(_cameraStatesFilePath))
+                {
+                    var json = File.ReadAllText(_cameraStatesFilePath);
+                    
+                    using var doc = JsonDocument.Parse(json);
+                    var root = doc.RootElement;
+                    
+                    if (root.TryGetProperty("camera_states", out var statesElement))
+                    {
+                        lock (_cameraStatesLock)
+                        {
+                            var loadedStates = JsonSerializer.Deserialize<Dictionary<string, CameraState>>(statesElement.GetRawText()) ?? new();
+                            foreach (var kvp in loadedStates)
+                            {
+                                _cameraStates[kvp.Key] = kvp.Value;
+                            }
+                        }
+                    }
+                    
+                    Console.WriteLine($"Loaded {_cameraStates.Count} camera states from file");
+                }
+                else
+                {
+                    Console.WriteLine("No camera states file found, starting with empty states");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error loading camera states: {ex.Message}");
+            }
+        }
+
+        private void SaveCameraStates()
+        {
+            lock (_cameraStatesLock)
+            {
+                try
+                {
+                    var data = new Dictionary<string, object>
+                    {
+                        ["camera_states"] = _cameraStates,
+                        ["last_updated"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+                    };
+
+                    var json = JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true });
+                    File.WriteAllText(_cameraStatesFilePath, json);
+                    Console.WriteLine($"Saved camera states with {_cameraStates.Count} cameras");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error saving camera states: {ex.Message}");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Initialize camera state with default control flags. Called when camera is approved.
+        /// Sets IsRegistered=true to prevent camera from updating its own flags.
+        /// </summary>
+        public void InitializeCameraState(string cameraId)
+        {
+            lock (_cameraStatesLock)
+            {
+                var defaultState = new CameraState
+                {
+                    ControlFlags = new Dictionary<string, bool>
+                    {
+                        ["record"] = false,
+                        ["show_raw"] = false,
+                        ["set_background"] = false,
+                        ["auto_update_bg"] = false,
+                        ["show_safe_area"] = false,
+                        ["use_safety_check"] = false,
+                        ["analytics_mode"] = true,
+                        ["hme"] = false
+                    },
+                    ControlFlagsInt = new Dictionary<string, int>
+                    {
+                        ["fall_algorithm"] = 3
+                    },
+                    SafeAreas = new List<List<List<double>>>(),
+                    IsRegistered = true,
+                    BackgroundUpdatePending = false,
+                    BackgroundUpdateAcknowledged = false,
+                    LastSeen = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+                };
+
+                _cameraStates[cameraId] = defaultState;
+                SaveCameraStates();
+                Console.WriteLine($"Initialized camera state for {cameraId} with IsRegistered=true");
+            }
+        }
+
+        /// <summary>
+        /// Get the pending background update status for a camera.
+        /// Returns true if set_background=True was sent and not yet acknowledged.
+        /// </summary>
+        public bool GetPendingBackgroundUpdate(string cameraId)
+        {
+            lock (_cameraStatesLock)
+            {
+                if (_cameraStates.TryGetValue(cameraId, out var state))
+                {
+                    return state.BackgroundUpdatePending && !state.BackgroundUpdateAcknowledged;
+                }
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Acknowledge that the camera has updated its background.
+        /// Called when camera sends background_updated command.
+        /// </summary>
+        public void AcknowledgeBackgroundUpdate(string cameraId)
+        {
+            lock (_cameraStatesLock)
+            {
+                if (_cameraStates.TryGetValue(cameraId, out var state))
+                {
+                    // Only acknowledge if there was a pending update
+                    if (state.BackgroundUpdatePending)
+                    {
+                        state.BackgroundUpdateAcknowledged = true;
+                        state.BackgroundUpdatePending = false;
+                        state.ControlFlags["set_background"] = false;
+                        _cameraStates[cameraId] = state;
+                        SaveCameraStates();
+                        Console.WriteLine($"Background update acknowledged for {cameraId}");
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Set the background update as pending (called when web sends set_background=True).
+        /// </summary>
+        public void SetBackgroundUpdatePending(string cameraId)
+        {
+            lock (_cameraStatesLock)
+            {
+                if (_cameraStates.TryGetValue(cameraId, out var state))
+                {
+                    state.BackgroundUpdatePending = true;
+                    state.BackgroundUpdateAcknowledged = false;
+                    state.ControlFlags["set_background"] = true;
+                    _cameraStates[cameraId] = state;
+                    SaveCameraStates();
+                    Console.WriteLine($"Background update pending for {cameraId}");
+                }
             }
         }
 

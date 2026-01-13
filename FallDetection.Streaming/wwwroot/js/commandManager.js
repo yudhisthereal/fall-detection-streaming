@@ -82,7 +82,7 @@ const CommandManager = {
         }
     },
 
-    async fetchCameraState(cameraId) {
+    async fetchCameraState(cameraId, silent = false) {
         try {
             const response = await fetch(`${STREAMING_HTTP_URL}/api/stream/camera-state?camera_id=${cameraId}`);
             if (response.ok) {
@@ -94,14 +94,15 @@ const CommandManager = {
                 }
                 
                 if (flags._connected !== undefined) {
-                    ConnectionStatus.updateConnectionStatusDebounced(cameraId, flags._connected);
+                    // Use silent mode to avoid resetting stability when just refreshing state
+                    ConnectionStatus.updateConnectionStatusDebounced(cameraId, flags._connected, null, silent);
                 }
                 
                 return flags;
             }
         } catch (error) {
             console.error(`Failed to fetch state for ${cameraId}:`, error);
-            ConnectionStatus.updateConnectionStatusDebounced(cameraId, false);
+            ConnectionStatus.updateConnectionStatusDebounced(cameraId, false, null, silent);
         }
         return null;
     }

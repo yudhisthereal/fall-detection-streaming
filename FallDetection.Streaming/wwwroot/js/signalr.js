@@ -50,7 +50,7 @@ const SignalRManager = {
         });
 
         this.connection.on("FlagUpdate", (flags) => {
-            console.log("Received flag update from server:", flags);
+            // console.log("Received flag update from server:", flags);
             UIControls.updateFromFlags(flags);
         });
     },

@@ -93,19 +93,6 @@ const DOMHelpers = {
             }
         }
     },
-    
-    // Update status indicator
-    updateStatus(text, connected = false) {
-        if (DOMElements.statusIndicator) {
-            DOMElements.statusIndicator.textContent = text;
-            DOMElements.statusIndicator.className = '';
-            if (connected) {
-                DOMElements.statusIndicator.classList.add('connected');
-            } else {
-                DOMElements.statusIndicator.classList.add('disconnected');
-            }
-        }
-    }
 };
 
 // Export

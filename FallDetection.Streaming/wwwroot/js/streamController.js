@@ -21,13 +21,22 @@ const StreamController = {
             await window.webrtcStreamer.initialize(AppState.currentCameraId);
             
             // Listen for connection state changes
+            let lastConnectionState = null;
             window.webrtcStreamer.peerConnection.onconnectionstatechange = () => {
-                console.log('WebRTC Connection state:', window.webrtcStreamer.peerConnection.connectionState);
-                if (window.webrtcStreamer.peerConnection.connectionState === 'connected') {
-                    ConnectionStatus.updateConnectionStatusDebounced(AppState.currentCameraId, true);
-                } else if (window.webrtcStreamer.peerConnection.connectionState === 'disconnected' ||
-                           window.webrtcStreamer.peerConnection.connectionState === 'failed' ||
-                           window.webrtcStreamer.peerConnection.connectionState === 'closed') {
+                const currentState = window.webrtcStreamer.peerConnection.connectionState;
+                console.log('WebRTC Connection state:', currentState);
+                
+                // Only update if state actually changed
+                if (currentState === lastConnectionState) return;
+                lastConnectionState = currentState;
+                
+                if (currentState === 'connected') {
+                    // Use silent mode if connection was already stable to avoid UI flicker
+                    const wasStable = AppState.isConnectionStable;
+                    ConnectionStatus.updateConnectionStatusDebounced(AppState.currentCameraId, true, null, wasStable);
+                } else if (currentState === 'disconnected' ||
+                           currentState === 'failed' ||
+                           currentState === 'closed') {
                     ConnectionStatus.updateConnectionStatusDebounced(AppState.currentCameraId, false);
                 }
             };

@@ -27,6 +27,14 @@ namespace FallDetection.Streaming.Models
         public bool RtmpConnected { get; set; }
         public string? CameraStatus { get; set; } // "online", "offline", etc.
         public long Timestamp { get; set; }
+
+        // Registration state - true after camera is approved
+        public bool IsRegistered { get; set; }
+
+        // Background update tracking for set_background command
+        // set_background=True stays true until camera sends background_updated
+        public bool BackgroundUpdatePending { get; set; }
+        public bool BackgroundUpdateAcknowledged { get; set; }
     }
 
     public class StreamCommand

@@ -118,7 +118,8 @@ namespace FallDetection.Streaming.Controllers
                 var cameraState = _cameraService.GetCameraState(report.CameraId);
                 if (cameraState == null)
                 {
-                // Camera doesn't exist yet, create a new state
+                    // Camera doesn't exist yet, create a new state
+                    // Control flags and safe areas will be initialized by the server (not from camera)
                     cameraState = new CameraState
                     {
                         LastSeen = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
@@ -126,9 +127,8 @@ namespace FallDetection.Streaming.Controllers
                         CameraStatus = report.Status,
                         IsRecording = report.IsRecording,
                         RtmpConnected = report.RtmpConnected,
-                        ControlFlags = new Dictionary<string, bool>(),
-                        ControlFlagsInt = new Dictionary<string, int>(),
-                        SafeAreas = new List<List<List<double>>>()
+                        // Note: Control flags and safe areas are NOT initialized from camera report
+                        // They are managed by the server as the single source of truth
                     };
                     
                     _cameraService.UpdateCameraState(report.CameraId, cameraState);
@@ -136,7 +136,9 @@ namespace FallDetection.Streaming.Controllers
                 }
                 else
                 {
-                    // Update existing camera state with reported values
+                    // Update ONLY timestamp and status - NOT control flags or safe areas
+                    // Camera is NOT allowed to update its own control flags or safe areas
+                    // Those are managed exclusively by the server and web interface
                     cameraState.LastSeen = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
                     cameraState.LastReport = report.Timestamp;
                     cameraState.CameraStatus = report.Status;
@@ -144,7 +146,7 @@ namespace FallDetection.Streaming.Controllers
                     cameraState.RtmpConnected = report.RtmpConnected;
                     
                     _cameraService.UpdateCameraState(report.CameraId, cameraState);
-                    _logger.LogDebug("Updated camera state for {CameraId}", report.CameraId);
+                    _logger.LogDebug("Updated camera state for {CameraId} (timestamp/status only)", report.CameraId);
                 }
 
                 return Ok(new
@@ -224,9 +226,15 @@ namespace FallDetection.Streaming.Controllers
         {
             try
             {
+                // Validate CameraId is provided
+                if (string.IsNullOrWhiteSpace(command.CameraId))
+                {
+                    _logger.LogWarning("Command received with empty CameraId: {Command}", command.Command);
+                    return BadRequest(new { status = "error", message = "CameraId is required" });
+                }
+
                 _logger.LogInformation("Command received: {Command}={Value} for {CameraId}", 
                     command.Command, command.Value, command.CameraId);
-                _logger.LogInformation("Command: {Command}", command.CameraId);
 
                 var cameraState = _cameraService.GetCameraState(command.CameraId);
                 if (cameraState != null)
@@ -235,30 +243,50 @@ namespace FallDetection.Streaming.Controllers
                     {
                         case "toggle_record":
                             cameraState.ControlFlags["record"] = SafeConvertToBool(command.Value);
+                            _cameraService.UpdateCameraState(command.CameraId, cameraState);
                             break;
                         case "toggle_raw":
                             cameraState.ControlFlags["show_raw"] = SafeConvertToBool(command.Value);
+                            _cameraService.UpdateCameraState(command.CameraId, cameraState);
                             break;
                         case "auto_update_bg":
                             cameraState.ControlFlags["auto_update_bg"] = SafeConvertToBool(command.Value);
+                            _cameraService.UpdateCameraState(command.CameraId, cameraState);
                             break;
                         case "set_background":
-                            cameraState.ControlFlags["set_background"] = SafeConvertToBool(command.Value);
+                            // Use SetBackgroundUpdatePending to track the update
+                            if (SafeConvertToBool(command.Value))
+                            {
+                                _cameraService.SetBackgroundUpdatePending(command.CameraId);
+                            }
+                            else
+                            {
+                                cameraState.ControlFlags["set_background"] = false;
+                                _cameraService.UpdateCameraState(command.CameraId, cameraState);
+                            }
+                            break;
+                        case "background_updated":
+                            // Camera acknowledges that it has updated the background
+                            _cameraService.AcknowledgeBackgroundUpdate(command.CameraId);
                             break;
                         case "toggle_safe_area_display":
                             cameraState.ControlFlags["show_safe_area"] = SafeConvertToBool(command.Value);
+                            _cameraService.UpdateCameraState(command.CameraId, cameraState);
                             break;
                         case "toggle_safety_check":
                             cameraState.ControlFlags["use_safety_check"] = SafeConvertToBool(command.Value);
+                            _cameraService.UpdateCameraState(command.CameraId, cameraState);
                             break;
                         case "toggle_hme":
                             cameraState.ControlFlags["hme"] = SafeConvertToBool(command.Value);
+                            _cameraService.UpdateCameraState(command.CameraId, cameraState);
                             break;
                         case "set_fall_algorithm":
                             var algorithm = SafeConvertToInt(command.Value);
                             if (algorithm >= 1 && algorithm <= 3)
                             {
                                 cameraState.ControlFlagsInt["fall_algorithm"] = algorithm;
+                                _cameraService.UpdateCameraState(command.CameraId, cameraState);
                             }
                             break;
                         case "update_safe_areas":
@@ -268,12 +296,11 @@ namespace FallDetection.Streaming.Controllers
                                 if (safeAreas != null)
                                 {
                                     cameraState.SafeAreas = safeAreas;
+                                    _cameraService.UpdateCameraState(command.CameraId, cameraState);
                                 }
                             }
                             break;
                     }
-                    
-                    _cameraService.UpdateCameraState(command.CameraId, cameraState);
                 }
 
                 return Ok(new
@@ -353,6 +380,11 @@ namespace FallDetection.Streaming.Controllers
                     response["_rtmp_connected"] = state.RtmpConnected;
                     response["_last_report"] = state.LastReport;
                     response["_last_seen"] = state.LastSeen;
+                    
+                    // Add background update tracking
+                    response["_background_update_pending"] = state.BackgroundUpdatePending;
+                    response["_background_update_acknowledged"] = state.BackgroundUpdateAcknowledged;
+                    response["_is_registered"] = state.IsRegistered;
                     
                     return Ok(response);
                 }
