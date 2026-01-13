@@ -226,6 +226,7 @@ namespace FallDetection.Streaming.Controllers
             {
                 _logger.LogInformation("Command received: {Command}={Value} for {CameraId}", 
                     command.Command, command.Value, command.CameraId);
+                _logger.LogInformation("Command: {Command}", command.CameraId);
 
                 var cameraState = _cameraService.GetCameraState(command.CameraId);
                 if (cameraState != null)

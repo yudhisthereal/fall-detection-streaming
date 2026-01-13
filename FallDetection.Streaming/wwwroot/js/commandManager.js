@@ -64,10 +64,11 @@ const CommandManager = {
                 headers: {
                     'Content-Type': 'application/json',
                 },
+                // use CamelCase as expected by ASP.NET
                 body: JSON.stringify({
-                    camera_id: cameraId,
-                    command: validCommand,
-                    value: value
+                    CameraId: cameraId,
+                    Command: validCommand,
+                    Value: value
                 })
             });
             
