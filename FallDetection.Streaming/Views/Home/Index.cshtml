@@ -22,7 +22,7 @@
     <script src="~/js/cameraManagement.js" defer></script>
     <script src="~/js/poseDisplay.js" defer></script>
     <script src="~/js/algorithmInfo.js" defer></script>
-    <script src="~/js/webrtc.js" defer></script>
+    @* <script src="~/js/webrtc.js" defer></script> *@
 </head>
 <body>
     <h1>📹 MaixCAM Analytics Dashboard</h1>
@@ -31,7 +31,7 @@
     <div class="main-container">
         
         <!-- Stream comes first after title -->
-        <video id="streamVideo" autoplay playsinline style="width:100%; max-width:1200px; height:auto; aspect-ratio:16/9; display:block; margin:20px auto; border-radius:12px; border:2px solid var(--theme-border); background:#000;"></video>
+        <img id="streamVideo" alt="Live Stream" style="width:100%; max-width:1200px; height:auto; aspect-ratio:16/9; display:block; margin:20px auto; border-radius:12px; border:2px solid var(--theme-border); background:#000;">
 
         <!-- Camera Controls -->
         <div id="cameraControls" class="camera-controls">
@@ -196,7 +196,7 @@
         </div>
     </div>
 
-    <script src="~/js/script.js"></script>
+    <script src="~/js/script.js" defer></script>
     <script>
         // Initialize SignalR connection
         const connection = new signalR.HubConnectionBuilder()
@@ -253,11 +253,6 @@
                         });
                 }
             }, 1000);
-            
-            // Start WebRTC stream (initialized in script.js)
-            if (typeof initializeWebRTC === 'function') {
-                initializeWebRTC();
-            }
         });
     </script>
 </body>

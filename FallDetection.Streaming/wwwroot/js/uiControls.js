@@ -136,11 +136,20 @@ const UIControls = {
         if (DOMElements.setBackgroundBtn) {
             DOMElements.setBackgroundBtn.onclick = () => {
                 if (DOMElements.preview && DOMElements.popup) {
+                    // Get dimensions from the IMG element (not VIDEO)
+                    // Use naturalWidth/naturalHeight which are available on loaded images
+                    const imgElement = DOMElements.streamVideo;
+                    const width = imgElement.naturalWidth || imgElement.width || 320;
+                    const height = imgElement.naturalHeight || imgElement.height || 240;
+                    
                     const canvas = document.createElement('canvas');
-                    canvas.width = DOMElements.streamVideo.videoWidth;
-                    canvas.height = DOMElements.streamVideo.videoHeight;
+                    canvas.width = width;
+                    canvas.height = height;
                     const ctx = canvas.getContext('2d');
-                    ctx.drawImage(DOMElements.streamVideo, 0, 0);
+                    
+                    // Draw the current image frame to canvas
+                    ctx.drawImage(imgElement, 0, 0, width, height);
+                    
                     DOMElements.preview.src = canvas.toDataURL('image/jpeg');
                     DOMHelpers.showPopup(DOMElements.popup);
                 }

@@ -1,6 +1,7 @@
 // config.js - Configuration and constants
 
 const STREAMING_HTTP_URL = window.location.origin;
+const STREAMING_HTTP_HOST = "103.150.93.198";
 
 // Valid commands whitelist for security
 const VALID_COMMANDS = [

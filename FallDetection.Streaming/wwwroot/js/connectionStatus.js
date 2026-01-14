@@ -73,7 +73,10 @@ const ConnectionStatus = {
             // Only update stability if we're disconnecting
             if (!connected) {
                 AppState.isConnectionStable = false;
+                AppState.wasDisconnected = true;
                 // console.log('[ConnectionStatus] Disconnected - setting isConnectionStable=false');
+            } else if (connected) {
+                // Clear wasDisconnected flag when connected (will be checked in stability check)
             }
             
             // Update stream status UI with unified status display
@@ -134,6 +137,18 @@ const ConnectionStatus = {
             if (isCurrentCamera && currentCameraConnected) {
                 AppState.isConnectionStable = true;
                 // console.log('[ConnectionStatus] SUCCESS: Connection to ' + timerCameraId + ' is now stable');
+                
+                // If camera was disconnected, reinitialize WebRTC for better stream recovery
+                if (AppState.wasDisconnected) {
+                    // console.log('[ConnectionStatus] Camera was disconnected, reinitializing WebRTC...');
+                    AppState.wasDisconnected = false;
+                    
+                // Reinitialize stream for better recovery
+                    if (typeof StreamController !== 'undefined' && StreamController.initializeStream) {
+                        // console.log('[ConnectionStatus] Calling StreamController.initializeStream()');
+                        StreamController.initializeStream();
+                    }
+                }
                 
                 // Fetch camera state once when connection is stable
                 if (typeof CommandManager !== 'undefined' && CommandManager.fetchCameraState) {

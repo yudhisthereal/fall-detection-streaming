@@ -1,6 +1,9 @@
 // safeAreaEditor.js - Safe Area Editor functionality
 
 const SafeAreaEditor = {
+    // Track previous show_raw state for restore on popup close
+    prevShowRaw: null,
+
     async loadSafeAreasForCamera(cameraId) {
         try {
             const response = await fetch(`${STREAMING_HTTP_URL}/api/stream/safe-areas?camera_id=${cameraId}`);
@@ -14,15 +17,61 @@ const SafeAreaEditor = {
         }
     },
 
+    // Helper function to get dimensions from IMG element (not VIDEO)
+    getImageDimensions(imgElement) {
+        // Use naturalWidth/naturalHeight which are available on loaded images
+        // Fallback to width/height attributes if natural dimensions are not set
+        const width = imgElement.naturalWidth || imgElement.width || 320;
+        const height = imgElement.naturalHeight || imgElement.height || 240;
+        return { width, height };
+    },
+
+    // Helper to capture current frame from the stream IMG element
+    captureCurrentFrame() {
+        const imgElement = DOMElements.streamVideo;
+        if (!imgElement) {
+            throw new Error('Stream video element not found');
+        }
+
+        const { width, height } = this.getImageDimensions(imgElement);
+
+        if (width === 0 || height === 0) {
+            throw new Error('Stream image dimensions are zero - image may not be loaded');
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(imgElement, 0, 0, width, height);
+
+        return canvas.toDataURL('image/jpeg');
+    },
+
     async show() {
         if (!AppState.isConnected) {
             alert('Camera is disconnected. Cannot edit safe areas.');
             return;
         }
-        
+
         try {
-            await this.loadSafeAreasForCamera(AppState.currentCameraId);
-            
+            // Load existing safe areas
+            await SafeAreaEditor.loadSafeAreasForCamera(AppState.currentCameraId);
+
+            // Save current show_raw state
+            this.prevShowRaw = DOMElements.toggleRaw ? DOMElements.toggleRaw.checked : false;
+
+            // If show_raw is currently true, send command to set it to false
+            if (this.prevShowRaw) {
+                console.log('Temporarily disabling show_raw for safe area editing...');
+                await CommandManager.sendCommand("toggle_raw", false);
+
+                // Wait a bit for the frame to update with background visible
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+
+            // Take snapshot from IMG element (not VIDEO)
+            const frameDataUrl = SafeAreaEditor.captureCurrentFrame();
+
             backgroundImage = new Image();
             backgroundImage.onload = () => {
                 this.initializeCanvas();
@@ -32,15 +81,25 @@ const SafeAreaEditor = {
             };
             backgroundImage.onerror = () => {
                 alert('Failed to load background image');
+                // Restore show_raw on error
+                if (this.prevShowRaw) {
+                    CommandManager.sendCommand("toggle_raw", true);
+                    this.prevShowRaw = null;
+                }
             };
-            
-            // Get current frame for editing
-            const timestamp = Date.now();
-            backgroundImage.src = `${STREAMING_HTTP_URL}/api/stream/frame?camera_id=${AppState.currentCameraId}&t=${timestamp}`;
-            
+
+            // Set background from captured frame
+            backgroundImage.src = frameDataUrl;
+
         } catch (error) {
             console.error('Error showing safe area editor:', error);
-            alert('Failed to open safe area editor');
+            alert('Failed to open safe area editor: ' + error.message);
+
+            // Restore show_raw on error
+            if (this.prevShowRaw !== null && this.prevShowRaw !== undefined) {
+                CommandManager.sendCommand("toggle_raw", true);
+                this.prevShowRaw = null;
+            }
         }
     },
 
@@ -258,7 +317,14 @@ const SafeAreaEditor = {
     hide() {
         DOMHelpers.hidePopup(DOMElements.safeAreaPopup);
         isEditing = false;
-        
+
+        // Restore show_raw to its previous state
+        if (SafeAreaEditor.prevShowRaw === true) {
+            console.log('Restoring show_raw to true');
+            CommandManager.sendCommand("toggle_raw", true);
+        }
+        SafeAreaEditor.prevShowRaw = null;
+
         if (canvasContext) {
             DOMElements.safeAreaCanvas.removeEventListener('click', (e) => this.handleCanvasClick(e));
             DOMElements.safeAreaCanvas.removeEventListener('mousemove', (e) => this.handleCanvasMouseMove(e));

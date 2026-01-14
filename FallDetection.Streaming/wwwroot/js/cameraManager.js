@@ -230,16 +230,12 @@ const CameraManager = {
         
         StreamController.stopHTTPStream();
         
-        // Try WebRTC first, fallback to HTTP
-        try {
-            await StreamController.initializeWebRTC();
-        } catch (err) {
-            console.error("Failed to initialize WebRTC:", err);
-            StreamController.startHTTPStream();
-        }
+        // Initialize HTTP stream directly (no WebRTC fallback)
+        StreamController.initializeStream();
         
         // Reset connection stability for new camera
         AppState.isConnectionStable = false;
+        AppState.wasDisconnected = false;
         ConnectionStatus.updateConnectionStatusDebounced(cameraId, true);
     },
 

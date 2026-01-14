@@ -10,11 +10,13 @@ namespace FallDetection.Streaming.Controllers
     public class StreamController : ControllerBase
     {
         private readonly CameraManagementService _cameraService;
+        private readonly StreamingService _streamingService;
         private readonly ILogger<StreamController> _logger;
 
-        public StreamController(CameraManagementService cameraService, ILogger<StreamController> logger)
+        public StreamController(CameraManagementService cameraService, StreamingService streamingService, ILogger<StreamController> logger)
         {
             _cameraService = cameraService;
+            _streamingService = streamingService;
             _logger = logger;
         }
 
@@ -481,6 +483,112 @@ namespace FallDetection.Streaming.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Update safe areas error");
+                return StatusCode(500, new { status = "error", message = ex.Message });
+            }
+        }
+
+        #endregion
+
+        #region HTTP JPEG Streaming Endpoints
+        
+        [HttpPost("upload-frame")]
+        public async Task<IActionResult> UploadFrame()
+        {
+            try
+            {
+                // Get camera ID from header
+                var cameraId = Request.Headers["X-Camera-ID"].ToString();
+                
+                if (string.IsNullOrWhiteSpace(cameraId))
+                {
+                    _logger.LogWarning("Frame upload received without X-Camera-ID header");
+                    return BadRequest(new { status = "error", message = "X-Camera-ID header is required" });
+                }
+
+                // Validate camera ID format
+                if (!System.Text.RegularExpressions.Regex.IsMatch(cameraId, @"^camera_\d{4}$"))
+                {
+                    _logger.LogWarning("Frame upload with invalid camera_id format: {CameraId}", cameraId);
+                    return BadRequest(new { status = "error", message = "Invalid camera ID format. Expected format: camera_XXXX" });
+                }
+
+                // Read the frame data from request body
+                using var memoryStream = new MemoryStream();
+                await Request.Body.CopyToAsync(memoryStream);
+                var frameData = memoryStream.ToArray();
+
+                if (frameData.Length == 0)
+                {
+                    _logger.LogWarning("Empty frame received from {CameraId}", cameraId);
+                    return BadRequest(new { status = "error", message = "Frame data is empty" });
+                }
+
+                // Validate it's a JPEG (starts with FFD8)
+                if (frameData.Length < 2 || frameData[0] != 0xFF || frameData[1] != 0xD8)
+                {
+                    _logger.LogWarning("Invalid frame format from {CameraId} - not a JPEG", cameraId);
+                    return BadRequest(new { status = "error", message = "Frame must be JPEG format (FFD8)" });
+                }
+
+                // Store the frame
+                _streamingService.StoreFrame(cameraId, frameData);
+
+                _logger.LogDebug("Frame stored for {CameraId}, size: {Size} bytes", cameraId, frameData.Length);
+
+                return Ok(new
+                {
+                    status = "success",
+                    camera_id = cameraId,
+                    size = frameData.Length,
+                    timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Frame upload error");
+                return StatusCode(500, new { status = "error", message = ex.Message });
+            }
+        }
+
+        [HttpGet("frame")]
+        public IActionResult GetFrame([FromQuery] string camera_id)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(camera_id))
+                {
+                    _logger.LogWarning("Frame request received without camera_id query parameter");
+                    return BadRequest(new { status = "error", message = "camera_id query parameter is required" });
+                }
+
+                // Validate camera ID format
+                if (!System.Text.RegularExpressions.Regex.IsMatch(camera_id, @"^camera_\d{4}$"))
+                {
+                    _logger.LogWarning("Frame request with invalid camera_id format: {CameraId}", camera_id);
+                    return BadRequest(new { status = "error", message = "Invalid camera ID format. Expected format: camera_XXXX" });
+                }
+
+                var frameData = _streamingService.GetFrame(camera_id);
+                var frameTimestamp = _streamingService.GetFrameTimestamp(camera_id);
+
+                if (frameData == null || frameData.Length == 0)
+                {
+                    _logger.LogDebug("No frame available for {CameraId}", camera_id);
+                    return NotFound(new { status = "error", message = "No frame available for this camera" });
+                }
+
+                // Return the JPEG image with proper caching headers
+                Response.Headers.Append("Cache-Control", "no-cache, no-store, must-revalidate");
+                Response.Headers.Append("Pragma", "no-cache");
+                Response.Headers.Append("Expires", "0");
+                Response.Headers.Append("X-Camera-ID", camera_id);
+                Response.Headers.Append("X-Frame-Timestamp", frameTimestamp?.ToString() ?? "0");
+
+                return File(frameData, "image/jpeg");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Frame retrieval error for camera {CameraId}", camera_id);
                 return StatusCode(500, new { status = "error", message = ex.Message });
             }
         }

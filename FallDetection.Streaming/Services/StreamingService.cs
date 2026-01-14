@@ -15,6 +15,12 @@ namespace FallDetection.Streaming.Services
         private readonly ConcurrentDictionary<string, WebRtcOffer> _pendingOffers = new();
         private readonly ConcurrentDictionary<string, WebRtcAnswer> _pendingAnswers = new();
         
+        // HTTP JPEG frame storage: cameraId -> latest frame data
+        private readonly ConcurrentDictionary<string, byte[]> _cameraFrames = new();
+        
+        // Frame metadata: cameraId -> timestamp
+        private readonly ConcurrentDictionary<string, long> _frameTimestamps = new();
+        
         public void AddViewer(string cameraId, string connectionId)
         {
             _viewerConnections[connectionId] = cameraId;
@@ -66,6 +72,23 @@ namespace FallDetection.Streaming.Services
         public WebRtcAnswer? GetWebRtcAnswer(string cameraId)
         {
             return _pendingAnswers.TryGetValue(cameraId, out var answer) ? answer : null;
+        }
+        
+        // HTTP JPEG frame methods
+        public void StoreFrame(string cameraId, byte[] frameData)
+        {
+            _cameraFrames[cameraId] = frameData;
+            _frameTimestamps[cameraId] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        }
+        
+        public byte[]? GetFrame(string cameraId)
+        {
+            return _cameraFrames.TryGetValue(cameraId, out var frame) ? frame : null;
+        }
+        
+        public long? GetFrameTimestamp(string cameraId)
+        {
+            return _frameTimestamps.TryGetValue(cameraId, out var timestamp) ? timestamp : null;
         }
         
         public void CleanupStaleConnections()

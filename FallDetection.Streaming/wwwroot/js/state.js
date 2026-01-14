@@ -7,6 +7,7 @@ const AppState = {
     currentCameraStatus: "registered",
     isConnected: false,
     isConnectionStable: false,
+    wasDisconnected: false,
     
     // Multi-camera state
     availableCameras: [],
@@ -37,6 +38,7 @@ const AppState = {
         this.currentCameraStatus = "pending";
         this.isConnected = false;
         this.isConnectionStable = false;
+        this.wasDisconnected = false;
     },
     
     // Update camera info

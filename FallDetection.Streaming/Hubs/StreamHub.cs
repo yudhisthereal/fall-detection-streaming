@@ -59,7 +59,7 @@ namespace FallDetection.Streaming.Hubs
         {
             // Broadcast flag updates to all viewers of this camera
             await Clients.Group(cameraId).SendAsync("FlagUpdate", flags);
-            Console.WriteLine($"Flag update for camera {cameraId} broadcasted to viewers");
+            // Console.WriteLine($"Flag update for camera {cameraId} broadcasted to viewers");
         }
 
         public override async Task OnDisconnectedAsync(Exception? exception)
