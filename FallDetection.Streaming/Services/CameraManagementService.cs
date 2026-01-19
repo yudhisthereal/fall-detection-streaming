@@ -719,6 +719,118 @@ namespace FallDetection.Streaming.Services
 
         #endregion
 
+        #region Pose Tracking Data Management
+
+        /// <summary>
+        /// Store pose label for a specific camera and track
+        /// </summary>
+        public void StorePoseLabel(string cameraId, int trackId, string poseLabel, string safetyStatus, double timestamp)
+        {
+            lock (_cameraStatesLock)
+            {
+                var state = GetCameraState(cameraId);
+                if (state == null)
+                {
+                    Console.WriteLine($"Cannot store pose label: Camera {cameraId} not found");
+                    return;
+                }
+
+                var currentTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+                if (!state.TrackingData.TryGetValue(trackId, out var trackingData))
+                {
+                    trackingData = new TrackingData
+                    {
+                        TrackId = trackId,
+                        LastUpdated = currentTime
+                    };
+                    state.TrackingData[trackId] = trackingData;
+                }
+
+                trackingData.PoseLabel = poseLabel;
+                trackingData.SafetyStatus = safetyStatus;
+                trackingData.Timestamp = (long)timestamp;
+                trackingData.LastUpdated = currentTime;
+
+                UpdateCameraState(cameraId, state);
+                SaveCameraStates();
+                Console.WriteLine($"Stored pose label for camera {cameraId}, track {trackId}: {poseLabel}");
+            }
+        }
+
+        /// <summary>
+        /// Store keypoints for a specific camera and track
+        /// </summary>
+        public void StoreKeypoints(string cameraId, int trackId, List<float> keypoints, string? poseLabel, string safetyStatus, List<double>? bbox, double timestamp)
+        {
+            lock (_cameraStatesLock)
+            {
+                var state = GetCameraState(cameraId);
+                if (state == null)
+                {
+                    Console.WriteLine($"Cannot store keypoints: Camera {cameraId} not found");
+                    return;
+                }
+
+                var currentTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+                if (!state.TrackingData.TryGetValue(trackId, out var trackingData))
+                {
+                    trackingData = new TrackingData
+                    {
+                        TrackId = trackId,
+                        LastUpdated = currentTime
+                    };
+                    state.TrackingData[trackId] = trackingData;
+                }
+
+                trackingData.Keypoints = keypoints;
+                trackingData.Bbox = bbox;
+                trackingData.PoseLabel = poseLabel ?? trackingData.PoseLabel;
+                trackingData.SafetyStatus = safetyStatus;
+                trackingData.Timestamp = (long)timestamp;
+                trackingData.LastUpdated = currentTime;
+
+                UpdateCameraState(cameraId, state);
+                SaveCameraStates();
+                Console.WriteLine($"Stored keypoints for camera {cameraId}, track {trackId}, count: {keypoints.Count}");
+            }
+        }
+
+        /// <summary>
+        /// Get pose label for a specific camera and track
+        /// </summary>
+        public TrackingData? GetTrackingData(string cameraId, int trackId)
+        {
+            lock (_cameraStatesLock)
+            {
+                var state = GetCameraState(cameraId);
+                if (state != null && state.TrackingData.TryGetValue(trackId, out var trackingData))
+                {
+                    return trackingData;
+                }
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Get all tracking data for a camera
+        /// </summary>
+        public Dictionary<int, TrackingData>? GetAllTrackingData(string cameraId)
+        {
+            lock (_cameraStatesLock)
+            {
+                var state = GetCameraState(cameraId);
+                if (state != null)
+                {
+                    return state.TrackingData;
+                }
+                return null;
+            }
+        }
+
+        #endregion
+
         #region Analytics Server Communication
         
         public async Task ForwardAnalyticsDataAsync(string cameraId, object analyticsData)

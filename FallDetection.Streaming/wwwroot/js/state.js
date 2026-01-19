@@ -30,6 +30,8 @@ const AppState = {
     cameraListTimer: null,
     cameraStatusTimer: null,
     flagSyncWorker: null,
+    streamRefreshInterval: null,
+    skeletonPollInterval: null,
     
     // Reset state
     resetCameraState() {
@@ -58,6 +60,7 @@ const AppState = {
         if (this.cameraStatusTimer) clearInterval(this.cameraStatusTimer);
         if (this.flagSyncWorker) clearInterval(this.flagSyncWorker);
         if (this.streamRefreshInterval) clearInterval(this.streamRefreshInterval);
+        if (this.skeletonPollInterval) clearInterval(this.skeletonPollInterval);
     }
 };
 

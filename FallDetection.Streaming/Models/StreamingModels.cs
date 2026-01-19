@@ -35,6 +35,10 @@ namespace FallDetection.Streaming.Models
         // set_background=True stays true until camera sends background_updated
         public bool BackgroundUpdatePending { get; set; }
         public bool BackgroundUpdateAcknowledged { get; set; }
+
+        // Pose tracking data - keyed by track_id
+        // Stores keypoints, pose labels, and safety status per tracked person
+        public Dictionary<int, TrackingData> TrackingData { get; set; } = new();
     }
 
     public class StreamCommand
@@ -80,4 +84,48 @@ namespace FallDetection.Streaming.Models
         public bool IsRecording { get; set; }
         public bool RtmpConnected { get; set; }
     }
+
+    #region Pose Tracking Models
+
+    /// <summary>
+    /// Stores pose tracking data for a single track (person)
+    /// </summary>
+    public class TrackingData
+    {
+        public int TrackId { get; set; }
+        public string? PoseLabel { get; set; }
+        public string? SafetyStatus { get; set; }
+        public List<float>? Keypoints { get; set; }
+        public List<double>? Bbox { get; set; }
+        public long Timestamp { get; set; }
+        public long LastUpdated { get; set; }
+    }
+
+    /// <summary>
+    /// Request model for pose-label endpoint
+    /// </summary>
+    public class PoseLabelRequest
+    {
+        public string CameraId { get; set; } = string.Empty;
+        public int TrackId { get; set; }
+        public string PoseLabel { get; set; } = string.Empty;
+        public string SafetyStatus { get; set; } = string.Empty;
+        public double Timestamp { get; set; }
+    }
+
+    /// <summary>
+    /// Request model for keypoints endpoint
+    /// </summary>
+    public class KeypointsRequest
+    {
+        public string CameraId { get; set; } = string.Empty;
+        public int TrackId { get; set; }
+        public List<float> Keypoints { get; set; } = new();
+        public string SafetyStatus { get; set; } = string.Empty;
+        public double Timestamp { get; set; }
+        public List<double>? Bbox { get; set; }
+        public string PoseLabel { get; set; } = string.Empty;
+    }
+
+    #endregion
 }

@@ -5,14 +5,34 @@
 // ============================================
 
 const ConnectionStatus = {
+    // Lock to prevent conflicting status updates during rapid state changes
+    statusUpdateInProgress: false,
+    pendingConnectionState: null,
+
     updateConnectionStatusDebounced(cameraId, connected, ageSeconds = null, silent = false) {
         // console.log('[ConnectionStatus] updateConnectionStatusDebounced: camera=' + cameraId + ', connected=' + connected + ', silent=' + silent + ', currentStable=' + AppState.isConnectionStable);
         
-        // Clear any pending update
-        if (AppState.pendingConnectionUpdate) {
-            // console.log('[ConnectionStatus] Clearing pending connection update');
-            clearTimeout(AppState.pendingConnectionUpdate);
+        // If a status update is already in progress, queue this update
+        if (this.statusUpdateInProgress) {
+            // console.log('[ConnectionStatus] Status update in progress, queuing update');
+            this.pendingConnectionState = { cameraId, connected, ageSeconds, silent };
+            
+            // Set a timeout to process the pending update after a short delay
+            setTimeout(() => {
+                const pending = this.pendingConnectionState;
+                if (pending) {
+                    this.pendingConnectionState = null;
+                    this.updateConnectionStatusDebounced(pending.cameraId, pending.connected, pending.ageSeconds, pending.silent);
+                }
+            }, 100);
+            return;
         }
+        
+        // Mark that we're processing a status update
+        this.statusUpdateInProgress = true;
+        
+        // Clear any pending update since we're processing now
+        this.pendingConnectionState = null;
         
         // Apply the update immediately
         this.updateConnectionStatusImmediate(cameraId, connected, ageSeconds);
@@ -50,8 +70,8 @@ const ConnectionStatus = {
             // console.log('[ConnectionStatus] No action taken: connected=' + connected + ', stable=' + AppState.isConnectionStable);
         }
         
-        // Set pending update to null (no debounce needed anymore since we apply immediately)
-        AppState.pendingConnectionUpdate = null;
+        // Release the lock
+        this.statusUpdateInProgress = false;
     },
 
     updateConnectionStatusImmediate(cameraId, connected, ageSeconds = null) {
@@ -105,6 +125,14 @@ const ConnectionStatus = {
             AppState.connectionStabilityTimer = null;
         }
         
+        // Double-check that we're still connected before starting the timer
+        // This prevents starting a "connecting" timer when we're actually disconnected
+        const currentStatus = AppState.cameraConnectionStatus[cameraId];
+        if (currentStatus && !currentStatus.connected) {
+            // console.log('[ConnectionStatus] Skipping stability check - camera is disconnected');
+            return;
+        }
+        
         // Only update UI to "connecting" if we're actually resetting stability
         if (shouldResetStability) {
             // Update UI to show "connecting" state (connected but not yet stable)
@@ -125,6 +153,14 @@ const ConnectionStatus = {
             
             // Clear the timer first
             AppState.connectionStabilityTimer = null;
+            
+            // Double-check connection status before updating UI
+            // This prevents the timer from overriding a "Disconnected" status
+            const statusAtFiring = AppState.cameraConnectionStatus[timerCameraId];
+            if (statusAtFiring && !statusAtFiring.connected) {
+                // console.log('[ConnectionStatus] Timer ignored - camera disconnected while waiting');
+                return;
+            }
             
             // Check if we're still connected to the same camera
             // Get current connection status from AppState instead of relying on parameter
@@ -264,6 +300,10 @@ const ConnectionStatus = {
                 
                 // If camera is already stable, update silently to avoid restarting timer
                 const silentUpdate = AppState.isConnectionStable && data.connected;
+                
+                // If camera was disconnected, don't start a new stability check - just show disconnected
+                const wasDisconnected = !AppState.isConnected;
+                
                 this.updateConnectionStatusDebounced(cameraId, data.connected, data.age_seconds, silentUpdate);
                 
                 // Update pending registrations if available
@@ -279,11 +319,13 @@ const ConnectionStatus = {
                 return data.connected;
             }
             // console.log('[ConnectionStatus] Status response not OK, marking as disconnected');
-            this.updateConnectionStatusDebounced(cameraId, false);
+            // Pass silent=true to prevent triggering "Connecting..." when already disconnected
+            this.updateConnectionStatusDebounced(cameraId, false, null, true);
             return false;
         } catch (error) {
             console.error('[ConnectionStatus] Error checking connection for ' + cameraId + ':', error);
-            this.updateConnectionStatusDebounced(cameraId, false);
+            // Pass silent=true to prevent triggering "Connecting..." when already disconnected
+            this.updateConnectionStatusDebounced(cameraId, false, null, true);
             return false;
         }
     },

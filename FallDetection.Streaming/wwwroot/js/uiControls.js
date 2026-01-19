@@ -92,7 +92,13 @@ const UIControls = {
         // Toggle Raw
         if (DOMElements.toggleRaw) {
             DOMElements.toggleRaw.onchange = () => {
-                CommandManager.sendCommand("toggle_raw", DOMElements.toggleRaw.checked);
+                const showRaw = DOMElements.toggleRaw.checked;
+                CommandManager.sendCommand("toggle_raw", showRaw);
+                
+                // Update stream display (background vs live)
+                if (window.StreamController) {
+                    window.StreamController.setShowBackground(!showRaw);
+                }
             };
         }
         

@@ -8,6 +8,10 @@ const StreamController = {
     maxBackoffInterval: 5000,
     currentBackoffInterval: REFRESH_INTERVAL_MS,
     
+    // Background image state
+    backgroundImageElement: null,
+    isShowingBackground: false,
+    
     // HTTP JPEG streaming only - no WebRTC/RTMP
     initializeStream() {
         console.log("Starting HTTP JPEG stream");
@@ -36,6 +40,9 @@ const StreamController = {
         this.currentBackoffInterval = this.baseRefreshInterval;
         this.isRefreshing = false;
         
+        // Initialize skeleton display
+        this.initializeSkeletonDisplay();
+        
         // Initial refresh
         this.refreshStreamImage();
         
@@ -52,6 +59,9 @@ const StreamController = {
             DOMElements.streamVideo.src = '';
         }
         this.isRefreshing = false;
+        
+        // Cleanup skeleton display
+        this.cleanupSkeletonDisplay();
     },
 
     scheduledRefresh() {
@@ -69,19 +79,36 @@ const StreamController = {
         this.isRefreshing = true;
         
         const timestamp = Date.now();
-        const streamUrl = `${STREAMING_HTTP_URL}/api/stream/frame?camera_id=${AppState.currentCameraId}&t=${timestamp}`;
+        let streamUrl;
+        
+        // Check if we should show background or live frame
+        if (this.isShowingBackground && this.backgroundImageElement) {
+            // Use cached background image
+            this.isRefreshing = false;
+            return;
+        } else {
+            streamUrl = `${STREAMING_HTTP_URL}/api/stream/frame?camera_id=${AppState.currentCameraId}&t=${timestamp}`;
+        }
         
         const img = DOMElements.streamVideo;
         
-        // Use onload for IMG elements (not onloadeddata which is for VIDEO)
+        // Use onload for IMG elements
         img.onload = () => {
             AppState.errorCount = 0;
             this.consecutiveErrors = 0;
             // Reset backoff on successful load
             this.currentBackoffInterval = this.baseRefreshInterval;
             this.isRefreshing = false;
-            ConnectionStatus.updateConnectionStatusDebounced(AppState.currentCameraId, true);
             console.debug(`Frame loaded successfully for ${AppState.currentCameraId}`);
+            
+            // Note: Connection status is determined solely by pings from the camera
+            // Frame loads do NOT affect connection status
+            // The camera's ping endpoint (/api/stream/ping) is the single source of truth
+            
+            // Resize skeleton canvas to match new image dimensions
+            if (window.SkeletonDisplay) {
+                window.SkeletonDisplay.resizeCanvas();
+            }
         };
         
         // Handle image load errors
@@ -97,7 +124,10 @@ const StreamController = {
             );
             
             console.error(`Stream error for ${AppState.currentCameraId}: ${this.consecutiveErrors} consecutive errors`);
-            ConnectionStatus.updateConnectionStatusDebounced(AppState.currentCameraId, false);
+            
+            // Note: Connection status is determined solely by pings from the camera
+            // Frame errors do NOT affect connection status
+            // The camera's ping endpoint (/api/stream/ping) is the single source of truth
             
             // Check if we need to recover
             if (AppState.errorCount >= MAX_ERRORS) {
@@ -134,6 +164,7 @@ const StreamController = {
             console.log('Manual refresh skipped - refresh in progress');
             return;
         }
+        this.backgroundImageElement = null; // Clear cached background
         this.refreshStreamImage();
     },
     
@@ -145,6 +176,70 @@ const StreamController = {
         // If running, restart with new interval
         if (AppState.streamRefreshInterval) {
             this.startHTTPStream();
+        }
+    },
+    
+    // Initialize skeleton display overlay
+    initializeSkeletonDisplay() {
+        if (window.SkeletonDisplay) {
+            window.SkeletonDisplay.initialize();
+        }
+    },
+    
+    // Cleanup skeleton display
+    cleanupSkeletonDisplay() {
+        if (window.SkeletonDisplay) {
+            window.SkeletonDisplay.destroy();
+        }
+    },
+    
+    // Set background display mode
+    async setShowBackground(showBackground) {
+        this.isShowingBackground = showBackground;
+        
+        if (showBackground && !this.backgroundImageElement) {
+            // Load background image
+            try {
+                const timestamp = Date.now();
+                const url = `${STREAMING_HTTP_URL}/api/stream/background?camera_id=${AppState.currentCameraId}&t=${timestamp}`;
+                const response = await fetch(url);
+                
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const img = new Image();
+                    
+                    img.onload = () => {
+                        this.backgroundImageElement = img;
+                        DOMElements.streamVideo.src = img.src;
+                        
+                        // Resize skeleton canvas to match background
+                        if (window.SkeletonDisplay) {
+                            window.SkeletonDisplay.resizeCanvas();
+                        }
+                    };
+                    
+                    img.src = URL.createObjectURL(blob);
+                } else {
+                    // Fallback to live stream
+                    this.isShowingBackground = false;
+                    this.manualRefresh();
+                }
+            } catch (error) {
+                console.error("Failed to load background:", error);
+                this.isShowingBackground = false;
+                this.manualRefresh();
+            }
+        } else if (showBackground && this.backgroundImageElement) {
+            // Use cached background
+            DOMElements.streamVideo.src = this.backgroundImageElement.src;
+        } else {
+            // Show live stream
+            this.manualRefresh();
+        }
+        
+        // Update skeleton display
+        if (window.SkeletonDisplay) {
+            window.SkeletonDisplay.setShowRaw(!showBackground);
         }
     }
 };

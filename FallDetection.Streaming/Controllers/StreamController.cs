@@ -453,6 +453,173 @@ namespace FallDetection.Streaming.Controllers
             }
         }
 
+        #endregion
+
+        #region Pose Tracking Endpoints
+        
+        [HttpPost("pose-label")]
+        public IActionResult UpdatePoseLabel([FromBody] PoseLabelRequest request)
+        {
+            try
+            {
+                // Validate required fields
+                if (string.IsNullOrWhiteSpace(request.CameraId))
+                {
+                    _logger.LogWarning("Pose label update received with empty camera_id");
+                    return BadRequest(new { status = "error", message = "CameraId is required" });
+                }
+
+                if (request.TrackId <= 0)
+                {
+                    _logger.LogWarning("Pose label update received with invalid track_id: {TrackId}", request.TrackId);
+                    return BadRequest(new { status = "error", message = "Valid TrackId is required" });
+                }
+
+                if (string.IsNullOrWhiteSpace(request.PoseLabel))
+                {
+                    _logger.LogWarning("Pose label update received with empty pose_label for camera {CameraId}", request.CameraId);
+                    return BadRequest(new { status = "error", message = "PoseLabel is required" });
+                }
+
+                _logger.LogDebug("Pose label update: Camera={CameraId}, Track={TrackId}, Label={PoseLabel}, Status={SafetyStatus}", 
+                    request.CameraId, request.TrackId, request.PoseLabel, request.SafetyStatus);
+
+                _cameraService.StorePoseLabel(
+                    request.CameraId,
+                    request.TrackId,
+                    request.PoseLabel,
+                    request.SafetyStatus,
+                    request.Timestamp
+                );
+
+                return Ok(new
+                {
+                    status = "success",
+                    message = "Pose label stored",
+                    camera_id = request.CameraId,
+                    track_id = request.TrackId,
+                    pose_label = request.PoseLabel,
+                    safety_status = request.SafetyStatus,
+                    timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Pose label update error for camera {CameraId}", request?.CameraId);
+                return StatusCode(500, new { status = "error", message = ex.Message });
+            }
+        }
+
+        [HttpPost("keypoints")]
+        public IActionResult StoreKeypoints([FromBody] KeypointsRequest request)
+        {
+            try
+            {
+                // Validate required fields
+                if (string.IsNullOrWhiteSpace(request.CameraId))
+                {
+                    _logger.LogWarning("Keypoints received with empty camera_id");
+                    return BadRequest(new { status = "error", message = "CameraId is required" });
+                }
+
+                if (request.TrackId <= 0)
+                {
+                    _logger.LogWarning("Keypoints received with invalid track_id: {TrackId}", request.TrackId);
+                    return BadRequest(new { status = "error", message = "Valid TrackId is required" });
+                }
+
+                if (request.Keypoints == null || request.Keypoints.Count == 0)
+                {
+                    _logger.LogWarning("Keypoints received with empty keypoints for camera {CameraId}", request.CameraId);
+                    return BadRequest(new { status = "error", message = "Keypoints array is required" });
+                }
+
+                _logger.LogDebug("Keypoints received: Camera={CameraId}, Track={TrackId}, KeypointsCount={Count}, Pose={PoseLabel}", 
+                    request.CameraId, request.TrackId, request.Keypoints.Count, request.PoseLabel);
+
+                _cameraService.StoreKeypoints(
+                    request.CameraId,
+                    request.TrackId,
+                    request.Keypoints,
+                    request.PoseLabel,
+                    request.SafetyStatus,
+                    request.Bbox,
+                    request.Timestamp
+                );
+
+                return Ok(new
+                {
+                    status = "success",
+                    message = "Keypoints stored",
+                    camera_id = request.CameraId,
+                    track_id = request.TrackId,
+                    keypoints_count = request.Keypoints.Count,
+                    pose_label = request.PoseLabel,
+                    safety_status = request.SafetyStatus,
+                    bbox = request.Bbox,
+                    timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Keypoints storage error for camera {CameraId}", request?.CameraId);
+                return StatusCode(500, new { status = "error", message = ex.Message });
+            }
+        }
+
+        [HttpGet("tracking-data")]
+        public IActionResult GetTrackingData([FromQuery] string camera_id, [FromQuery] int? track_id)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(camera_id))
+                {
+                    _logger.LogWarning("Get tracking data received with empty camera_id");
+                    return BadRequest(new { status = "error", message = "CameraId is required" });
+                }
+
+                if (track_id.HasValue && track_id.Value > 0)
+                {
+                    // Get specific track data
+                    var trackingData = _cameraService.GetTrackingData(camera_id, track_id.Value);
+                    if (trackingData != null)
+                    {
+                        return Ok(new
+                        {
+                            camera_id = camera_id,
+                            track_id = track_id.Value,
+                            tracking_data = trackingData
+                        });
+                    }
+                    return NotFound(new { error = "Tracking data not found for specified camera and track" });
+                }
+                else
+                {
+                    // Get all tracking data for camera
+                    var allTrackingData = _cameraService.GetAllTrackingData(camera_id);
+                    if (allTrackingData != null)
+                    {
+                        return Ok(new
+                        {
+                            camera_id = camera_id,
+                            tracking_data = allTrackingData,
+                            track_count = allTrackingData.Count
+                        });
+                    }
+                    return NotFound(new { error = "No tracking data found for camera" });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Get tracking data error for camera {CameraId}", camera_id);
+                return StatusCode(500, new { status = "error", message = ex.Message });
+            }
+        }
+
+        #endregion
+
+        #region Safe Areas Endpoints
+
         [HttpPost("safe-areas")]
         public IActionResult UpdateSafeAreas([FromBody] SafeAreasRequest request)
         {
@@ -550,6 +717,65 @@ namespace FallDetection.Streaming.Controllers
             }
         }
 
+        [HttpPost("upload-bg")]
+        public async Task<IActionResult> UploadBackground()
+        {
+            try
+            {
+                // Get camera ID from header
+                var cameraId = Request.Headers["X-Camera-ID"].ToString();
+                
+                if (string.IsNullOrWhiteSpace(cameraId))
+                {
+                    _logger.LogWarning("Background upload received without X-Camera-ID header");
+                    return BadRequest(new { status = "error", message = "X-Camera-ID header is required" });
+                }
+
+                // Validate camera ID format
+                if (!System.Text.RegularExpressions.Regex.IsMatch(cameraId, @"^camera_\d{4}$"))
+                {
+                    _logger.LogWarning("Background upload with invalid camera_id format: {CameraId}", cameraId);
+                    return BadRequest(new { status = "error", message = "Invalid camera ID format. Expected format: camera_XXXX" });
+                }
+
+                // Read the background data from request body
+                using var memoryStream = new MemoryStream();
+                await Request.Body.CopyToAsync(memoryStream);
+                var backgroundData = memoryStream.ToArray();
+
+                if (backgroundData.Length == 0)
+                {
+                    _logger.LogWarning("Empty background received from {CameraId}", cameraId);
+                    return BadRequest(new { status = "error", message = "Background data is empty" });
+                }
+
+                // Validate it's a JPEG (starts with FFD8)
+                if (backgroundData.Length < 2 || backgroundData[0] != 0xFF || backgroundData[1] != 0xD8)
+                {
+                    _logger.LogWarning("Invalid background format from {CameraId} - not a JPEG", cameraId);
+                    return BadRequest(new { status = "error", message = "Background must be JPEG format (FFD8)" });
+                }
+
+                // Store the background in memory and filesystem
+                _streamingService.StoreBackground(cameraId, backgroundData);
+
+                _logger.LogDebug("Background stored for {CameraId}, size: {Size} bytes", cameraId, backgroundData.Length);
+
+                return Ok(new
+                {
+                    status = "success",
+                    camera_id = cameraId,
+                    size = backgroundData.Length,
+                    timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Background upload error");
+                return StatusCode(500, new { status = "error", message = ex.Message });
+            }
+        }
+
         [HttpGet("frame")]
         public IActionResult GetFrame([FromQuery] string camera_id)
         {
@@ -589,6 +815,49 @@ namespace FallDetection.Streaming.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Frame retrieval error for camera {CameraId}", camera_id);
+                return StatusCode(500, new { status = "error", message = ex.Message });
+            }
+        }
+
+        [HttpGet("background")]
+        public IActionResult GetBackground([FromQuery] string camera_id)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(camera_id))
+                {
+                    _logger.LogWarning("Background request received without camera_id query parameter");
+                    return BadRequest(new { status = "error", message = "camera_id query parameter is required" });
+                }
+
+                // Validate camera ID format
+                if (!System.Text.RegularExpressions.Regex.IsMatch(camera_id, @"^camera_\d{4}$"))
+                {
+                    _logger.LogWarning("Background request with invalid camera_id format: {CameraId}", camera_id);
+                    return BadRequest(new { status = "error", message = "Invalid camera ID format. Expected format: camera_XXXX" });
+                }
+
+                var backgroundData = _streamingService.GetBackground(camera_id);
+                var backgroundTimestamp = _streamingService.GetBackgroundTimestamp(camera_id);
+
+                if (backgroundData == null || backgroundData.Length == 0)
+                {
+                    _logger.LogDebug("No background available for {CameraId}", camera_id);
+                    return NotFound(new { status = "error", message = "No background available for this camera" });
+                }
+
+                // Return the JPEG image with proper caching headers
+                Response.Headers.Append("Cache-Control", "no-cache, no-store, must-revalidate");
+                Response.Headers.Append("Pragma", "no-cache");
+                Response.Headers.Append("Expires", "0");
+                Response.Headers.Append("X-Camera-ID", camera_id);
+                Response.Headers.Append("X-Background-Timestamp", backgroundTimestamp?.ToString() ?? "0");
+
+                return File(backgroundData, "image/jpeg");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Background retrieval error for camera {CameraId}", camera_id);
                 return StatusCode(500, new { status = "error", message = ex.Message });
             }
         }
