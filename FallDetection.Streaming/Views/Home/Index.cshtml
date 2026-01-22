@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8" />
@@ -21,7 +21,7 @@
     <script src="~/js/cameraRegistration.js" defer></script>
     <script src="~/js/cameraManagement.js" defer></script>
     <script src="~/js/poseDisplay.js" defer></script>
-    <script src="~/js/skeletonDisplay.js" defer></script>
+    <script src="~/js/streamDisplay.js" defer></script>
     <script src="~/js/algorithmInfo.js" defer></script>
     @* <script src="~/js/webrtc.js" defer></script> *@
 </head>
@@ -32,7 +32,12 @@
     <div class="main-container">
         
         <!-- Stream comes first after title -->
-        <img id="streamVideo" alt="Live Stream" style="width:100%; max-width:1200px; height:auto; aspect-ratio:16/9; display:block; margin:20px auto; border-radius:12px; border:2px solid var(--theme-border); background:#000;">
+        <div style="position: relative; display: inline-block; width: 100%; max-width: 1200px; margin: 20px auto; display: block;">
+            <img id="streamVideo" alt="Live Stream" style="width:100%; height:auto; aspect-ratio:16/9; display:block; border-radius:12px; border:2px solid var(--theme-border); background:#000; position: relative; z-index: 1;">
+            <div id="canvasOverlay" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2;">
+                <canvas id="streamCanvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;"></canvas>
+            </div>
+        </div>
 
         <!-- Camera Controls -->
         <div id="cameraControls" class="camera-controls">
@@ -78,8 +83,8 @@
                 <input type="checkbox" id="useSafetyCheck">
                 <label for="useSafetyCheck" class="toggle-label">Use Safety Check</label>
                 
-                <input type="checkbox" id="toggleHME">
-                <label for="toggleHME" class="toggle-label">🔐 HME Mode</label>
+                @* <input type="checkbox" id="toggleHME">
+                <label for="toggleHME" class="toggle-label">🔐 HME Mode</label> *@
             </div>
             <div class="control-group">
                 <label>Fall Algorithm:
@@ -258,3 +263,4 @@
     </script>
 </body>
 </html>
+

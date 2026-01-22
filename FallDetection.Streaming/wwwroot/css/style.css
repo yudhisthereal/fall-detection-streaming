@@ -754,6 +754,8 @@ h1 {
 .camera-name {
     font-weight: bold;
     color: white;
+    align-content: start;
+    text-align: left;
     margin-bottom: 5px;
 }
 
@@ -764,6 +766,8 @@ h1 {
 
 .camera-details span {
     display: block;
+    align-content: start;
+    text-align: left;
     margin-bottom: 3px;
 }
 
@@ -1165,4 +1169,24 @@ h1 {
     #stream-status.connecting {
         animation: none;
     }
+}
+
+/* ==================== */
+/* Z-Index Enforcement  */
+/* ==================== */
+
+/* Force z-index for stream elements - use !important to prevent override */
+#streamVideo {
+    position: relative !important;
+    z-index: 1 !important;
+}
+
+#canvasOverlay {
+    position: absolute !important;
+    z-index: 2 !important;
+}
+
+#streamCanvas {
+    position: absolute !important;
+    z-index: 10 !important;
 }

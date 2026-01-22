@@ -11,7 +11,7 @@ const DOMElements = {
     autoUpdateBg: document.getElementById('autoUpdateBg'),
     showSafeArea: document.getElementById('showSafeArea'),
     useSafetyCheck: document.getElementById('useSafetyCheck'),
-    toggleHME: document.getElementById('toggleHME'),
+    // toggleHME: document.getElementById('toggleHME'),
     fallAlgorithmSelect: document.getElementById('fallAlgorithmSelect'),
     
     // Buttons

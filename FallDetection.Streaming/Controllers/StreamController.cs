@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using FallDetection.Streaming.Services;
 using FallDetection.Streaming.Models;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace FallDetection.Streaming.Controllers
 {
@@ -457,112 +458,88 @@ namespace FallDetection.Streaming.Controllers
 
         #region Pose Tracking Endpoints
         
-        [HttpPost("pose-label")]
-        public IActionResult UpdatePoseLabel([FromBody] PoseLabelRequest request)
+        [HttpPost("tracks")]
+        public IActionResult StoreTracks([FromBody] TracksRequest request)
         {
             try
             {
                 // Validate required fields
                 if (string.IsNullOrWhiteSpace(request.CameraId))
                 {
-                    _logger.LogWarning("Pose label update received with empty camera_id");
+                    _logger.LogWarning("Tracks received with empty camera_id");
                     return BadRequest(new { status = "error", message = "CameraId is required" });
                 }
 
-                if (request.TrackId <= 0)
+                if (request.Tracks == null)
                 {
-                    _logger.LogWarning("Pose label update received with invalid track_id: {TrackId}", request.TrackId);
-                    return BadRequest(new { status = "error", message = "Valid TrackId is required" });
+                    _logger.LogWarning("Tracks received with null tracks array for camera {CameraId}", request.CameraId);
+                    return BadRequest(new { status = "error", message = "Tracks array is required (can be empty list)" });
                 }
 
-                if (string.IsNullOrWhiteSpace(request.PoseLabel))
+                // Validate and filter tracks
+                var validTracks = new List<TrackItem>();
+                var errors = new List<string>();
+
+                // Allow empty lists - they will clear all existing tracks
+                if (request.Tracks.Count > 0)
                 {
-                    _logger.LogWarning("Pose label update received with empty pose_label for camera {CameraId}", request.CameraId);
-                    return BadRequest(new { status = "error", message = "PoseLabel is required" });
+                    foreach (var track in request.Tracks)
+                    {
+                        // Validate track
+                        if (track.TrackId <= 0)
+                        {
+                            errors.Add($"Invalid track_id: {track.TrackId}");
+                            continue;
+                        }
+
+                        if (track.Keypoints == null || track.Keypoints.Count == 0)
+                        {
+                            errors.Add($"Track {track.TrackId} has empty keypoints");
+                            continue;
+                        }
+
+                        validTracks.Add(track);
+                        _logger.LogDebug("Valid track: Camera={CameraId}, Track={TrackId}, KeypointsCount={Count}, Pose={PoseLabel}, Status={SafetyStatus}", 
+                            request.CameraId, track.TrackId, track.Keypoints.Count, track.PoseLabel, track.SafetyStatus);
+                    }
+
+                    // If we had tracks but all failed validation, log warning but still store empty list to clear tracks
+                    if (validTracks.Count == 0 && request.Tracks.Count > 0)
+                    {
+                        _logger.LogWarning("All tracks failed validation for camera {CameraId}, clearing all tracks", request.CameraId);
+                    }
+                }
+                else
+                {
+                    _logger.LogDebug("Empty tracks list received for camera {CameraId}, clearing all tracks", request.CameraId);
                 }
 
-                _logger.LogDebug("Pose label update: Camera={CameraId}, Track={TrackId}, Label={PoseLabel}, Status={SafetyStatus}", 
-                    request.CameraId, request.TrackId, request.PoseLabel, request.SafetyStatus);
+                // Store all tracks at once - this replaces all existing tracking data to prevent zombie tracks
+                // Empty list will clear all existing tracks
+                _cameraService.StoreTracks(request.CameraId, validTracks, request.Timestamp);
 
-                _cameraService.StorePoseLabel(
-                    request.CameraId,
-                    request.TrackId,
-                    request.PoseLabel,
-                    request.SafetyStatus,
-                    request.Timestamp
-                );
+                var processedTracks = validTracks.Select(t => new
+                {
+                    track_id = t.TrackId,
+                    keypoints_count = t.Keypoints.Count,
+                    pose_label = t.PoseLabel,
+                    safety_status = t.SafetyStatus
+                }).ToList();
 
                 return Ok(new
                 {
                     status = "success",
-                    message = "Pose label stored",
+                    message = "Tracks stored",
                     camera_id = request.CameraId,
-                    track_id = request.TrackId,
-                    pose_label = request.PoseLabel,
-                    safety_status = request.SafetyStatus,
+                    tracks_processed = processedTracks.Count,
+                    total_tracks = request.Tracks.Count,
+                    errors = errors.Count > 0 ? errors : null,
                     timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
                 });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Pose label update error for camera {CameraId}", request?.CameraId);
-                return StatusCode(500, new { status = "error", message = ex.Message });
-            }
-        }
-
-        [HttpPost("keypoints")]
-        public IActionResult StoreKeypoints([FromBody] KeypointsRequest request)
-        {
-            try
-            {
-                // Validate required fields
-                if (string.IsNullOrWhiteSpace(request.CameraId))
-                {
-                    _logger.LogWarning("Keypoints received with empty camera_id");
-                    return BadRequest(new { status = "error", message = "CameraId is required" });
-                }
-
-                if (request.TrackId <= 0)
-                {
-                    _logger.LogWarning("Keypoints received with invalid track_id: {TrackId}", request.TrackId);
-                    return BadRequest(new { status = "error", message = "Valid TrackId is required" });
-                }
-
-                if (request.Keypoints == null || request.Keypoints.Count == 0)
-                {
-                    _logger.LogWarning("Keypoints received with empty keypoints for camera {CameraId}", request.CameraId);
-                    return BadRequest(new { status = "error", message = "Keypoints array is required" });
-                }
-
-                _logger.LogDebug("Keypoints received: Camera={CameraId}, Track={TrackId}, KeypointsCount={Count}, Pose={PoseLabel}", 
-                    request.CameraId, request.TrackId, request.Keypoints.Count, request.PoseLabel);
-
-                _cameraService.StoreKeypoints(
-                    request.CameraId,
-                    request.TrackId,
-                    request.Keypoints,
-                    request.PoseLabel,
-                    request.SafetyStatus,
-                    request.Bbox,
-                    request.Timestamp
-                );
-
-                return Ok(new
-                {
-                    status = "success",
-                    message = "Keypoints stored",
-                    camera_id = request.CameraId,
-                    track_id = request.TrackId,
-                    keypoints_count = request.Keypoints.Count,
-                    pose_label = request.PoseLabel,
-                    safety_status = request.SafetyStatus,
-                    bbox = request.Bbox,
-                    timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Keypoints storage error for camera {CameraId}", request?.CameraId);
+                _logger.LogError(ex, "Tracks storage error for camera {CameraId}", request?.CameraId);
                 return StatusCode(500, new { status = "error", message = ex.Message });
             }
         }
@@ -597,16 +574,15 @@ namespace FallDetection.Streaming.Controllers
                 {
                     // Get all tracking data for camera
                     var allTrackingData = _cameraService.GetAllTrackingData(camera_id);
-                    if (allTrackingData != null)
+                    // Always return tracking data, even if empty (empty dictionary)
+                    var trackingData = allTrackingData ?? new Dictionary<int, TrackingData>();
+                    
+                    return Ok(new
                     {
-                        return Ok(new
-                        {
-                            camera_id = camera_id,
-                            tracking_data = allTrackingData,
-                            track_count = allTrackingData.Count
-                        });
-                    }
-                    return NotFound(new { error = "No tracking data found for camera" });
+                        camera_id = camera_id,
+                        tracking_data = trackingData,
+                        track_count = trackingData.Count
+                    });
                 }
             }
             catch (Exception ex)
@@ -862,6 +838,7 @@ namespace FallDetection.Streaming.Controllers
             }
         }
 
+
         #endregion
     }
 
@@ -891,8 +868,9 @@ namespace FallDetection.Streaming.Controllers
         public List<List<List<double>>>? SafeAreas { get; set; }
     }
 
-    public class StateReportRequest
+public class StateReportRequest
     {
+        [JsonPropertyName("camera_id")]
         public string CameraId { get; set; } = string.Empty;
         public long Timestamp { get; set; }
         public string Status { get; set; } = "online";

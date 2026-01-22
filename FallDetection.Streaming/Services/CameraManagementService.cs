@@ -759,41 +759,44 @@ namespace FallDetection.Streaming.Services
         }
 
         /// <summary>
-        /// Store keypoints for a specific camera and track
+        /// Store tracks for a camera - replaces all existing tracking data to prevent zombie tracks
         /// </summary>
-        public void StoreKeypoints(string cameraId, int trackId, List<float> keypoints, string? poseLabel, string safetyStatus, List<double>? bbox, double timestamp)
+        public void StoreTracks(string cameraId, List<TrackItem> tracks, double timestamp)
         {
             lock (_cameraStatesLock)
             {
                 var state = GetCameraState(cameraId);
                 if (state == null)
                 {
-                    Console.WriteLine($"Cannot store keypoints: Camera {cameraId} not found");
+                    Console.WriteLine($"Cannot store tracks: Camera {cameraId} not found");
                     return;
                 }
 
                 var currentTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
-                if (!state.TrackingData.TryGetValue(trackId, out var trackingData))
+                // Clear all existing tracking data to prevent zombie tracks
+                state.TrackingData.Clear();
+
+                // Store only the tracks from the current request
+                foreach (var track in tracks)
                 {
-                    trackingData = new TrackingData
+                    var trackingData = new TrackingData
                     {
-                        TrackId = trackId,
+                        TrackId = track.TrackId,
+                        Keypoints = track.Keypoints,
+                        Bbox = track.Bbox,
+                        PoseLabel = track.PoseLabel,
+                        SafetyStatus = track.SafetyStatus,
+                        Timestamp = (long)timestamp,
                         LastUpdated = currentTime
                     };
-                    state.TrackingData[trackId] = trackingData;
-                }
 
-                trackingData.Keypoints = keypoints;
-                trackingData.Bbox = bbox;
-                trackingData.PoseLabel = poseLabel ?? trackingData.PoseLabel;
-                trackingData.SafetyStatus = safetyStatus;
-                trackingData.Timestamp = (long)timestamp;
-                trackingData.LastUpdated = currentTime;
+                    state.TrackingData[track.TrackId] = trackingData;
+                }
 
                 UpdateCameraState(cameraId, state);
                 SaveCameraStates();
-                Console.WriteLine($"Stored keypoints for camera {cameraId}, track {trackId}, count: {keypoints.Count}");
+                Console.WriteLine($"Stored {tracks.Count} tracks for camera {cameraId} (replaced all existing tracks)");
             }
         }
 

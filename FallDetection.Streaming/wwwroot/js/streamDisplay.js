@@ -1,11 +1,11 @@
-// skeletonDisplay.js - Skeleton rendering on canvas overlay for pose detection
+// streamDisplay.js - Unified canvas overlay for skeletons and safe areas
+// Renders both skeletons and safe areas on a single canvas
+// Only refreshes after streamVideo refreshes (not continuously polling)
 
-const SkeletonDisplay = {
+const StreamDisplay = {
     canvas: null,
     ctx: null,
     isInitialized: false,
-    animationFrameId: null,
-    isPolling: false,
     showSafeAreas: false,
     
     // COCO 17 keypoint indices
@@ -65,38 +65,33 @@ const SkeletonDisplay = {
     trackTimestamps: {}, // Map of trackId -> last update timestamp
     trackLifetimeMs: 1000, // 1 second lifetime
     
+    // Cached data
+    cachedTrackingData: {},
+    cachedSafeAreas: null,
+    
     // Initialize the canvas
     init() {
         if (this.isInitialized) return;
         
-        this.canvas = document.getElementById('skeletonCanvas');
+        this.canvas = document.getElementById('streamCanvas');
         if (!this.canvas) {
-            console.warn('[SkeletonDisplay] skeletonCanvas element not found');
+            console.warn('[StreamDisplay] streamCanvas element not found');
             return;
         }
         
         this.ctx = this.canvas.getContext('2d');
         this.isInitialized = true;
         
-        // Canvas z-index is handled by CSS, no need to set here
-        
         // Resize canvas to match video dimensions
         this.resizeCanvas();
         
-        // Initialize static canvas for safe areas
-        if (window.SafeAreaDisplay) {
-            window.SafeAreaDisplay.init();
-        }
-        
-        console.log('[SkeletonDisplay] Canvas initialized');
+        console.log('[StreamDisplay] Unified canvas initialized');
     },
     
     // Resize canvas to match video dimensions
     resizeCanvas() {
         const streamVideo = document.getElementById('streamVideo');
         if (!streamVideo || !this.canvas) return;
-        
-        // Canvas z-index is handled by CSS, no need to set here
         
         // Use the displayed size of the video element
         const width = streamVideo.clientWidth || 1200;
@@ -106,12 +101,7 @@ const SkeletonDisplay = {
         this.canvas.width = width;
         this.canvas.height = height;
         
-        console.debug(`[SkeletonDisplay] Canvas resized to ${width}x${height}`);
-        
-        // Also resize the static canvas for safe areas
-        if (window.SafeAreaDisplay) {
-            window.SafeAreaDisplay.resizeCanvas();
-        }
+        console.debug(`[StreamDisplay] Canvas resized to ${width}x${height}`);
     },
     
     // Clear the canvas
@@ -126,14 +116,9 @@ const SkeletonDisplay = {
         // Check if show_safe_areas is enabled
         const newShowSafeAreas = this.cameraState.show_safe_area === true;
         
-        if (newShowSafeAreas !== this.showSafeAreas || newShowSafeAreas) {
+        if (newShowSafeAreas !== this.showSafeAreas) {
             this.showSafeAreas = newShowSafeAreas;
-            console.log(`[SkeletonDisplay] show_safe_areas: ${this.showSafeAreas}`);
-            
-            // Use SafeAreaDisplay to render safe areas on the static canvas
-            if (window.SafeAreaDisplay) {
-                window.SafeAreaDisplay.update(this.showSafeAreas);
-            }
+            console.log(`[StreamDisplay] show_safe_areas: ${this.showSafeAreas}`);
         }
     },
     
@@ -189,13 +174,88 @@ const SkeletonDisplay = {
         }
     },
     
+    // Get the actual image source dimensions for proper coordinate mapping
+    getImageDimensions() {
+        const streamVideo = document.getElementById('streamVideo');
+        if (!streamVideo) {
+            return { width: this.canvas.width, height: this.canvas.height };
+        }
+        
+        // Use naturalWidth/naturalHeight which are available on loaded images
+        // Fallback to width/height attributes if natural dimensions are not set
+        const width = streamVideo.naturalWidth || streamVideo.width || this.canvas.width;
+        const height = streamVideo.naturalHeight || streamVideo.height || this.canvas.height;
+        
+        return { width, height };
+    },
+    
+    // Render safe areas on the canvas
+    renderSafeAreas(safeAreas) {
+        if (!this.ctx || !this.canvas || !safeAreas || safeAreas.length === 0) {
+            return;
+        }
+        
+        const ctx = this.ctx;
+        
+        // Get source image dimensions
+        const { width: sourceWidth, height: sourceHeight } = this.getImageDimensions();
+        
+        // Get canvas dimensions (displayed size)
+        const canvasWidth = this.canvas.width;
+        const canvasHeight = this.canvas.height;
+        
+        // Calculate scale factors to map from source dimensions to canvas dimensions
+        const scaleX = canvasWidth / sourceWidth;
+        const scaleY = canvasHeight / sourceHeight;
+        
+        safeAreas.forEach((polygon, index) => {
+            if (!polygon || polygon.length < 3) return;
+            
+            // Generate a color for this safe area (hsl with different hue)
+            const hue = (index * 60) % 360;
+            const color = `hsl(${hue}, 70%, 50%)`;
+            
+            // Convert normalized coordinates to canvas coordinates
+            const points = polygon.map(point => {
+                // First convert normalized (0-1) to source coordinates
+                const sourceX = point[0] * sourceWidth;
+                const sourceY = point[1] * sourceHeight;
+                // Then scale to canvas coordinates
+                const x = sourceX * scaleX;
+                const y = sourceY * scaleY;
+                return { x, y };
+            });
+            
+            // Draw filled polygon with transparency
+            ctx.beginPath();
+            ctx.moveTo(points[0].x, points[0].y);
+            for (let i = 1; i < points.length; i++) {
+                ctx.lineTo(points[i].x, points[i].y);
+            }
+            ctx.closePath();
+            
+            // Draw border
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            // Draw vertices
+            points.forEach(point => {
+                ctx.beginPath();
+                ctx.arc(point.x, point.y, 4, 0, Math.PI * 2);
+                ctx.fillStyle = color;
+                ctx.fill();
+            });
+            
+            // Add label
+            ctx.font = '12px sans-serif';
+            ctx.fillStyle = color;
+            ctx.fillText(`Safe Area ${index + 1}`, points[0].x + 10, points[0].y + 20);
+        });
+    },
+    
     // Render all skeletons from tracking data
-    render(trackingData) {
-        this.clear();
-        
-        // Note: Safe areas are rendered on staticCanvas by SafeAreaDisplay
-        // and do not need to be redrawn every frame
-        
+    renderSkeletons(trackingData) {
         if (!trackingData || Object.keys(trackingData).length === 0) {
             return;
         }
@@ -229,9 +289,6 @@ const SkeletonDisplay = {
         const colorIndex = trackId % this.TRACK_COLORS.length;
         const color = this.TRACK_COLORS[colorIndex];
         
-        // Log keypoints for debugging
-        console.log(`[SkeletonDisplay] Track ${trackId} keypoints:`, keypoints);
-        
         // Keypoints are in 320x224 coordinate space, scale to canvas size
         const scaleX = this.canvas.width / 320;
         const scaleY = this.canvas.height / 224;
@@ -248,7 +305,6 @@ const SkeletonDisplay = {
             const endY = keypoints[endIdx * 2 + 1] * scaleY;
             
             // Only draw if both points are valid (not -1)
-            // Keypoint coordinate of -1 means the keypoint is invalid
             if (this.isValidCoordinate(startX) && this.isValidCoordinate(startY) &&
                 this.isValidCoordinate(endX) && this.isValidCoordinate(endY)) {
                 this.ctx.beginPath();
@@ -329,55 +385,50 @@ const SkeletonDisplay = {
         this.ctx.fillText(poseLabel, clampedX, labelY - 8);
     },
     
-    // Start real-time continuous polling for tracking data
-    // Uses requestAnimationFrame pattern for immediate response without sleep delays
-    startPolling() {
-        if (this.isPolling) return;
-        
-        this.isPolling = true;
-        
-        // Start continuous polling loop
-        this.pollLoop();
-        
-        console.log('[SkeletonDisplay] Started real-time continuous polling');
-    },
-    
-    // Continuous polling loop using requestAnimationFrame for real-time updates
-    // No sleep delays - polls immediately after data is received
-    pollLoop() {
-        if (!this.isPolling) return;
-        
-        // Poll for tracking data and camera state
-        Promise.all([
-            this.pollForTrackingData(),
-            this.pollForCameraState()
-        ]).then(() => {
-            // Immediately request next frame - no delay
-            this.animationFrameId = requestAnimationFrame(() => this.pollLoop());
-        }).catch((error) => {
-            console.error('[SkeletonDisplay] Polling error:', error);
-            // On error, still continue polling but with a small delay to avoid spam
-            this.animationFrameId = requestAnimationFrame(() => this.pollLoop());
-        });
-    },
-    
-    // Stop polling
-    stopPolling() {
-        this.isPolling = false;
-        if (this.animationFrameId) {
-            cancelAnimationFrame(this.animationFrameId);
-            this.animationFrameId = null;
+    // Refresh display - fetches and renders both skeletons and safe areas
+    // Called after streamVideo refreshes
+    async refresh() {
+        if (!this.isInitialized) {
+            this.init();
         }
-        this.cameraState = {};
-        this.trackTimestamps = {}; // Clear track timestamps when stopping
-        console.log('[SkeletonDisplay] Stopped polling');
-    },
-    
-    // Poll for tracking data from the server
-    async pollForTrackingData() {
+        
         if (!AppState.currentCameraId || !AppState.isConnected) {
             this.clear();
-            return null;
+            return;
+        }
+        
+        // Clear canvas first
+        this.clear();
+        
+        // Fetch tracking data and safe areas in parallel
+        const [trackingData, safeAreas, cameraState] = await Promise.all([
+            this.fetchTrackingData(),
+            this.showSafeAreas ? this.fetchSafeAreas() : Promise.resolve(null),
+            this.fetchCameraState()
+        ]);
+        
+        // Update camera state (which may update showSafeAreas flag)
+        if (cameraState) {
+            this.updateCameraState(cameraState);
+        }
+        
+        // Render safe areas first (so they appear behind skeletons)
+        if (this.showSafeAreas && safeAreas) {
+            this.renderSafeAreas(safeAreas);
+            this.cachedSafeAreas = safeAreas;
+        }
+        
+        // Render skeletons on top
+        if (trackingData) {
+            this.renderSkeletons(trackingData);
+            this.cachedTrackingData = trackingData;
+        }
+    },
+    
+    // Fetch tracking data from server
+    async fetchTrackingData() {
+        if (!AppState.currentCameraId) {
+            return {};
         }
         
         try {
@@ -387,23 +438,42 @@ const SkeletonDisplay = {
             
             if (response.ok) {
                 const data = await response.json();
-                // Always render, even if tracking_data is empty (empty object/dictionary)
-                // The render method will clear the canvas when data is empty
-                const trackingData = data.tracking_data || {};
-                this.render(trackingData);
-                return trackingData;
+                return data.tracking_data || {};
             } else {
-                return null;
+                return this.cachedTrackingData || {};
             }
         } catch (error) {
-            console.error('[SkeletonDisplay] Error fetching tracking data:', error);
-            return null;
+            console.error('[StreamDisplay] Error fetching tracking data:', error);
+            return this.cachedTrackingData || {};
         }
     },
     
-    // Poll for camera state to get control flags
-    async pollForCameraState() {
-        if (!AppState.currentCameraId || !AppState.isConnected) {
+    // Fetch safe areas from server
+    async fetchSafeAreas() {
+        if (!AppState.currentCameraId) {
+            return [];
+        }
+        
+        try {
+            const response = await fetch(
+                STREAMING_HTTP_URL + '/api/stream/safe-areas?camera_id=' + AppState.currentCameraId
+            );
+            
+            if (response.ok) {
+                const safeAreas = await response.json();
+                return safeAreas || [];
+            } else {
+                return this.cachedSafeAreas || [];
+            }
+        } catch (error) {
+            console.error('[StreamDisplay] Error fetching safe areas:', error);
+            return this.cachedSafeAreas || [];
+        }
+    },
+    
+    // Fetch camera state to get control flags
+    async fetchCameraState() {
+        if (!AppState.currentCameraId) {
             return null;
         }
         
@@ -413,43 +483,29 @@ const SkeletonDisplay = {
             );
             
             if (response.ok) {
-                const state = await response.json();
-                this.updateCameraState(state);
-                return state;
+                return await response.json();
             } else {
                 return null;
             }
         } catch (error) {
-            console.error('[SkeletonDisplay] Error fetching camera state:', error);
+            console.error('[StreamDisplay] Error fetching camera state:', error);
             return null;
         }
     },
     
-    // Update skeleton display for current camera
-    update() {
-        if (!this.isInitialized) {
-            this.init();
-        }
-        this.startPolling();
-    },
-    
     // Cleanup
     destroy() {
-        this.stopPolling();
         this.clear();
         this.canvas = null;
         this.ctx = null;
         this.isInitialized = false;
-        
-        // Also cleanup SafeAreaDisplay
-        if (window.SafeAreaDisplay) {
-            window.SafeAreaDisplay.destroy();
-        }
-        
-        console.log('[SkeletonDisplay] Destroyed');
+        this.cachedTrackingData = {};
+        this.cachedSafeAreas = null;
+        this.cameraState = {};
+        this.trackTimestamps = {};
+        console.log('[StreamDisplay] Destroyed');
     }
 };
 
 // Export for use in other modules
-window.SkeletonDisplay = SkeletonDisplay;
-
+window.StreamDisplay = StreamDisplay;

@@ -33,7 +33,7 @@ const SafeAreaEditor = {
             throw new Error('Stream video element not found');
         }
 
-        const { width, height } = this.getImageDimensions(imgElement);
+        const { width, height } = SafeAreaEditor.getImageDimensions(imgElement);
 
         if (width === 0 || height === 0) {
             throw new Error('Stream image dimensions are zero - image may not be loaded');
@@ -58,10 +58,10 @@ const SafeAreaEditor = {
             await SafeAreaEditor.loadSafeAreasForCamera(AppState.currentCameraId);
 
             // Save current show_raw state
-            this.prevShowRaw = DOMElements.toggleRaw ? DOMElements.toggleRaw.checked : false;
+            SafeAreaEditor.prevShowRaw = DOMElements.toggleRaw ? DOMElements.toggleRaw.checked : false;
 
             // If show_raw is currently true, send command to set it to false
-            if (this.prevShowRaw) {
+            if (SafeAreaEditor.prevShowRaw) {
                 console.log('Temporarily disabling show_raw for safe area editing...');
                 await CommandManager.sendCommand("toggle_raw", false);
 
@@ -74,17 +74,17 @@ const SafeAreaEditor = {
 
             backgroundImage = new Image();
             backgroundImage.onload = () => {
-                this.initializeCanvas();
+                SafeAreaEditor.initializeCanvas();
                 DOMHelpers.showPopup(DOMElements.safeAreaPopup);
                 isEditing = true;
-                this.drawSafeAreas();
+                SafeAreaEditor.drawSafeAreas();
             };
             backgroundImage.onerror = () => {
                 alert('Failed to load background image');
                 // Restore show_raw on error
-                if (this.prevShowRaw) {
+                if (SafeAreaEditor.prevShowRaw) {
                     CommandManager.sendCommand("toggle_raw", true);
-                    this.prevShowRaw = null;
+                    SafeAreaEditor.prevShowRaw = null;
                 }
             };
 
@@ -96,9 +96,9 @@ const SafeAreaEditor = {
             alert('Failed to open safe area editor: ' + error.message);
 
             // Restore show_raw on error
-            if (this.prevShowRaw !== null && this.prevShowRaw !== undefined) {
+            if (SafeAreaEditor.prevShowRaw !== null && SafeAreaEditor.prevShowRaw !== undefined) {
                 CommandManager.sendCommand("toggle_raw", true);
-                this.prevShowRaw = null;
+                SafeAreaEditor.prevShowRaw = null;
             }
         }
     },
@@ -123,13 +123,13 @@ const SafeAreaEditor = {
         
         canvasContext = DOMElements.safeAreaCanvas.getContext('2d');
         
-        DOMElements.safeAreaCanvas.addEventListener('click', (e) => this.handleCanvasClick(e));
-        DOMElements.safeAreaCanvas.addEventListener('mousemove', (e) => this.handleCanvasMouseMove(e));
-        DOMElements.safeAreaCanvas.addEventListener('contextmenu', (e) => this.handleCanvasRightClick(e));
+        DOMElements.safeAreaCanvas.addEventListener('click', (e) => SafeAreaEditor.handleCanvasClick(e));
+        DOMElements.safeAreaCanvas.addEventListener('mousemove', (e) => SafeAreaEditor.handleCanvasMouseMove(e));
+        DOMElements.safeAreaCanvas.addEventListener('contextmenu', (e) => SafeAreaEditor.handleCanvasRightClick(e));
         
-        if (DOMElements.newPolygonBtn) DOMElements.newPolygonBtn.onclick = () => this.startNewPolygon();
-        if (DOMElements.clearAllBtn) DOMElements.clearAllBtn.onclick = () => this.clearAllPolygons();
-        if (DOMElements.saveSafeAreasBtn) DOMElements.saveSafeAreasBtn.onclick = () => this.saveSafeAreas();
+        if (DOMElements.newPolygonBtn) DOMElements.newPolygonBtn.onclick = () => SafeAreaEditor.startNewPolygon();
+        if (DOMElements.clearAllBtn) DOMElements.clearAllBtn.onclick = () => SafeAreaEditor.clearAllPolygons();
+        if (DOMElements.saveSafeAreasBtn) DOMElements.saveSafeAreasBtn.onclick = () => SafeAreaEditor.saveSafeAreas();
     },
 
     getCanvasCoordinates(event) {
@@ -146,7 +146,7 @@ const SafeAreaEditor = {
     handleCanvasClick(event) {
         if (!isEditing) return;
         
-        const { x, y } = this.getCanvasCoordinates(event);
+        const { x, y } = SafeAreaEditor.getCanvasCoordinates(event);
         const normalizedX = x / originalImageWidth;
         const normalizedY = y / originalImageHeight;
         
@@ -158,23 +158,23 @@ const SafeAreaEditor = {
             );
             
             if (distance < 0.05) {
-                this.finishCurrentPolygon();
+                SafeAreaEditor.finishCurrentPolygon();
                 return;
             }
         }
         
         currentPolygon.push([normalizedX, normalizedY]);
-        this.drawSafeAreas();
+        SafeAreaEditor.drawSafeAreas();
     },
 
     handleCanvasMouseMove(event) {
         if (!isEditing || currentPolygon.length === 0) return;
         
-        const { x, y } = this.getCanvasCoordinates(event);
+        const { x, y } = SafeAreaEditor.getCanvasCoordinates(event);
         const normalizedX = x / originalImageWidth;
         const normalizedY = y / originalImageHeight;
         
-        this.drawSafeAreas([...currentPolygon, [normalizedX, normalizedY]]);
+        SafeAreaEditor.drawSafeAreas([...currentPolygon, [normalizedX, normalizedY]]);
     },
 
     handleCanvasRightClick(event) {
@@ -182,22 +182,22 @@ const SafeAreaEditor = {
         if (!isEditing || currentPolygon.length === 0) return;
         
         currentPolygon.pop();
-        this.drawSafeAreas();
+        SafeAreaEditor.drawSafeAreas();
     },
 
     startNewPolygon() {
         if (currentPolygon.length >= 3) {
-            this.finishCurrentPolygon();
+            SafeAreaEditor.finishCurrentPolygon();
         }
         currentPolygon = [];
-        this.drawSafeAreas();
+        SafeAreaEditor.drawSafeAreas();
     },
 
     finishCurrentPolygon() {
         if (currentPolygon.length >= 3) {
             safeAreas.push([...currentPolygon]);
             currentPolygon = [];
-            this.drawSafeAreas();
+            SafeAreaEditor.drawSafeAreas();
         }
     },
 
@@ -205,7 +205,7 @@ const SafeAreaEditor = {
         if (confirm("Clear all safe areas?")) {
             safeAreas = [];
             currentPolygon = [];
-            this.drawSafeAreas();
+            SafeAreaEditor.drawSafeAreas();
         }
     },
 
@@ -216,12 +216,12 @@ const SafeAreaEditor = {
         canvasContext.drawImage(backgroundImage, 0, 0, originalImageWidth, originalImageHeight);
         
         safeAreas.forEach((polygon, index) => {
-            this.drawPolygon(polygon, `hsl(${index * 60}, 70%, 50%)`, true);
+            SafeAreaEditor.drawPolygon(polygon, `hsl(${index * 60}, 70%, 50%)`, true);
         });
         
         const polygonToDraw = tempPolygon || currentPolygon;
         if (polygonToDraw.length > 0) {
-            this.drawPolygon(polygonToDraw, 'cyan', false);
+            SafeAreaEditor.drawPolygon(polygonToDraw, 'cyan', false);
         }
     },
 
@@ -300,7 +300,7 @@ const SafeAreaEditor = {
                 CommandManager.sendCommand("update_safe_areas", safeAreas);
                 
                 setTimeout(() => {
-                    this.hide();
+                    SafeAreaEditor.hide();
                 }, 1000);
             } else {
                 throw new Error(`HTTP ${response.status}`);
@@ -326,9 +326,9 @@ const SafeAreaEditor = {
         SafeAreaEditor.prevShowRaw = null;
 
         if (canvasContext) {
-            DOMElements.safeAreaCanvas.removeEventListener('click', (e) => this.handleCanvasClick(e));
-            DOMElements.safeAreaCanvas.removeEventListener('mousemove', (e) => this.handleCanvasMouseMove(e));
-            DOMElements.safeAreaCanvas.removeEventListener('contextmenu', (e) => this.handleCanvasRightClick(e));
+            DOMElements.safeAreaCanvas.removeEventListener('click', (e) => SafeAreaEditor.handleCanvasClick(e));
+            DOMElements.safeAreaCanvas.removeEventListener('mousemove', (e) => SafeAreaEditor.handleCanvasMouseMove(e));
+            DOMElements.safeAreaCanvas.removeEventListener('contextmenu', (e) => SafeAreaEditor.handleCanvasRightClick(e));
         }
     }
 };

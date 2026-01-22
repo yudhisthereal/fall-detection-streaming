@@ -9,7 +9,6 @@ const StreamController = {
     currentBackoffInterval: REFRESH_INTERVAL_MS,
     
     // Background image state
-    backgroundImageElement: null,
     isShowingBackground: false,
     
     // HTTP JPEG streaming only - no WebRTC/RTMP
@@ -40,14 +39,16 @@ const StreamController = {
         this.currentBackoffInterval = this.baseRefreshInterval;
         this.isRefreshing = false;
         
-        // Initialize skeleton display
-        this.initializeSkeletonDisplay();
+        // Initialize unified stream display
+        this.initializeStreamDisplay();
         
         // Initial refresh
         this.refreshStreamImage();
         
         // Start periodic refresh with current backoff interval
-        AppState.streamRefreshInterval = setInterval(() => this.scheduledRefresh(), this.currentBackoffInterval);
+        AppState.streamRefreshInterval = setInterval(() => {
+            this.scheduledRefresh();
+        }, this.currentBackoffInterval);
     },
 
     stopHTTPStream() {
@@ -60,12 +61,12 @@ const StreamController = {
         }
         this.isRefreshing = false;
         
-        // Cleanup skeleton display
-        this.cleanupSkeletonDisplay();
+        // Cleanup stream display
+        this.cleanupStreamDisplay();
     },
 
     scheduledRefresh() {
-        // Only refresh if not already processing a request
+        // Always refresh - if showing background, it will use background endpoint
         if (!this.isRefreshing) {
             this.refreshStreamImage();
         } else {
@@ -79,18 +80,15 @@ const StreamController = {
         this.isRefreshing = true;
         
         const timestamp = Date.now();
-        let streamUrl;
-        
-        // Check if we should show background or live frame
-        if (this.isShowingBackground && this.backgroundImageElement) {
-            // Use cached background image
-            this.isRefreshing = false;
-            return;
-        } else {
-            streamUrl = `${STREAMING_HTTP_URL}/api/stream/frame?camera_id=${AppState.currentCameraId}&t=${timestamp}`;
-        }
+        // Use background endpoint if showing background, otherwise use frame endpoint
+        const endpoint = this.isShowingBackground ? 'background' : 'frame';
+        const streamUrl = `${STREAMING_HTTP_URL}/api/stream/${endpoint}?camera_id=${AppState.currentCameraId}&t=${timestamp}`;
         
         const img = DOMElements.streamVideo;
+        
+        // IMPORTANT: Clear previous handlers to prevent memory leaks and cross-triggering
+        img.onload = null;
+        img.onerror = null;
         
         // Use onload for IMG elements
         img.onload = () => {
@@ -99,16 +97,14 @@ const StreamController = {
             // Reset backoff on successful load
             this.currentBackoffInterval = this.baseRefreshInterval;
             this.isRefreshing = false;
-            console.debug(`Frame loaded successfully for ${AppState.currentCameraId}`);
+            console.debug(`${this.isShowingBackground ? 'Background' : 'Frame'} loaded successfully for ${AppState.currentCameraId}`);
             
             // Note: Connection status is determined solely by pings from the camera
             // Frame loads do NOT affect connection status
             // The camera's ping endpoint (/api/stream/ping) is the single source of truth
             
-            // Resize skeleton canvas to match new image dimensions
-            if (window.SkeletonDisplay) {
-                window.SkeletonDisplay.resizeCanvas();
-            }
+            // Refresh stream canvas after image load (fetches and renders skeletons + safe areas)
+            this.rerenderStreamCanvas();
         };
         
         // Handle image load errors
@@ -139,6 +135,17 @@ const StreamController = {
         // Set the source to trigger load
         img.src = streamUrl;
     },
+    
+    // Re-render stream canvas after streamVideo updates
+    // This refreshes both skeletons and safe areas on the unified canvas
+    rerenderStreamCanvas() {
+        if (window.StreamDisplay && window.StreamDisplay.isInitialized) {
+            // Resize canvas to match new image dimensions
+            window.StreamDisplay.resizeCanvas();
+            // Refresh display (fetches and renders skeletons + safe areas)
+            window.StreamDisplay.refresh();
+        }
+    },
 
     recoverStream() {
         console.log('Attempting stream recovery...');
@@ -164,7 +171,6 @@ const StreamController = {
             console.log('Manual refresh skipped - refresh in progress');
             return;
         }
-        this.backgroundImageElement = null; // Clear cached background
         this.refreshStreamImage();
     },
     
@@ -179,67 +185,28 @@ const StreamController = {
         }
     },
     
-    // Initialize skeleton display overlay
-    initializeSkeletonDisplay() {
-        if (window.SkeletonDisplay) {
-            window.SkeletonDisplay.initialize();
+    // Initialize unified stream display overlay
+    initializeStreamDisplay() {
+        if (window.StreamDisplay) {
+            window.StreamDisplay.init();
+            // Display will refresh after streamVideo refreshes (not continuously polling)
         }
     },
     
-    // Cleanup skeleton display
-    cleanupSkeletonDisplay() {
-        if (window.SkeletonDisplay) {
-            window.SkeletonDisplay.destroy();
+    // Cleanup stream display
+    cleanupStreamDisplay() {
+        if (window.StreamDisplay) {
+            window.StreamDisplay.clear();
         }
     },
     
     // Set background display mode
-    async setShowBackground(showBackground) {
+    setShowBackground(showBackground) {
         this.isShowingBackground = showBackground;
-        
-        if (showBackground && !this.backgroundImageElement) {
-            // Load background image
-            try {
-                const timestamp = Date.now();
-                const url = `${STREAMING_HTTP_URL}/api/stream/background?camera_id=${AppState.currentCameraId}&t=${timestamp}`;
-                const response = await fetch(url);
-                
-                if (response.ok) {
-                    const blob = await response.blob();
-                    const img = new Image();
-                    
-                    img.onload = () => {
-                        this.backgroundImageElement = img;
-                        DOMElements.streamVideo.src = img.src;
-                        
-                        // Resize skeleton canvas to match background
-                        if (window.SkeletonDisplay) {
-                            window.SkeletonDisplay.resizeCanvas();
-                        }
-                    };
-                    
-                    img.src = URL.createObjectURL(blob);
-                } else {
-                    // Fallback to live stream
-                    this.isShowingBackground = false;
-                    this.manualRefresh();
-                }
-            } catch (error) {
-                console.error("Failed to load background:", error);
-                this.isShowingBackground = false;
-                this.manualRefresh();
-            }
-        } else if (showBackground && this.backgroundImageElement) {
-            // Use cached background
-            DOMElements.streamVideo.src = this.backgroundImageElement.src;
-        } else {
-            // Show live stream
-            this.manualRefresh();
-        }
-        
-        // Update skeleton display
-        if (window.SkeletonDisplay) {
-            window.SkeletonDisplay.setShowRaw(!showBackground);
+        console.log(`[StreamController] Background mode: ${showBackground ? 'ON' : 'OFF'}`);
+        // The next refresh will automatically use the correct endpoint
+        if (!this.isRefreshing) {
+            this.refreshStreamImage();
         }
     }
 };

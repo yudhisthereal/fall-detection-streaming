@@ -35,6 +35,8 @@ namespace FallDetection.Streaming.Services
             // Setup backgrounds directory
             var dataDir = Path.Combine(Directory.GetCurrentDirectory(), "Data");
             _backgroundsDirectory = Path.Combine(dataDir, "backgrounds");
+
+            Console.WriteLine($"Data Directory: {dataDir}");
             
             // Create backgrounds directory if it doesn't exist
             if (!Directory.Exists(_backgroundsDirectory))

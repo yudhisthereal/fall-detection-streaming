@@ -1,3 +1,6 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
 namespace FallDetection.Streaming.Models
 {
     public class CameraInfo
@@ -78,6 +81,7 @@ namespace FallDetection.Streaming.Models
 
     public class StateReportRequest
     {
+        [JsonPropertyName("camera_id")]
         public string CameraId { get; set; } = string.Empty;
         public long Timestamp { get; set; }
         public string Status { get; set; } = "online";
@@ -106,10 +110,18 @@ namespace FallDetection.Streaming.Models
     /// </summary>
     public class PoseLabelRequest
     {
+        [JsonPropertyName("camera_id")]
         public string CameraId { get; set; } = string.Empty;
+        
+        [JsonPropertyName("track_id")]
         public int TrackId { get; set; }
+        
+        [JsonPropertyName("pose_label")]
         public string PoseLabel { get; set; } = string.Empty;
+        
+        [JsonPropertyName("safety_status")]
         public string SafetyStatus { get; set; } = string.Empty;
+        
         public double Timestamp { get; set; }
     }
 
@@ -118,14 +130,57 @@ namespace FallDetection.Streaming.Models
     /// </summary>
     public class KeypointsRequest
     {
+        [JsonPropertyName("camera_id")]
         public string CameraId { get; set; } = string.Empty;
+        
+        [JsonPropertyName("track_id")]
         public int TrackId { get; set; }
+        
         public List<float> Keypoints { get; set; } = new();
+        
+        [JsonPropertyName("safety_status")]
         public string SafetyStatus { get; set; } = string.Empty;
+        
         public double Timestamp { get; set; }
+        
         public List<double>? Bbox { get; set; }
+        
+        [JsonPropertyName("pose_label")]
         public string PoseLabel { get; set; } = string.Empty;
+    }
+
+    /// <summary>
+    /// Request model for tracks endpoint - replaces pose-label and keypoints endpoints
+    /// </summary>
+    public class TracksRequest
+    {
+        [JsonPropertyName("camera_id")]
+        public string CameraId { get; set; } = string.Empty;
+        
+        public List<TrackItem> Tracks { get; set; } = new();
+        
+        public double Timestamp { get; set; }
+    }
+
+    /// <summary>
+    /// Individual track item within a tracks request
+    /// </summary>
+    public class TrackItem
+    {
+        [JsonPropertyName("track_id")]
+        public int TrackId { get; set; }
+        
+        public List<float> Keypoints { get; set; } = new();
+        
+        public List<double>? Bbox { get; set; }
+        
+        [JsonPropertyName("pose_label")]
+        public string PoseLabel { get; set; } = string.Empty;
+        
+        [JsonPropertyName("safety_status")]
+        public string SafetyStatus { get; set; } = string.Empty;
     }
 
     #endregion
 }
+

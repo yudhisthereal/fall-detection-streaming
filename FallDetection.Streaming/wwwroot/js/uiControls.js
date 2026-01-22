@@ -24,10 +24,10 @@ const UIControls = {
             DOMElements.useSafetyCheck.checked = flags.use_safety_check;
             DOMElements.useSafetyCheck.disabled = !AppState.isConnected;
         }
-        if (typeof flags.hme === 'boolean' && DOMElements.toggleHME) {
-            DOMElements.toggleHME.checked = flags.hme;
-            DOMElements.toggleHME.disabled = !AppState.isConnected;
-        }
+        // if (typeof flags.hme === 'boolean' && DOMElements.toggleHME) {
+        //     DOMElements.toggleHME.checked = flags.hme;
+        //     DOMElements.toggleHME.disabled = !AppState.isConnected;
+        // }
         if (typeof flags.fall_algorithm === 'number' && DOMElements.fallAlgorithmSelect) {
             DOMElements.fallAlgorithmSelect.value = flags.fall_algorithm;
             DOMElements.fallAlgorithmSelect.disabled = !AppState.isConnected;
@@ -46,7 +46,7 @@ const UIControls = {
             DOMElements.autoUpdateBg,
             DOMElements.showSafeArea,
             DOMElements.useSafetyCheck,
-            DOMElements.toggleHME,
+            // DOMElements.toggleHME,
             DOMElements.fallAlgorithmSelect,
             DOMElements.setBackgroundBtn,
             DOMElements.editSafeAreaBtn
@@ -124,11 +124,11 @@ const UIControls = {
         }
         
         // Toggle HME
-        if (DOMElements.toggleHME) {
-            DOMElements.toggleHME.onchange = () => {
-                CommandManager.sendCommand("toggle_hme", DOMElements.toggleHME.checked);
-            };
-        }
+        // if (DOMElements.toggleHME) {
+        //     DOMElements.toggleHME.onchange = () => {
+        //         CommandManager.sendCommand("toggle_hme", DOMElements.toggleHME.checked);
+        //     };
+        // }
         
         // Fall Algorithm Select
         if (DOMElements.fallAlgorithmSelect) {
@@ -164,7 +164,7 @@ const UIControls = {
         
         // Edit Safe Area Button
         if (DOMElements.editSafeAreaBtn) {
-            DOMElements.editSafeAreaBtn.onclick = SafeAreaEditor.show;
+            DOMElements.editSafeAreaBtn.onclick = SafeAreaEditor.show.bind(SafeAreaEditor);
         }
     }
 };
