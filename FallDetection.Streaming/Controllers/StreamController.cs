@@ -466,13 +466,11 @@ namespace FallDetection.Streaming.Controllers
                 // Validate required fields
                 if (string.IsNullOrWhiteSpace(request.CameraId))
                 {
-                    _logger.LogWarning("Tracks received with empty camera_id");
                     return BadRequest(new { status = "error", message = "CameraId is required" });
                 }
 
                 if (request.Tracks == null)
                 {
-                    _logger.LogWarning("Tracks received with null tracks array for camera {CameraId}", request.CameraId);
                     return BadRequest(new { status = "error", message = "Tracks array is required (can be empty list)" });
                 }
 
@@ -499,24 +497,15 @@ namespace FallDetection.Streaming.Controllers
                         }
 
                         validTracks.Add(track);
-                        _logger.LogDebug("Valid track: Camera={CameraId}, Track={TrackId}, KeypointsCount={Count}, Pose={PoseLabel}, Status={SafetyStatus}", 
-                            request.CameraId, track.TrackId, track.Keypoints.Count, track.PoseLabel, track.SafetyStatus);
                     }
-
-                    // If we had tracks but all failed validation, log warning but still store empty list to clear tracks
-                    if (validTracks.Count == 0 && request.Tracks.Count > 0)
-                    {
-                        _logger.LogWarning("All tracks failed validation for camera {CameraId}, clearing all tracks", request.CameraId);
-                    }
-                }
-                else
-                {
-                    _logger.LogDebug("Empty tracks list received for camera {CameraId}, clearing all tracks", request.CameraId);
                 }
 
                 // Store all tracks at once - this replaces all existing tracking data to prevent zombie tracks
                 // Empty list will clear all existing tracks
                 _cameraService.StoreTracks(request.CameraId, validTracks, request.Timestamp);
+
+                // Log keypoints received (empty or not)
+                // _logger.LogInformation("Tracks received for {CameraId}: {TrackCount} tracks", request.CameraId, request.Tracks.Count);
 
                 var processedTracks = validTracks.Select(t => new
                 {
@@ -576,7 +565,7 @@ namespace FallDetection.Streaming.Controllers
                     var allTrackingData = _cameraService.GetAllTrackingData(camera_id);
                     // Always return tracking data, even if empty (empty dictionary)
                     var trackingData = allTrackingData ?? new Dictionary<int, TrackingData>();
-                    
+
                     return Ok(new
                     {
                         camera_id = camera_id,

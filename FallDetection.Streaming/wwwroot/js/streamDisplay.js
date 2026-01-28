@@ -1,13 +1,31 @@
-// streamDisplay.js - Unified canvas overlay for skeletons and safe areas
-// Renders both skeletons and safe areas on a single canvas
-// Only refreshes after streamVideo refreshes (not continuously polling)
+// streamDisplay.js - Two-Pass Rendering Solution (NO FLICKER)
+// Strategy: Separate canvases for background and overlays
+// - Background canvas: refreshed every frame with video frame (40 FPS)
+// - Overlay canvas: refreshed ONLY when new overlay data arrives (NOT every frame)
+// - Key insight: Overlay canvas is NEVER cleared unless we have new data to draw
+// This eliminates flicker because overlays persist visually during fetch latency
 
 const StreamDisplay = {
-    canvas: null,
-    ctx: null,
+    // Canvas elements
+    backgroundCanvas: null,
+    backgroundCtx: null,
+    overlayCanvas: null,
+    overlayCtx: null,
+
+    // State
     isInitialized: false,
+    isRunning: false,
+    backgroundRefreshInterval: null,
+    overlayRefreshInterval: null,
+
+    // Cached overlay data (only updated when new data arrives)
+    cachedTrackingData: null,
+    cachedSafeAreas: null,
+
+    // Camera state for control flags
+    cameraState: {},
     showSafeAreas: false,
-    
+
     // COCO 17 keypoint indices
     KEYPOINT_NAMES: [
         'nose',        // 0
@@ -28,7 +46,7 @@ const StreamDisplay = {
         'left_ankle',  // 15
         'right_ankle'  // 16
     ],
-    
+
     // COCO skeleton connections (pair of keypoint indices)
     SKELETON_CONNECTIONS: [
         [0, 1],   // nose -> left_eye
@@ -48,7 +66,7 @@ const StreamDisplay = {
         [12, 14], // right_hip -> right_knee
         [14, 16]  // right_knee -> right_ankle
     ],
-    
+
     // Color palette for different tracks
     TRACK_COLORS: [
         { stroke: '#00FF00', fill: '#00FF00' },   // Green
@@ -57,453 +75,452 @@ const StreamDisplay = {
         { stroke: '#FFE66D', fill: '#FFE66D' },   // Yellow
         { stroke: '#C44Dff', fill: '#C44Dff' },   // Purple
     ],
-    
-    // Camera state for control flags
-    cameraState: {},
-    
-    // Track lifetime management - tracks expire after 1 second without updates
-    trackTimestamps: {}, // Map of trackId -> last update timestamp
-    trackLifetimeMs: 1000, // 1 second lifetime
-    
-    // Cached data
-    cachedTrackingData: {},
-    cachedSafeAreas: null,
-    
-    // Initialize the canvas
+
     init() {
         if (this.isInitialized) return;
-        
-        this.canvas = document.getElementById('streamCanvas');
-        if (!this.canvas) {
-            console.warn('[StreamDisplay] streamCanvas element not found');
+
+        this.backgroundCanvas = document.getElementById('streamBackgroundCanvas');
+        this.overlayCanvas = document.getElementById('streamCanvas');
+
+        if (!this.backgroundCanvas || !this.overlayCanvas) {
+            console.warn('[StreamDisplay] Canvas elements not found');
             return;
         }
-        
-        this.ctx = this.canvas.getContext('2d');
+
+        this.backgroundCtx = this.backgroundCanvas.getContext('2d');
+        this.overlayCtx = this.overlayCanvas.getContext('2d');
         this.isInitialized = true;
-        
-        // Resize canvas to match video dimensions
-        this.resizeCanvas();
-        
-        console.log('[StreamDisplay] Unified canvas initialized');
+
+        // Resize canvases to match display size
+        this.resizeCanvases();
+
+        console.log('[StreamDisplay] Two-pass rendering initialized - Background:', this.backgroundCanvas.width, 'x', this.backgroundCanvas.height, '| Overlay:', this.overlayCanvas.width, 'x', this.overlayCanvas.height);
     },
-    
-    // Resize canvas to match video dimensions
-    resizeCanvas() {
-        const streamVideo = document.getElementById('streamVideo');
-        if (!streamVideo || !this.canvas) return;
-        
-        // Use the displayed size of the video element
-        const width = streamVideo.clientWidth || 1200;
-        const height = streamVideo.clientHeight || 675;
-        
-        // Set canvas dimensions to match displayed size
-        this.canvas.width = width;
-        this.canvas.height = height;
-        
-        console.debug(`[StreamDisplay] Canvas resized to ${width}x${height}`);
-    },
-    
-    // Clear the canvas
-    clear() {
-        if (!this.ctx || !this.canvas) return;
-        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-    },
-    
-    // Update camera state and control flags
-    updateCameraState(state) {
-        this.cameraState = state || {};
-        // Check if show_safe_areas is enabled
-        const newShowSafeAreas = this.cameraState.show_safe_area === true;
-        
-        if (newShowSafeAreas !== this.showSafeAreas) {
-            this.showSafeAreas = newShowSafeAreas;
-            console.log(`[StreamDisplay] show_safe_areas: ${this.showSafeAreas}`);
+
+    resizeCanvases() {
+        // Get the container width
+        const container = this.backgroundCanvas?.parentElement;
+        if (!container) return;
+
+        const width = container.clientWidth || 1200;
+        const height = container.clientHeight || 675;
+
+        // Set both canvases to the same size
+        if (this.backgroundCanvas) {
+            this.backgroundCanvas.width = width;
+            this.backgroundCanvas.height = height;
         }
+        if (this.overlayCanvas) {
+            this.overlayCanvas.width = width;
+            this.overlayCanvas.height = height;
+        }
+
+        console.debug(`[StreamDisplay] Canvases resized to ${width}x${height}`);
     },
-    
-    // Filter out expired tracks (tracks that haven't been updated in the last 1 second)
-    filterExpiredTracks(trackingData) {
-        if (!trackingData || Object.keys(trackingData).length === 0) {
-            return {};
-        }
-        
-        const now = Date.now();
-        const filteredData = {};
-        const activeTrackIds = new Set();
-        
-        // Process current tracking data and mark active tracks
-        for (const [trackId, data] of Object.entries(trackingData)) {
-            const trackIdNum = parseInt(trackId);
-            const lastUpdate = this.trackTimestamps[trackIdNum];
-            
-            // If track exists and is still within lifetime, keep it
-            if (lastUpdate && (now - lastUpdate) < this.trackLifetimeMs) {
-                filteredData[trackId] = data;
-                activeTrackIds.add(trackIdNum);
-            } else if (!lastUpdate) {
-                // New track - add it
-                filteredData[trackId] = data;
-                activeTrackIds.add(trackIdNum);
-            }
-            // Otherwise, track is expired - don't include it
-        }
-        
-        // Clean up expired tracks from timestamps
-        for (const trackId in this.trackTimestamps) {
-            if (!activeTrackIds.has(parseInt(trackId))) {
-                delete this.trackTimestamps[trackId];
-            }
-        }
-        
-        return filteredData;
+
+    isValidCoordinate(value) {
+        return value !== null && value !== undefined && value >= 0;
     },
-    
-    // Update track timestamps for currently active tracks
-    updateTrackTimestamps(trackingData) {
-        if (!trackingData || Object.keys(trackingData).length === 0) {
+
+    // BACKGROUND PASS: Draw video frame every 25ms
+    // This is the ONLY thing drawn on the background canvas
+    refreshBackground() {
+        if (!this.backgroundCtx || !this.backgroundCanvas) return;
+
+        const imgElement = document.getElementById('streamVideo');
+        if (!imgElement || !imgElement.complete || imgElement.naturalWidth === 0) {
+            // Fallback to dark background
+            this.backgroundCtx.fillStyle = '#000';
+            this.backgroundCtx.fillRect(0, 0, this.backgroundCanvas.width, this.backgroundCanvas.height);
             return;
         }
-        
-        const now = Date.now();
-        
-        // Update timestamps for all tracks in current data
-        for (const trackId of Object.keys(trackingData)) {
-            const trackIdNum = parseInt(trackId);
-            this.trackTimestamps[trackIdNum] = now;
+
+        // Draw video frame stretched to fill canvas
+        this.backgroundCtx.drawImage(imgElement, 0, 0, this.backgroundCanvas.width, this.backgroundCanvas.height);
+    },
+
+    // OVERLAY PASS: Clear and redraw overlays ONLY when new data arrives
+    // This is called ONLY when fetchTrackingData or fetchSafeAreas returns new data
+    refreshOverlay() {
+        if (!this.overlayCtx || !this.overlayCanvas) return;
+
+        console.log('[StreamDisplay] Refreshing overlay - Cached tracking tracks:', Object.keys(this.cachedTrackingData || {}).length, '| Cached safe areas:', (this.cachedSafeAreas || []).length);
+
+        // Clear overlay canvas BEFORE redrawing overlays
+        // This is safe because we only call this when we have new data
+        this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
+
+        // Render safe areas first (behind skeletons)
+        if (this.showSafeAreas && this.cachedSafeAreas && this.cachedSafeAreas.length > 0) {
+            this.renderSafeAreas(this.cachedSafeAreas);
+        }
+
+        // Render skeletons on top
+        if (this.cachedTrackingData) {
+            this.renderSkeletons(this.cachedTrackingData);
         }
     },
-    
-    // Get the actual image source dimensions for proper coordinate mapping
-    getImageDimensions() {
-        const streamVideo = document.getElementById('streamVideo');
-        if (!streamVideo) {
-            return { width: this.canvas.width, height: this.canvas.height };
-        }
-        
-        // Use naturalWidth/naturalHeight which are available on loaded images
-        // Fallback to width/height attributes if natural dimensions are not set
-        const width = streamVideo.naturalWidth || streamVideo.width || this.canvas.width;
-        const height = streamVideo.naturalHeight || streamVideo.height || this.canvas.height;
-        
-        return { width, height };
-    },
-    
-    // Render safe areas on the canvas
-    renderSafeAreas(safeAreas) {
-        if (!this.ctx || !this.canvas || !safeAreas || safeAreas.length === 0) {
-            return;
-        }
-        
-        const ctx = this.ctx;
-        
-        // Get source image dimensions
-        const { width: sourceWidth, height: sourceHeight } = this.getImageDimensions();
-        
-        // Get canvas dimensions (displayed size)
-        const canvasWidth = this.canvas.width;
-        const canvasHeight = this.canvas.height;
-        
-        // Calculate scale factors to map from source dimensions to canvas dimensions
-        const scaleX = canvasWidth / sourceWidth;
-        const scaleY = canvasHeight / sourceHeight;
-        
-        safeAreas.forEach((polygon, index) => {
-            if (!polygon || polygon.length < 3) return;
-            
-            // Generate a color for this safe area (hsl with different hue)
-            const hue = (index * 60) % 360;
-            const color = `hsl(${hue}, 70%, 50%)`;
-            
-            // Convert normalized coordinates to canvas coordinates
-            const points = polygon.map(point => {
-                // First convert normalized (0-1) to source coordinates
-                const sourceX = point[0] * sourceWidth;
-                const sourceY = point[1] * sourceHeight;
-                // Then scale to canvas coordinates
-                const x = sourceX * scaleX;
-                const y = sourceY * scaleY;
-                return { x, y };
-            });
-            
-            // Draw filled polygon with transparency
-            ctx.beginPath();
-            ctx.moveTo(points[0].x, points[0].y);
-            for (let i = 1; i < points.length; i++) {
-                ctx.lineTo(points[i].x, points[i].y);
-            }
-            ctx.closePath();
-            
-            // Draw border
-            ctx.strokeStyle = color;
-            ctx.lineWidth = 2;
-            ctx.stroke();
-            
-            // Draw vertices
-            points.forEach(point => {
-                ctx.beginPath();
-                ctx.arc(point.x, point.y, 4, 0, Math.PI * 2);
-                ctx.fillStyle = color;
-                ctx.fill();
-            });
-            
-            // Add label
-            ctx.font = '12px sans-serif';
-            ctx.fillStyle = color;
-            ctx.fillText(`Safe Area ${index + 1}`, points[0].x + 10, points[0].y + 20);
-        });
-    },
-    
-    // Render all skeletons from tracking data
+
     renderSkeletons(trackingData) {
         if (!trackingData || Object.keys(trackingData).length === 0) {
             return;
         }
-        
-        // Update timestamps for current tracks
-        this.updateTrackTimestamps(trackingData);
-        
-        // Filter out expired tracks
-        const activeTrackingData = this.filterExpiredTracks(trackingData);
-        
-        if (Object.keys(activeTrackingData).length === 0) {
-            return;
-        }
-        
-        // Render each tracked person
-        for (const [trackId, data] of Object.entries(activeTrackingData)) {
+
+        // Server is the source of truth - render all tracks returned by server
+        for (const [trackId, data] of Object.entries(trackingData)) {
             this.renderSkeleton(parseInt(trackId), data);
         }
     },
-    
-    // Check if keypoint coordinate is valid (not -1)
-    isValidCoordinate(value) {
-        return value !== null && value !== undefined && value >= 0;
-    },
-    
-    // Render a single skeleton
+
     renderSkeleton(trackId, data) {
-        if (!this.ctx || !data.keypoints || data.keypoints.length < 34) return;
-        
+        if (!this.overlayCtx || !data.keypoints || data.keypoints.length < 34) return;
+
         const keypoints = data.keypoints;
         const colorIndex = trackId % this.TRACK_COLORS.length;
         const color = this.TRACK_COLORS[colorIndex];
-        
+
         // Keypoints are in 320x224 coordinate space, scale to canvas size
-        const scaleX = this.canvas.width / 320;
-        const scaleY = this.canvas.height / 224;
-        
-        // Draw skeleton connections (limbs)
-        this.ctx.strokeStyle = color.stroke;
-        this.ctx.lineWidth = 3;
-        this.ctx.lineCap = 'round';
-        
+        const scaleX = this.overlayCanvas.width / 320;
+        const scaleY = this.overlayCanvas.height / 224;
+
+        // Draw skeleton connections
+        this.overlayCtx.strokeStyle = color.stroke;
+        this.overlayCtx.lineWidth = 3;
+        this.overlayCtx.lineCap = 'round';
+
         for (const [startIdx, endIdx] of this.SKELETON_CONNECTIONS) {
             const startX = keypoints[startIdx * 2] * scaleX;
             const startY = keypoints[startIdx * 2 + 1] * scaleY;
             const endX = keypoints[endIdx * 2] * scaleX;
             const endY = keypoints[endIdx * 2 + 1] * scaleY;
-            
-            // Only draw if both points are valid (not -1)
+
             if (this.isValidCoordinate(startX) && this.isValidCoordinate(startY) &&
                 this.isValidCoordinate(endX) && this.isValidCoordinate(endY)) {
-                this.ctx.beginPath();
-                this.ctx.moveTo(startX, startY);
-                this.ctx.lineTo(endX, endY);
-                this.ctx.stroke();
+                this.overlayCtx.beginPath();
+                this.overlayCtx.moveTo(startX, startY);
+                this.overlayCtx.lineTo(endX, endY);
+                this.overlayCtx.stroke();
             }
         }
-        
+
         // Draw keypoints
         for (let i = 0; i < 17; i++) {
             const x = keypoints[i * 2] * scaleX;
             const y = keypoints[i * 2 + 1] * scaleY;
-            
-            // Only draw if coordinate is valid (not -1)
+
             if (this.isValidCoordinate(x) && this.isValidCoordinate(y)) {
-                // Draw point
-                this.ctx.fillStyle = color.fill;
-                this.ctx.beginPath();
-                this.ctx.arc(x, y, 5, 0, Math.PI * 2);
-                this.ctx.fill();
-                
-                // Draw outline
-                this.ctx.strokeStyle = '#FFFFFF';
-                this.ctx.lineWidth = 1;
-                this.ctx.stroke();
+                this.overlayCtx.fillStyle = color.fill;
+                this.overlayCtx.beginPath();
+                this.overlayCtx.arc(x, y, 5, 0, Math.PI * 2);
+                this.overlayCtx.fill();
+
+                this.overlayCtx.strokeStyle = '#FFFFFF';
+                this.overlayCtx.lineWidth = 1;
+                this.overlayCtx.stroke();
             }
         }
-        
-        // Draw pose label above the skeleton
+
+        // Draw pose label
         if (data.pose_label) {
             this.drawPoseLabel(data.pose_label, keypoints, trackId, scaleX, scaleY);
         }
     },
-    
+
     // Draw pose label above the skeleton
     drawPoseLabel(poseLabel, keypoints, trackId, scaleX = 1, scaleY = 1) {
+        if (!poseLabel || !this.overlayCtx) return;
+
         // Find the topmost keypoint (nose)
         const noseX = keypoints[0] * scaleX;
         const noseY = keypoints[1] * scaleY;
-        
+
         // Skip if nose position is invalid
         if (!this.isValidCoordinate(noseX) || !this.isValidCoordinate(noseY)) {
             return;
         }
-        
+
         // Calculate label position (above the nose, clamped to canvas bounds)
         const labelX = noseX;
         const labelY = Math.max(30, noseY - 20);
-        
+
         // Get color based on track
         const colorIndex = trackId % this.TRACK_COLORS.length;
         const baseColor = this.TRACK_COLORS[colorIndex];
-        
-        // Measure text width
-        this.ctx.font = 'bold 14px sans-serif';
-        const textWidth = this.ctx.measureText(poseLabel).width;
-        
+
+        // Set font and measure text width
+        this.overlayCtx.font = 'bold 14px sans-serif';
+        this.overlayCtx.textAlign = 'left';
+        this.overlayCtx.textBaseline = 'top';
+        const textWidth = this.overlayCtx.measureText(poseLabel).width;
+        const textHeight = 20;
+        const padding = 8;
+
         // Clamp x position to prevent overflow
-        const canvasWidth = this.canvas.width;
-        const clampedX = Math.max(textWidth / 2 + 10, Math.min(labelX, canvasWidth - textWidth / 2 - 10));
-        
-        // Draw label background
-        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-        this.ctx.beginPath();
-        this.ctx.roundRect(clampedX - textWidth / 2 - 10, labelY - 20, textWidth + 20, 24, 4);
-        this.ctx.fill();
-        
+        const canvasWidth = this.overlayCanvas.width;
+        const canvasHeight = this.overlayCanvas.height;
+        const boxWidth = textWidth + padding * 2;
+        const boxHeight = textHeight + padding * 2;
+
+        // Calculate box position (centered above nose)
+        let boxX = labelX - boxWidth / 2;
+        let boxY = labelY - boxHeight - 5;
+
+        // Clamp to canvas bounds
+        boxX = Math.max(0, Math.min(boxX, canvasWidth - boxWidth));
+        boxY = Math.max(0, Math.min(boxY, canvasHeight - boxHeight));
+
+        // Draw rounded rectangle background (using path for compatibility)
+        this.overlayCtx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        this.overlayCtx.beginPath();
+        const radius = 4;
+        this.overlayCtx.moveTo(boxX + radius, boxY);
+        this.overlayCtx.lineTo(boxX + boxWidth - radius, boxY);
+        this.overlayCtx.quadraticCurveTo(boxX + boxWidth, boxY, boxX + boxWidth, boxY + radius);
+        this.overlayCtx.lineTo(boxX + boxWidth, boxY + boxHeight - radius);
+        this.overlayCtx.quadraticCurveTo(boxX + boxWidth, boxY + boxHeight, boxX + boxWidth - radius, boxY + boxHeight);
+        this.overlayCtx.lineTo(boxX + radius, boxY + boxHeight);
+        this.overlayCtx.quadraticCurveTo(boxX, boxY + boxHeight, boxX, boxY + boxHeight - radius);
+        this.overlayCtx.lineTo(boxX, boxY + radius);
+        this.overlayCtx.quadraticCurveTo(boxX, boxY, boxX + radius, boxY);
+        this.overlayCtx.closePath();
+        this.overlayCtx.fill();
+
         // Draw label border
-        this.ctx.strokeStyle = baseColor.stroke;
-        this.ctx.lineWidth = 2;
-        this.ctx.stroke();
-        
+        this.overlayCtx.strokeStyle = baseColor.stroke;
+        this.overlayCtx.lineWidth = 2;
+        this.overlayCtx.stroke();
+
         // Draw label text
-        this.ctx.fillStyle = '#FFFFFF';
-        this.ctx.textAlign = 'center';
-        this.ctx.textBaseline = 'middle';
-        this.ctx.fillText(poseLabel, clampedX, labelY - 8);
+        this.overlayCtx.fillStyle = '#FFFFFF';
+        this.overlayCtx.textAlign = 'left';
+        this.overlayCtx.textBaseline = 'top';
+        this.overlayCtx.fillText(poseLabel, boxX + padding, boxY + padding);
     },
-    
-    // Refresh display - fetches and renders both skeletons and safe areas
-    // Called after streamVideo refreshes
-    async refresh() {
-        if (!this.isInitialized) {
-            this.init();
-        }
-        
-        if (!AppState.currentCameraId || !AppState.isConnected) {
-            this.clear();
+
+    renderSafeAreas(safeAreas) {
+        if (!safeAreas || safeAreas.length === 0) {
             return;
         }
-        
-        // Clear canvas first
-        this.clear();
-        
-        // Fetch tracking data and safe areas in parallel
-        const [trackingData, safeAreas, cameraState] = await Promise.all([
-            this.fetchTrackingData(),
-            this.showSafeAreas ? this.fetchSafeAreas() : Promise.resolve(null),
-            this.fetchCameraState()
-        ]);
-        
-        // Update camera state (which may update showSafeAreas flag)
-        if (cameraState) {
-            this.updateCameraState(cameraState);
-        }
-        
-        // Render safe areas first (so they appear behind skeletons)
-        if (this.showSafeAreas && safeAreas) {
-            this.renderSafeAreas(safeAreas);
-            this.cachedSafeAreas = safeAreas;
-        }
-        
-        // Render skeletons on top
-        if (trackingData) {
-            this.renderSkeletons(trackingData);
-            this.cachedTrackingData = trackingData;
+
+        safeAreas.forEach((polygon, index) => {
+            if (!polygon || polygon.length < 3) return;
+
+            const hue = (index * 60) % 360;
+            const color = `hsl(${hue}, 70%, 50%)`;
+
+            // Convert normalized coordinates to canvas coordinates
+            const points = polygon.map(point => {
+                const x = point[0] * this.overlayCanvas.width;
+                const y = point[1] * this.overlayCanvas.height;
+                return { x, y };
+            });
+
+            // Draw polygon
+            this.overlayCtx.beginPath();
+            this.overlayCtx.moveTo(points[0].x, points[0].y);
+            for (let i = 1; i < points.length; i++) {
+                this.overlayCtx.lineTo(points[i].x, points[i].y);
+            }
+            this.overlayCtx.closePath();
+
+            this.overlayCtx.strokeStyle = color;
+            this.overlayCtx.lineWidth = 2;
+            this.overlayCtx.stroke();
+
+            // Draw vertices
+            points.forEach(point => {
+                this.overlayCtx.beginPath();
+                this.overlayCtx.arc(point.x, point.y, 4, 0, Math.PI * 2);
+                this.overlayCtx.fillStyle = color;
+                this.overlayCtx.fill();
+            });
+
+            // Add label
+            this.overlayCtx.font = '12px sans-serif';
+            this.overlayCtx.fillStyle = color;
+            this.overlayCtx.fillText(`Safe Area ${index + 1}`, points[0].x + 10, points[0].y + 20);
+        });
+    },
+
+    // Update camera state and control flags
+    updateCameraState(state) {
+        // Replace entirely, don't merge - prevents accumulation
+        this.cameraState = state ? { ...state } : {};
+
+        // Check if show_safe_areas is enabled
+        const newShowSafeAreas = this.cameraState.show_safe_area === true;
+
+        if (newShowSafeAreas !== this.showSafeAreas) {
+            this.showSafeAreas = newShowSafeAreas;
+            console.log(`[StreamDisplay] show_safe_areas: ${this.showSafeAreas}`);
+            // Refresh overlay when showSafeAreas flag changes
+            this.refreshOverlay();
         }
     },
-    
-    // Fetch tracking data from server
+
+    // Fetch tracking data and refresh overlay ONLY if data changed
     async fetchTrackingData() {
         if (!AppState.currentCameraId) {
-            return {};
+            return;
         }
-        
+
         try {
             const response = await fetch(
                 STREAMING_HTTP_URL + '/api/stream/tracking-data?camera_id=' + AppState.currentCameraId
             );
-            
+
             if (response.ok) {
                 const data = await response.json();
-                return data.tracking_data || {};
-            } else {
-                return this.cachedTrackingData || {};
+                const trackingData = data.tracking_data || {};
+
+                // Only refresh overlay if data actually changed
+                if (JSON.stringify(trackingData) !== JSON.stringify(this.cachedTrackingData)) {
+                    const oldCount = Object.keys(this.cachedTrackingData || {}).length;
+                    const newCount = Object.keys(trackingData).length;
+                    this.cachedTrackingData = trackingData;
+                    console.log(`[StreamDisplay] Tracking data changed: ${oldCount} -> ${newCount} tracks`);
+                    this.refreshOverlay(); // ONLY refresh overlay when data changes
+                }
             }
         } catch (error) {
             console.error('[StreamDisplay] Error fetching tracking data:', error);
-            return this.cachedTrackingData || {};
+            // On error, DO NOT clear overlay - cached data persists visually
         }
     },
-    
-    // Fetch safe areas from server
+
+    // Fetch safe areas and refresh overlay ONLY if data changed
     async fetchSafeAreas() {
         if (!AppState.currentCameraId) {
-            return [];
+            return;
         }
-        
+
         try {
             const response = await fetch(
                 STREAMING_HTTP_URL + '/api/stream/safe-areas?camera_id=' + AppState.currentCameraId
             );
-            
+
             if (response.ok) {
-                const safeAreas = await response.json();
-                return safeAreas || [];
-            } else {
-                return this.cachedSafeAreas || [];
+                const safeAreas = await response.json() || [];
+
+                // Only refresh overlay if data actually changed
+                if (JSON.stringify(safeAreas) !== JSON.stringify(this.cachedSafeAreas)) {
+                    const oldCount = (this.cachedSafeAreas || []).length;
+                    const newCount = safeAreas.length;
+                    this.cachedSafeAreas = safeAreas;
+                    console.log(`[StreamDisplay] Safe areas changed: ${oldCount} -> ${newCount} areas`);
+                    this.refreshOverlay(); // ONLY refresh overlay when data changes
+                }
             }
         } catch (error) {
             console.error('[StreamDisplay] Error fetching safe areas:', error);
-            return this.cachedSafeAreas || [];
+            // On error, DO NOT clear overlay - cached data persists visually
         }
     },
-    
+
     // Fetch camera state to get control flags
     async fetchCameraState() {
         if (!AppState.currentCameraId) {
             return null;
         }
-        
+
         try {
             const response = await fetch(
                 STREAMING_HTTP_URL + '/api/stream/camera-state?camera_id=' + AppState.currentCameraId
             );
-            
+
             if (response.ok) {
-                return await response.json();
-            } else {
-                return null;
+                const state = await response.json();
+                this.updateCameraState(state);
+                return state;
             }
         } catch (error) {
             console.error('[StreamDisplay] Error fetching camera state:', error);
-            return null;
         }
+        return null;
     },
-    
+
+    start() {
+        if (this.isRunning) return;
+
+        this.init();
+
+        // Initialize with current data
+        this.fetchTrackingData();
+        this.fetchSafeAreas();
+        this.fetchCameraState();
+
+        // Background pass: Refresh every 25ms (40 FPS)
+        // This ensures the video frame is always current
+        this.backgroundRefreshInterval = setInterval(() => {
+            this.refreshBackground();
+        }, 25);
+
+        // Overlay pass: Fetch and check for updates every 25ms (40 FPS)
+        // BUT only redraw overlay if data actually changed
+        this.overlayRefreshInterval = setInterval(() => {
+            this.fetchTrackingData();
+            this.fetchSafeAreas();
+            this.fetchCameraState();
+        }, 25);
+
+        this.isRunning = true;
+        console.log('[StreamDisplay] Two-pass rendering started - Background: 40 FPS | Overlay: Only on data change');
+    },
+
+    stop() {
+        if (!this.isRunning) return;
+
+        if (this.backgroundRefreshInterval) {
+            clearInterval(this.backgroundRefreshInterval);
+            this.backgroundRefreshInterval = null;
+        }
+        if (this.overlayRefreshInterval) {
+            clearInterval(this.overlayRefreshInterval);
+            this.overlayRefreshInterval = null;
+        }
+
+        // Clear both canvases
+        if (this.backgroundCtx) {
+            this.backgroundCtx.fillStyle = '#000';
+            this.backgroundCtx.fillRect(0, 0, this.backgroundCanvas.width, this.backgroundCanvas.height);
+        }
+        if (this.overlayCtx) {
+            this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
+        }
+
+        // Reset cached data
+        this.cachedTrackingData = null;
+        this.cachedSafeAreas = null;
+
+        this.isRunning = false;
+        console.log('[StreamDisplay] Two-pass rendering stopped');
+    },
+
+    // Manual refresh trigger (for button click, etc.)
+    async manualRefresh() {
+        // Fetch all data and refresh overlay
+        await Promise.all([
+            this.fetchTrackingData(),
+            this.fetchSafeAreas(),
+            this.fetchCameraState()
+        ]);
+        // Refresh background immediately
+        this.refreshBackground();
+    },
+
     // Cleanup
     destroy() {
-        this.clear();
-        this.canvas = null;
-        this.ctx = null;
+        this.stop();
+        this.backgroundCanvas = null;
+        this.backgroundCtx = null;
+        this.overlayCanvas = null;
+        this.overlayCtx = null;
         this.isInitialized = false;
-        this.cachedTrackingData = {};
+        this.cachedTrackingData = null;
         this.cachedSafeAreas = null;
         this.cameraState = {};
-        this.trackTimestamps = {};
-        console.log('[StreamDisplay] Destroyed');
+        this.showSafeAreas = false;
+        console.log('[StreamDisplay] Destroyed and cleaned up');
     }
 };
 

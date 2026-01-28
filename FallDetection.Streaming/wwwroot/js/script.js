@@ -103,7 +103,9 @@ async function initializeApplication() {
 // ============================================
 
 function startFlagSyncWorker() {
-    AppState.flagSyncWorker = setInterval(async () => {
+    // Use recursive setTimeout instead of setInterval to prevent stacking requests
+    // This ensures each request completes before the next one starts
+    async function flagSyncLoop() {
         if (AppState.currentCameraId && AppState.isConnected) {
             try {
                 const flags = await CommandManager.fetchCameraState(AppState.currentCameraId);
@@ -117,7 +119,12 @@ function startFlagSyncWorker() {
                 console.error("Flag sync error:", error);
             }
         }
-    }, 500);
+        // Schedule next sync after current one completes
+        AppState.flagSyncWorker = setTimeout(flagSyncLoop, 500);
+    }
+
+    // Start the loop
+    AppState.flagSyncWorker = setTimeout(flagSyncLoop, 500);
 }
 
 // ============================================

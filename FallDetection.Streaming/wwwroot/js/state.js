@@ -58,7 +58,8 @@ const AppState = {
         if (this.cameraStateTimer) clearTimeout(this.cameraStateTimer);
         if (this.cameraListTimer) clearInterval(this.cameraListTimer);
         if (this.cameraStatusTimer) clearInterval(this.cameraStatusTimer);
-        if (this.flagSyncWorker) clearInterval(this.flagSyncWorker);
+        // flagSyncWorker is now a recursive setTimeout, not setInterval
+        if (this.flagSyncWorker) clearTimeout(this.flagSyncWorker);
         if (this.streamRefreshInterval) clearInterval(this.streamRefreshInterval);
         if (this.skeletonPollInterval) clearInterval(this.skeletonPollInterval);
     }

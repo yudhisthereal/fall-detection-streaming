@@ -513,13 +513,35 @@ namespace FallDetection.Streaming.Services
             }
         }
 
+        /// <summary>
+        /// Get camera state with copied dictionaries to prevent race conditions during JSON serialization
+        /// </summary>
         public CameraState? GetCameraState(string cameraId)
         {
             lock (_cameraStatesLock)
             {
                 if (_cameraStates.TryGetValue(cameraId, out var state))
                 {
-                    return state;
+                    // Return a copy with copied dictionaries to prevent InvalidOperationException
+                    // when other threads modify the collections during serialization
+                    return new CameraState
+                    {
+                        ControlFlags = new Dictionary<string, bool>(state.ControlFlags),
+                        ControlFlagsInt = new Dictionary<string, int>(state.ControlFlagsInt),
+                        SafeAreas = new List<List<List<double>>>(state.SafeAreas),
+                        IpAddress = state.IpAddress,
+                        LastSeen = state.LastSeen,
+                        LastReport = state.LastReport,
+                        IsRecording = state.IsRecording,
+                        RtmpConnected = state.RtmpConnected,
+                        CameraStatus = state.CameraStatus,
+                        Timestamp = state.Timestamp,
+                        IsRegistered = state.IsRegistered,
+                        BackgroundUpdatePending = state.BackgroundUpdatePending,
+                        BackgroundUpdateAcknowledged = state.BackgroundUpdateAcknowledged,
+                        // Note: TrackingData is NOT copied here for performance - use GetAllTrackingData() for thread-safe access
+                        TrackingData = new Dictionary<int, TrackingData>()
+                    };
                 }
 
                 // Initialize default state
@@ -541,7 +563,8 @@ namespace FallDetection.Streaming.Services
                         ["fall_algorithm"] = 3
                     },
                     SafeAreas = new List<List<List<double>>>(),
-                    LastSeen = 0
+                    LastSeen = 0,
+                    TrackingData = new Dictionary<int, TrackingData>()
                 };
 
                 _cameraStates[cameraId] = defaultState;
@@ -768,13 +791,17 @@ namespace FallDetection.Streaming.Services
                 var state = GetCameraState(cameraId);
                 if (state == null)
                 {
-                    Console.WriteLine($"Cannot store tracks: Camera {cameraId} not found");
+                    Console.WriteLine($"[StoreTracks] Camera {cameraId} not found");
                     return;
                 }
 
                 var currentTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                var beforeCount = state.TrackingData.Count;
+
+                Console.WriteLine($"[StoreTracks] Camera {cameraId}: BEFORE={beforeCount} tracks, RECEIVED={tracks.Count} tracks, timestamp={timestamp}");
 
                 // Clear all existing tracking data to prevent zombie tracks
+                // Camera is the single source of truth - empty list means no people detected
                 state.TrackingData.Clear();
 
                 // Store only the tracks from the current request
@@ -796,21 +823,33 @@ namespace FallDetection.Streaming.Services
 
                 UpdateCameraState(cameraId, state);
                 SaveCameraStates();
-                Console.WriteLine($"Stored {tracks.Count} tracks for camera {cameraId} (replaced all existing tracks)");
+                Console.WriteLine($"[StoreTracks] Camera {cameraId}: AFTER={state.TrackingData.Count} tracks (cleared and stored {tracks.Count} tracks)");
             }
         }
 
         /// <summary>
-        /// Get pose label for a specific camera and track
+        /// Get tracking data for a specific camera and track
+        /// Returns a copy to prevent race conditions
         /// </summary>
         public TrackingData? GetTrackingData(string cameraId, int trackId)
         {
             lock (_cameraStatesLock)
             {
-                var state = GetCameraState(cameraId);
-                if (state != null && state.TrackingData.TryGetValue(trackId, out var trackingData))
+                // Get the internal state directly (bypass GetCameraState to avoid extra copying)
+                if (_cameraStates.TryGetValue(cameraId, out var state) &&
+                    state.TrackingData.TryGetValue(trackId, out var trackingData))
                 {
-                    return trackingData;
+                    // Return a copy with copied collections
+                    return new TrackingData
+                    {
+                        TrackId = trackingData.TrackId,
+                        Keypoints = trackingData.Keypoints != null ? new List<float>(trackingData.Keypoints) : null,
+                        Bbox = trackingData.Bbox != null ? new List<double>(trackingData.Bbox) : null,
+                        PoseLabel = trackingData.PoseLabel,
+                        SafetyStatus = trackingData.SafetyStatus,
+                        Timestamp = trackingData.Timestamp,
+                        LastUpdated = trackingData.LastUpdated
+                    };
                 }
                 return null;
             }
@@ -818,16 +857,24 @@ namespace FallDetection.Streaming.Services
 
         /// <summary>
         /// Get all tracking data for a camera
+        /// Returns a copy to prevent race conditions during JSON serialization
         /// </summary>
         public Dictionary<int, TrackingData>? GetAllTrackingData(string cameraId)
         {
             lock (_cameraStatesLock)
             {
-                var state = GetCameraState(cameraId);
-                if (state != null)
+                // Get the internal state directly (bypass GetCameraState to avoid unnecessary copying)
+                if (_cameraStates.TryGetValue(cameraId, out var state))
                 {
-                    return state.TrackingData;
+                    var count = state.TrackingData.Count;
+                    Console.WriteLine($"[GetAllTrackingData] Camera {cameraId}: returning {count} tracks");
+
+                    // Return a copy to prevent InvalidOperationException during serialization
+                    // when StoreTracks modifies the collection concurrently
+                    return new Dictionary<int, TrackingData>(state.TrackingData);
                 }
+
+                Console.WriteLine($"[GetAllTrackingData] Camera {cameraId}: state not found");
                 return null;
             }
         }

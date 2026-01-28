@@ -98,6 +98,11 @@ const CommandManager = {
                     ConnectionStatus.updateConnectionStatusDebounced(cameraId, flags._connected, null, silent);
                 }
                 
+                // Update StreamDisplay camera state (which will check show_raw flag)
+                if (window.StreamDisplay) {
+                    window.StreamDisplay.updateCameraState(flags);
+                }
+                
                 return flags;
             }
         } catch (error) {

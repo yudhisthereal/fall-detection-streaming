@@ -23,6 +23,9 @@
     <script src="~/js/poseDisplay.js" defer></script>
     <script src="~/js/streamDisplay.js" defer></script>
     <script src="~/js/algorithmInfo.js" defer></script>
+    <script src="~/js/debugRenderer.js" defer></script>
+    <script src="~/js/debugTwoPassRenderer.js" defer></script>
+    <script src="~/js/debugRetainedRenderer.js" defer></script>
     @* <script src="~/js/webrtc.js" defer></script> *@
 </head>
 <body>
@@ -33,10 +36,42 @@
         
         <!-- Stream comes first after title -->
         <div style="position: relative; display: inline-block; width: 100%; max-width: 1200px; margin: 20px auto; display: block;">
-            <img id="streamVideo" alt="Live Stream" style="width:100%; height:auto; aspect-ratio:16/9; display:block; border-radius:12px; border:2px solid var(--theme-border); background:#000; position: relative; z-index: 1;">
-            <div id="canvasOverlay" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2;">
-                <canvas id="streamCanvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;"></canvas>
+            <!-- Two-pass rendering: Background canvas (video frame) + Overlay canvas (skeletons & safe areas) -->
+            <div style="position: relative; width: 100%; aspect-ratio: 16/9;">
+                <canvas id="streamBackgroundCanvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border-radius:12px; border:2px solid var(--theme-border); background:#000; z-index: 1;"></canvas>
+                <canvas id="streamCanvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2;"></canvas>
             </div>
+            <!-- Hidden img element for loading video frames (not displayed directly) -->
+            <img id="streamVideo" alt="Live Stream" style="display: none;" />
+        </div>
+
+        <!-- Debug Canvas - Separate from main stream to isolate rendering issues -->
+        <div id="debugCanvasContainer" style="position: relative; display: inline-block; width: 100%; max-width: 1200px; margin: 20px auto; display: none;">
+            <div style="background: var(--theme-surface); padding: 10px; border-radius: 8px 8px 0 0; border: 2px solid var(--theme-border); border-bottom: none;">
+                <h3 style="margin: 0; color: var(--theme-text); font-size: 14px;">🐛 Debug Canvas (separate, no overlay) - Skeletons & Safe Areas</h3>
+            </div>
+            <canvas id="debugCanvas" width="1200" height="675" style="width:100%; height:auto; aspect-ratio:16/9; display:block; border-radius:0 0 12px 12px; border:2px solid var(--theme-border); background:#111;"></canvas>
+        </div>
+
+        <!-- Debug Mode A — Two-Pass Rendering -->
+        <div id="debugTwoPassContainer" style="position: relative; display: inline-block; width: 100%; max-width: 1200px; margin: 20px auto; display: none;">
+            <div style="background: var(--theme-surface); padding: 10px; border-radius: 8px 8px 0 0; border: 2px solid var(--theme-border); border-bottom: none;">
+                <h3 style="margin: 0; color: var(--theme-text); font-size: 14px;">🔹 Debug Mode A — Two-Pass Rendering (Bg + Overlay layers)</h3>
+                <p style="margin: 5px 0 0 0; color: var(--theme-text); font-size: 12px;">Background canvas refreshed every frame • Overlay canvas only when new data arrives • No flicker</p>
+            </div>
+            <div style="position: relative; width: 100%; aspect-ratio: 16/9;">
+                <canvas id="debugBgCanvas" width="1200" height="675" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border-radius:0 0 12px 12px; border:2px solid var(--theme-border); border-top: none; background:#000; z-index: 1;"></canvas>
+                <canvas id="debugOverlayCanvas" width="1200" height="675" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2;"></canvas>
+            </div>
+        </div>
+
+        <!-- Debug Mode B — Last-Known Overlay Retention -->
+        <div id="debugRetainedContainer" style="position: relative; display: inline-block; width: 100%; max-width: 1200px; margin: 20px auto; display: none;">
+            <div style="background: var(--theme-surface); padding: 10px; border-radius: 8px 8px 0 0; border: 2px solid var(--theme-border); border-bottom: none;">
+                <h3 style="margin: 0; color: var(--theme-text); font-size: 14px;">🧠 Debug Mode B — Last-Known Overlay Retention (Single canvas)</h3>
+                <p style="margin: 5px 0 0 0; color: var(--theme-text); font-size: 12px;">Caches last valid tracking data & safe areas • Always renders from cache • Overlay persists during fetch latency</p>
+            </div>
+            <canvas id="debugRetainedCanvas" width="1200" height="675" style="width:100%; height:auto; aspect-ratio:16/9; display:block; border-radius:0 0 12px 12px; border:2px solid var(--theme-border); border-top: none; background:#000;"></canvas>
         </div>
 
         <!-- Camera Controls -->
@@ -58,6 +93,15 @@
                 </button>
                 <button id="manageCamerasBtn" class="btn btn-secondary">
                     📷 Manage Cameras
+                </button>
+                <button id="toggleDebugBtn" class="btn btn-info" onclick="toggleDebugRenderer()">
+                    🐛 Debug Canvas
+                </button>
+                <button id="toggleTwoPassBtn" class="btn btn-primary" onclick="toggleTwoPassRenderer()">
+                    🔹 Two-Pass Mode
+                </button>
+                <button id="toggleRetainedBtn" class="btn btn-success" onclick="toggleRetainedRenderer()">
+                    🧠 Retained Mode
                 </button>
             </div>
             
@@ -204,6 +248,134 @@
 
     <script src="~/js/script.js" defer></script>
     <script>
+        // Debug renderer toggle
+        let debugRendererActive = false;
+        let twoPassRendererActive = false;
+        let retainedRendererActive = false;
+
+        function toggleDebugRenderer() {
+            const btn = document.getElementById('toggleDebugBtn');
+            const debugCanvasContainer = document.getElementById('debugCanvasContainer');
+
+            if (debugRendererActive) {
+                // Stop debug renderer
+                if (window.DebugRenderer) {
+                    window.DebugRenderer.stop();
+                }
+                debugRendererActive = false;
+                if (btn) {
+                    btn.textContent = '🐛 Debug Canvas';
+                    btn.classList.remove('btn-success');
+                    btn.classList.add('btn-info');
+                }
+                if (debugCanvasContainer) {
+                    debugCanvasContainer.style.display = 'none';
+                }
+                console.log('[Debug] Debug renderer stopped');
+            } else {
+                // Stop other debug renderers first
+                if (twoPassRendererActive) toggleTwoPassRenderer();
+                if (retainedRendererActive) toggleRetainedRenderer();
+
+                // Start debug renderer
+                if (window.DebugRenderer) {
+                    window.DebugRenderer.start();
+                }
+                debugRendererActive = true;
+                if (btn) {
+                    btn.textContent = '✓ Debug ON';
+                    btn.classList.remove('btn-info');
+                    btn.classList.add('btn-success');
+                }
+                if (debugCanvasContainer) {
+                    debugCanvasContainer.style.display = 'block';
+                }
+                console.log('[Debug] Debug renderer started');
+            }
+        }
+
+        function toggleTwoPassRenderer() {
+            const btn = document.getElementById('toggleTwoPassBtn');
+            const debugTwoPassContainer = document.getElementById('debugTwoPassContainer');
+
+            if (twoPassRendererActive) {
+                // Stop two-pass renderer
+                if (window.DebugTwoPassRenderer) {
+                    window.DebugTwoPassRenderer.stop();
+                }
+                twoPassRendererActive = false;
+                if (btn) {
+                    btn.textContent = '🔹 Two-Pass Mode';
+                    btn.classList.remove('btn-success');
+                    btn.classList.add('btn-primary');
+                }
+                if (debugTwoPassContainer) {
+                    debugTwoPassContainer.style.display = 'none';
+                }
+                console.log('[Debug] Two-Pass renderer stopped');
+            } else {
+                // Stop other debug renderers first
+                if (debugRendererActive) toggleDebugRenderer();
+                if (retainedRendererActive) toggleRetainedRenderer();
+
+                // Start two-pass renderer
+                if (window.DebugTwoPassRenderer) {
+                    window.DebugTwoPassRenderer.start();
+                }
+                twoPassRendererActive = true;
+                if (btn) {
+                    btn.textContent = '✓ Two-Pass ON';
+                    btn.classList.remove('btn-primary');
+                    btn.classList.add('btn-success');
+                }
+                if (debugTwoPassContainer) {
+                    debugTwoPassContainer.style.display = 'block';
+                }
+                console.log('[Debug] Two-Pass renderer started');
+            }
+        }
+
+        function toggleRetainedRenderer() {
+            const btn = document.getElementById('toggleRetainedBtn');
+            const debugRetainedContainer = document.getElementById('debugRetainedContainer');
+
+            if (retainedRendererActive) {
+                // Stop retained renderer
+                if (window.DebugRetainedRenderer) {
+                    window.DebugRetainedRenderer.stop();
+                }
+                retainedRendererActive = false;
+                if (btn) {
+                    btn.textContent = '🧠 Retained Mode';
+                    btn.classList.remove('btn-warning');
+                    btn.classList.add('btn-success');
+                }
+                if (debugRetainedContainer) {
+                    debugRetainedContainer.style.display = 'none';
+                }
+                console.log('[Debug] Retained renderer stopped');
+            } else {
+                // Stop other debug renderers first
+                if (debugRendererActive) toggleDebugRenderer();
+                if (twoPassRendererActive) toggleTwoPassRenderer();
+
+                // Start retained renderer
+                if (window.DebugRetainedRenderer) {
+                    window.DebugRetainedRenderer.start();
+                }
+                retainedRendererActive = true;
+                if (btn) {
+                    btn.textContent = '✓ Retained ON';
+                    btn.classList.remove('btn-success');
+                    btn.classList.add('btn-warning');
+                }
+                if (debugRetainedContainer) {
+                    debugRetainedContainer.style.display = 'block';
+                }
+                console.log('[Debug] Retained renderer started');
+            }
+        }
+
         // Initialize SignalR connection
         const connection = new signalR.HubConnectionBuilder()
             .withUrl("/streamHub")
