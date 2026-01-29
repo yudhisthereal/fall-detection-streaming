@@ -1,7 +1,7 @@
 // streamController.js - HTTP JPEG streaming with Two-Pass Rendering
-// Stream frames are loaded into hidden streamVideo element
+// Stream frames are loaded into hidden streamImg element
 // Two-Pass rendering handles:
-//   - Background canvas: Draws streamVideo frame every 25ms (40 FPS)
+//   - Background canvas: Draws streamImg frame every 25ms (40 FPS)
 //   - Overlay canvas: Draws skeletons/safe areas only when data changes
 
 const StreamController = {
@@ -43,12 +43,12 @@ const StreamController = {
         this.stopHTTPStream();
 
         // Verify we have an IMG element
-        if (!DOMElements.streamVideo) {
+        if (!DOMElements.streamImg) {
             console.error('Stream video element not found');
             return;
         }
 
-        const elementTag = DOMElements.streamVideo.tagName;
+        const elementTag = DOMElements.streamImg.tagName;
         if (elementTag !== 'IMG') {
             console.error(`Expected IMG element but found ${elementTag}. Please change <video> to <img> in HTML.`);
             return;
@@ -78,8 +78,8 @@ const StreamController = {
             clearInterval(AppState.streamRefreshInterval);
             AppState.streamRefreshInterval = null;
         }
-        if (DOMElements.streamVideo) {
-            DOMElements.streamVideo.src = '';
+        if (DOMElements.streamImg) {
+            DOMElements.streamImg.src = '';
         }
         this.isRefreshing = false;
 
@@ -97,7 +97,7 @@ const StreamController = {
     },
 
     refreshStreamImage() {
-        if (!DOMElements.streamVideo) return;
+        if (!DOMElements.streamImg) return;
 
         this.isRefreshing = true;
 
@@ -107,7 +107,7 @@ const StreamController = {
         const endpoint = showRaw ? 'frame' : 'background';
         const streamUrl = `${STREAMING_HTTP_URL}/api/stream/${endpoint}?camera_id=${AppState.currentCameraId}&t=${timestamp}`;
 
-        const img = DOMElements.streamVideo;
+        const img = DOMElements.streamImg;
 
         // IMPORTANT: Clear previous handlers to prevent memory leaks and cross-triggering
         img.onload = null;
@@ -121,6 +121,12 @@ const StreamController = {
             this.currentBackoffInterval = this.baseRefreshInterval;
             this.isRefreshing = false;
             console.debug(`${endpoint} loaded successfully for ${AppState.currentCameraId}`);
+
+            // If background endpoint was used, update the visible background image
+            if (endpoint === 'background' && window.StreamDisplay) {
+                console.log('[StreamController] Background image loaded, updating visible background img');
+                window.StreamDisplay.updateBackgroundImage(streamUrl);
+            }
 
             // Note: Connection status is determined solely by pings from the camera
             // Frame loads do NOT affect connection status

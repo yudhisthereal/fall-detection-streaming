@@ -93,14 +93,14 @@ const SkeletonDisplay = {
     
     // Resize canvas to match video dimensions
     resizeCanvas() {
-        const streamVideo = document.getElementById('streamVideo');
-        if (!streamVideo || !this.canvas) return;
+        const streamImg = document.getElementById('streamImg');
+        if (!streamImg || !this.canvas) return;
         
         // Canvas z-index is handled by CSS, no need to set here
         
         // Use the displayed size of the video element
-        const width = streamVideo.clientWidth || 1200;
-        const height = streamVideo.clientHeight || 675;
+        const width = streamImg.clientWidth || 1200;
+        const height = streamImg.clientHeight || 675;
         
         // Set canvas dimensions to match displayed size
         this.canvas.width = width;

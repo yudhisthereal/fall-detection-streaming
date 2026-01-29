@@ -1176,7 +1176,7 @@ h1 {
 /* ==================== */
 
 /* Force z-index for stream elements - use !important to prevent override */
-#streamVideo {
+#streamImg {
     position: relative !important;
     z-index: 1 !important;
 }

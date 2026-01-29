@@ -2,9 +2,10 @@
 
 // DOM Elements cache
 const DOMElements = {
-    // Video element
-    streamVideo: document.getElementById('streamVideo'),
-    
+    // Video/Stream elements
+    streamImg: document.getElementById('streamImg'),
+    streamBackgroundImg: document.getElementById('streamBackgroundImg'),
+
     // Toggle controls
     toggleRecord: document.getElementById('toggleRecord'),
     toggleRaw: document.getElementById('toggleRaw'),

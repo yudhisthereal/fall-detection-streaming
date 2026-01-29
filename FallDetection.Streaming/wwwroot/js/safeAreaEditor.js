@@ -28,7 +28,7 @@ const SafeAreaEditor = {
 
     // Helper to capture current frame from the stream IMG element
     captureCurrentFrame() {
-        const imgElement = DOMElements.streamVideo;
+        const imgElement = DOMElements.streamImg;
         if (!imgElement) {
             throw new Error('Stream video element not found');
         }

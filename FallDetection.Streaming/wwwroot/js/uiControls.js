@@ -144,7 +144,7 @@ const UIControls = {
                 if (DOMElements.preview && DOMElements.popup) {
                     // Get dimensions from the IMG element (not VIDEO)
                     // Use naturalWidth/naturalHeight which are available on loaded images
-                    const imgElement = DOMElements.streamVideo;
+                    const imgElement = DOMElements.streamImg;
                     const width = imgElement.naturalWidth || imgElement.width || 320;
                     const height = imgElement.naturalHeight || imgElement.height || 240;
                     

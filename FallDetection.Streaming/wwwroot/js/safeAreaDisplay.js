@@ -33,14 +33,14 @@ const SafeAreaDisplay = {
     
     // Resize canvas to match video dimensions
     resizeCanvas() {
-        const streamVideo = document.getElementById('streamVideo');
-        if (!streamVideo || !this.canvas) return;
+        const streamImg = document.getElementById('streamImg');
+        if (!streamImg || !this.canvas) return;
         
         // Canvas z-index is handled by CSS, no need to set here
         
         // Use the displayed size of the video element
-        const width = streamVideo.clientWidth || 1200;
-        const height = streamVideo.clientHeight || 675;
+        const width = streamImg.clientWidth || 1200;
+        const height = streamImg.clientHeight || 675;
         
         // Set canvas dimensions to match displayed size
         this.canvas.width = width;
@@ -58,15 +58,15 @@ const SafeAreaDisplay = {
     // Get the actual image source dimensions for proper coordinate mapping
     // This matches the approach used in safeAreaEditor.js
     getImageDimensions() {
-        const streamVideo = document.getElementById('streamVideo');
-        if (!streamVideo) {
+        const streamImg = document.getElementById('streamImg');
+        if (!streamImg) {
             return { width: this.canvas.width, height: this.canvas.height };
         }
         
         // Use naturalWidth/naturalHeight which are available on loaded images
         // Fallback to width/height attributes if natural dimensions are not set
-        const width = streamVideo.naturalWidth || streamVideo.width || this.canvas.width;
-        const height = streamVideo.naturalHeight || streamVideo.height || this.canvas.height;
+        const width = streamImg.naturalWidth || streamImg.width || this.canvas.width;
+        const height = streamImg.naturalHeight || streamImg.height || this.canvas.height;
         
         return { width, height };
     },

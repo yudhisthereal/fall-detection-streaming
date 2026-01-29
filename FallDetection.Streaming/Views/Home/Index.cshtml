@@ -33,13 +33,13 @@
         
         <!-- Stream comes first after title -->
         <div style="position: relative; display: inline-block; width: 100%; max-width: 1200px; margin: 20px auto; display: block;">
-            <!-- Two-pass rendering: Background canvas (video frame) + Overlay canvas (skeletons & safe areas) -->
+            <!-- Two-pass rendering: Background img (static) + Overlay canvas (skeletons & safe areas) -->
             <div style="position: relative; width: 100%; aspect-ratio: 16/9;">
-                <canvas id="streamBackgroundCanvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border-radius:12px; border:2px solid var(--theme-border); background:#000; z-index: 1;"></canvas>
+                <img id="streamBackgroundImg" alt="Background" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border-radius:12px; border:2px solid var(--theme-border); background:#000; z-index: 1; object-fit: cover;" />
                 <canvas id="streamCanvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2;"></canvas>
             </div>
             <!-- Hidden img element for loading video frames (not displayed directly) -->
-            <img id="streamVideo" alt="Live Stream" style="display: none;" />
+            <img id="streamImg" alt="Live Stream" style="display: none;" />
         </div>
 
         <!-- Camera Controls -->

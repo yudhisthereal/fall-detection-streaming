@@ -1,21 +1,19 @@
 // streamDisplay.js - Two-Pass Rendering Solution (NO FLICKER)
-// Strategy: Separate canvases for background and overlays
-// - Background canvas: refreshed every frame with video frame (40 FPS)
-// - Overlay canvas: refreshed ONLY when new overlay data arrives (NOT every frame)
-// - Key insight: Overlay canvas is NEVER cleared unless we have new data to draw
-// This eliminates flicker because overlays persist visually during fetch latency
+// Strategy: Static background img + Overlay canvas for overlays
+// - Background img: Static, only updates when explicitly requested (set_background acknowledgment flow)
+// - Overlay canvas: Refreshed ONLY when new overlay data arrives (NOT every frame)
+// - Key insight: Background img is NEVER cleared, redrawn, or replaced except when explicitly requested
+// This eliminates flicker because the background is immune to redraw, resize, or overlay updates
 
 const StreamDisplay = {
-    // Canvas elements
-    backgroundCanvas: null,
-    backgroundCtx: null,
+    // Elements
+    backgroundImg: null,
     overlayCanvas: null,
     overlayCtx: null,
 
     // State
     isInitialized: false,
     isRunning: false,
-    backgroundRefreshInterval: null,
     overlayRefreshInterval: null,
 
     // Cached overlay data (only updated when new data arrives)
@@ -25,6 +23,11 @@ const StreamDisplay = {
     // Camera state for control flags
     cameraState: {},
     showSafeAreas: false,
+
+    // Background state tracking
+    currentBackgroundMode: false,  // true = background mode, false = raw mode
+    backgroundUpdatePending: false,  // true when set_background command is in flight
+    lastBackgroundTimestamp: 0,  // Track when background was last updated
 
     // COCO 17 keypoint indices
     KEYPOINT_NAMES: [
@@ -79,64 +82,85 @@ const StreamDisplay = {
     init() {
         if (this.isInitialized) return;
 
-        this.backgroundCanvas = document.getElementById('streamBackgroundCanvas');
+        this.backgroundImg = document.getElementById('streamBackgroundImg');
         this.overlayCanvas = document.getElementById('streamCanvas');
 
-        if (!this.backgroundCanvas || !this.overlayCanvas) {
-            console.warn('[StreamDisplay] Canvas elements not found');
+        if (!this.backgroundImg || !this.overlayCanvas) {
+            console.warn('[StreamDisplay] Elements not found');
             return;
         }
 
-        this.backgroundCtx = this.backgroundCanvas.getContext('2d');
         this.overlayCtx = this.overlayCanvas.getContext('2d');
         this.isInitialized = true;
+
+        // Set placeholder image until real background is available
+        this.setBackgroundPlaceholder();
 
         // Resize canvases to match display size
         this.resizeCanvases();
 
-        console.log('[StreamDisplay] Two-pass rendering initialized - Background:', this.backgroundCanvas.width, 'x', this.backgroundCanvas.height, '| Overlay:', this.overlayCanvas.width, 'x', this.overlayCanvas.height);
+        console.log('[StreamDisplay] Static background img + overlay canvas initialized');
     },
 
     resizeCanvases() {
         // Get the container width
-        const container = this.backgroundCanvas?.parentElement;
+        const container = this.backgroundImg?.parentElement;
         if (!container) return;
 
         const width = container.clientWidth || 1200;
         const height = container.clientHeight || 675;
 
-        // Set both canvases to the same size
-        if (this.backgroundCanvas) {
-            this.backgroundCanvas.width = width;
-            this.backgroundCanvas.height = height;
-        }
+        // Resize overlay canvas only (background img is auto-sized by CSS)
         if (this.overlayCanvas) {
             this.overlayCanvas.width = width;
             this.overlayCanvas.height = height;
         }
 
-        console.debug(`[StreamDisplay] Canvases resized to ${width}x${height}`);
+        console.debug(`[StreamDisplay] Overlay canvas resized to ${width}x${height}`);
+    },
+
+    // Set placeholder image until real background is available
+    setBackgroundPlaceholder() {
+        if (!this.backgroundImg) return;
+
+        // Use a data URI placeholder (black with text)
+        const placeholder = `data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIwMCIgaGVpZ2h0PSI2NzUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjEyMDAiIGhlaWdodD0iNjc1IiBmaWxsPSIjMDAwIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZpbGw9IiMzMzMiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIyNCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPldhaXRpbmcgZm9yIGJhY2tncm91bmQuLi48L3RleHQ+PC9zdmc+`;
+
+        this.backgroundImg.src = placeholder;
+        console.log('[StreamDisplay] Background placeholder set');
+    },
+
+    // Update background image - ONLY called in authorized cases:
+    // 1. Initial connection, once the first valid background frame is available
+    // 2. Entering background mode
+    // 3. When set_background === true completes its full server–camera–server acknowledgment flow
+    updateBackgroundImage(imageSrc) {
+        if (!this.backgroundImg || !imageSrc) {
+            console.warn('[StreamDisplay] Cannot update background - element or source missing');
+            return;
+        }
+
+        console.log('[StreamDisplay] Updating background image');
+
+        // Only update background after image has fully loaded
+        const tempImg = new Image();
+        tempImg.onload = () => {
+            this.backgroundImg.src = imageSrc;
+            this.lastBackgroundTimestamp = Date.now();
+            this.backgroundUpdatePending = false;
+            console.log('[StreamDisplay] Background image updated successfully');
+        };
+
+        tempImg.onerror = () => {
+            console.error('[StreamDisplay] Failed to load background image, keeping current image');
+            this.backgroundUpdatePending = false;
+        };
+
+        tempImg.src = imageSrc;
     },
 
     isValidCoordinate(value) {
         return value !== null && value !== undefined && value >= 0;
-    },
-
-    // BACKGROUND PASS: Draw video frame every 25ms
-    // This is the ONLY thing drawn on the background canvas
-    refreshBackground() {
-        if (!this.backgroundCtx || !this.backgroundCanvas) return;
-
-        const imgElement = document.getElementById('streamVideo');
-        if (!imgElement || !imgElement.complete || imgElement.naturalWidth === 0) {
-            // Fallback to dark background
-            this.backgroundCtx.fillStyle = '#000';
-            this.backgroundCtx.fillRect(0, 0, this.backgroundCanvas.width, this.backgroundCanvas.height);
-            return;
-        }
-
-        // Draw video frame stretched to fill canvas
-        this.backgroundCtx.drawImage(imgElement, 0, 0, this.backgroundCanvas.width, this.backgroundCanvas.height);
     },
 
     // OVERLAY PASS: Clear and redraw overlays ONLY when new data arrives
@@ -290,7 +314,7 @@ const StreamDisplay = {
         // Draw label border
         this.overlayCtx.strokeStyle = baseColor.stroke;
         this.overlayCtx.lineWidth = 2;
-        this.overlayCtx.stroke();
+        this.overlayCtx.strokeRect(boxX, boxY, boxWidth, boxHeight);
 
         // Draw label text
         this.overlayCtx.fillStyle = '#FFFFFF';
@@ -346,8 +370,11 @@ const StreamDisplay = {
 
     // Update camera state and control flags
     updateCameraState(state) {
+        if (!state) return;
+
         // Replace entirely, don't merge - prevents accumulation
-        this.cameraState = state ? { ...state } : {};
+        const oldState = { ...this.cameraState };
+        this.cameraState = { ...state };
 
         // Check if show_safe_areas is enabled
         const newShowSafeAreas = this.cameraState.show_safe_area === true;
@@ -357,6 +384,25 @@ const StreamDisplay = {
             console.log(`[StreamDisplay] show_safe_areas: ${this.showSafeAreas}`);
             // Refresh overlay when showSafeAreas flag changes
             this.refreshOverlay();
+        }
+
+        // Check if show_raw flag changed (background mode transition)
+        const oldShowRaw = oldState.show_raw === true;
+        const newShowRaw = this.cameraState.show_raw === true;
+
+        if (oldShowRaw !== newShowRaw) {
+            console.log(`[StreamDisplay] show_raw changed: ${oldShowRaw} -> ${newShowRaw}`);
+
+            // When entering background mode (show_raw: true -> false), update background image
+            if (oldShowRaw === true && newShowRaw === false) {
+                this.currentBackgroundMode = true;
+                console.log('[StreamDisplay] Entering background mode - will update background on next stream refresh');
+            }
+            // When entering raw mode (show_raw: false -> true)
+            else if (oldShowRaw === false && newShowRaw === true) {
+                this.currentBackgroundMode = false;
+                console.log('[StreamDisplay] Entering raw mode - background remains static');
+            }
         }
     },
 
@@ -451,12 +497,6 @@ const StreamDisplay = {
         this.fetchSafeAreas();
         this.fetchCameraState();
 
-        // Background pass: Refresh every 25ms (40 FPS)
-        // This ensures the video frame is always current
-        this.backgroundRefreshInterval = setInterval(() => {
-            this.refreshBackground();
-        }, 25);
-
         // Overlay pass: Fetch and check for updates every 25ms (40 FPS)
         // BUT only redraw overlay if data actually changed
         this.overlayRefreshInterval = setInterval(() => {
@@ -466,26 +506,18 @@ const StreamDisplay = {
         }, 25);
 
         this.isRunning = true;
-        console.log('[StreamDisplay] Two-pass rendering started - Background: 40 FPS | Overlay: Only on data change');
+        console.log('[StreamDisplay] Static background img + overlay canvas rendering started - Overlay: 40 FPS (only on data change)');
     },
 
     stop() {
         if (!this.isRunning) return;
 
-        if (this.backgroundRefreshInterval) {
-            clearInterval(this.backgroundRefreshInterval);
-            this.backgroundRefreshInterval = null;
-        }
         if (this.overlayRefreshInterval) {
             clearInterval(this.overlayRefreshInterval);
             this.overlayRefreshInterval = null;
         }
 
-        // Clear both canvases
-        if (this.backgroundCtx) {
-            this.backgroundCtx.fillStyle = '#000';
-            this.backgroundCtx.fillRect(0, 0, this.backgroundCanvas.width, this.backgroundCanvas.height);
-        }
+        // Clear overlay canvas only (NOT the background img)
         if (this.overlayCtx) {
             this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
         }
@@ -495,7 +527,7 @@ const StreamDisplay = {
         this.cachedSafeAreas = null;
 
         this.isRunning = false;
-        console.log('[StreamDisplay] Two-pass rendering stopped');
+        console.log('[StreamDisplay] Static background img + overlay canvas rendering stopped');
     },
 
     // Manual refresh trigger (for button click, etc.)
@@ -506,15 +538,12 @@ const StreamDisplay = {
             this.fetchSafeAreas(),
             this.fetchCameraState()
         ]);
-        // Refresh background immediately
-        this.refreshBackground();
     },
 
     // Cleanup
     destroy() {
         this.stop();
-        this.backgroundCanvas = null;
-        this.backgroundCtx = null;
+        this.backgroundImg = null;
         this.overlayCanvas = null;
         this.overlayCtx = null;
         this.isInitialized = false;
