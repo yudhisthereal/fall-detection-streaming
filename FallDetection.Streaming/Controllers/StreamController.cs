@@ -474,6 +474,14 @@ namespace FallDetection.Streaming.Controllers
                     return BadRequest(new { status = "error", message = "Tracks array is required (can be empty list)" });
                 }
 
+                // LOG: Full incoming request data
+                var incomingDataJson = JsonSerializer.Serialize(request, new JsonSerializerOptions { WriteIndented = true });
+                _logger.LogInformation("[POST /api/stream/tracks] RECEIVED REQUEST for CameraId={CameraId}, Timestamp={Timestamp}, TracksCount={TracksCount}\nFULL REQUEST DATA:\n{FullData}",
+                    request.CameraId,
+                    request.Timestamp,
+                    request.Tracks.Count,
+                    incomingDataJson);
+
                 // Validate and filter tracks
                 var validTracks = new List<TrackItem>();
                 var errors = new List<string>();
@@ -500,12 +508,15 @@ namespace FallDetection.Streaming.Controllers
                     }
                 }
 
+                // LOG: After validation
+                _logger.LogInformation("[POST /api/stream/tracks] CameraId={CameraId}: Validation complete - Valid={ValidCount}, Invalid={InvalidCount}",
+                    request.CameraId,
+                    validTracks.Count,
+                    errors.Count);
+
                 // Store all tracks at once - this replaces all existing tracking data to prevent zombie tracks
                 // Empty list will clear all existing tracks
                 _cameraService.StoreTracks(request.CameraId, validTracks, request.Timestamp);
-
-                // Log keypoints received (empty or not)
-                // _logger.LogInformation("Tracks received for {CameraId}: {TrackCount} tracks", request.CameraId, request.Tracks.Count);
 
                 var processedTracks = validTracks.Select(t => new
                 {
@@ -514,6 +525,24 @@ namespace FallDetection.Streaming.Controllers
                     pose_label = t.PoseLabel,
                     safety_status = t.SafetyStatus
                 }).ToList();
+
+                // LOG: Response data
+                var responseJson = JsonSerializer.Serialize(new
+                {
+                    status = "success",
+                    message = "Tracks stored",
+                    camera_id = request.CameraId,
+                    tracks_processed = processedTracks.Count,
+                    total_tracks = request.Tracks.Count,
+                    errors = errors.Count > 0 ? errors : null,
+                    timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+                }, new JsonSerializerOptions { WriteIndented = true });
+
+                _logger.LogInformation("[POST /api/stream/tracks] CameraId={CameraId}: RESPONSE - Processed={ProcessedCount}, Total={TotalCount}\nFULL RESPONSE DATA:\n{FullResponse}",
+                    request.CameraId,
+                    processedTracks.Count,
+                    request.Tracks.Count,
+                    responseJson);
 
                 return Ok(new
                 {
@@ -528,19 +557,24 @@ namespace FallDetection.Streaming.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Tracks storage error for camera {CameraId}", request?.CameraId);
+                _logger.LogError(ex, "[POST /api/stream/tracks] Tracks storage error for camera {CameraId}", request?.CameraId);
                 return StatusCode(500, new { status = "error", message = ex.Message });
             }
         }
 
-        [HttpGet("tracking-data")]
+        [HttpGet("tracks")]
         public IActionResult GetTrackingData([FromQuery] string camera_id, [FromQuery] int? track_id)
         {
             try
             {
+                // LOG: Incoming GET request
+                _logger.LogInformation("[GET /api/stream/tracks] RECEIVED REQUEST for CameraId={CameraId}, TrackId={TrackId}",
+                    camera_id,
+                    track_id.HasValue ? track_id.Value.ToString() : "null (getting all tracks)");
+
                 if (string.IsNullOrWhiteSpace(camera_id))
                 {
-                    _logger.LogWarning("Get tracking data received with empty camera_id");
+                    _logger.LogWarning("[GET /api/stream/tracks] Request with empty camera_id");
                     return BadRequest(new { status = "error", message = "CameraId is required" });
                 }
 
@@ -550,6 +584,18 @@ namespace FallDetection.Streaming.Controllers
                     var trackingData = _cameraService.GetTrackingData(camera_id, track_id.Value);
                     if (trackingData != null)
                     {
+                        var responseJson = JsonSerializer.Serialize(new
+                        {
+                            camera_id = camera_id,
+                            track_id = track_id.Value,
+                            tracking_data = trackingData
+                        }, new JsonSerializerOptions { WriteIndented = true });
+
+                        _logger.LogInformation("[GET /api/stream/tracks] CameraId={CameraId}, TrackId={TrackId}: Returning 1 track\nFULL RESPONSE DATA:\n{FullResponse}",
+                            camera_id,
+                            track_id.Value,
+                            responseJson);
+
                         return Ok(new
                         {
                             camera_id = camera_id,
@@ -557,6 +603,10 @@ namespace FallDetection.Streaming.Controllers
                             tracking_data = trackingData
                         });
                     }
+
+                    _logger.LogWarning("[GET /api/stream/tracks] CameraId={CameraId}, TrackId={TrackId}: Tracking data not found",
+                        camera_id,
+                        track_id.Value);
                     return NotFound(new { error = "Tracking data not found for specified camera and track" });
                 }
                 else
@@ -565,6 +615,18 @@ namespace FallDetection.Streaming.Controllers
                     var allTrackingData = _cameraService.GetAllTrackingData(camera_id);
                     // Always return tracking data, even if empty (empty dictionary)
                     var trackingData = allTrackingData ?? new Dictionary<int, TrackingData>();
+
+                    var responseJson = JsonSerializer.Serialize(new
+                    {
+                        camera_id = camera_id,
+                        tracking_data = trackingData,
+                        track_count = trackingData.Count
+                    }, new JsonSerializerOptions { WriteIndented = true });
+
+                    _logger.LogInformation("[GET /api/stream/tracks] CameraId={CameraId}: Returning {TrackCount} tracks\nFULL RESPONSE DATA:\n{FullResponse}",
+                        camera_id,
+                        trackingData.Count,
+                        responseJson);
 
                     return Ok(new
                     {
@@ -576,7 +638,7 @@ namespace FallDetection.Streaming.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Get tracking data error for camera {CameraId}", camera_id);
+                _logger.LogError(ex, "[GET /api/stream/tracks] Get tracking data error for camera {CameraId}", camera_id);
                 return StatusCode(500, new { status = "error", message = ex.Message });
             }
         }

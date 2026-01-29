@@ -223,6 +223,8 @@ const StreamDisplay = {
         // Draw pose label
         if (data.pose_label) {
             this.drawPoseLabel(data.pose_label, keypoints, trackId, scaleX, scaleY);
+        } else {
+            this.drawPoseLabel("...", keypoints, trackId, scaleX, scaleY);
         }
     },
 
@@ -366,7 +368,7 @@ const StreamDisplay = {
 
         try {
             const response = await fetch(
-                STREAMING_HTTP_URL + '/api/stream/tracking-data?camera_id=' + AppState.currentCameraId
+                STREAMING_HTTP_URL + '/api/stream/tracks?camera_id=' + AppState.currentCameraId
             );
 
             if (response.ok) {

@@ -96,12 +96,25 @@ namespace FallDetection.Streaming.Models
     /// </summary>
     public class TrackingData
     {
+        [JsonPropertyName("track_id")]
         public int TrackId { get; set; }
+
+        [JsonPropertyName("pose_label")]
         public string? PoseLabel { get; set; }
+
+        [JsonPropertyName("safety_status")]
         public string? SafetyStatus { get; set; }
+
+        [JsonPropertyName("keypoints")]
         public List<float>? Keypoints { get; set; }
+
+        [JsonPropertyName("bbox")]
         public List<double>? Bbox { get; set; }
+
+        [JsonPropertyName("timestamp")]
         public long Timestamp { get; set; }
+
+        [JsonPropertyName("last_updated")]
         public long LastUpdated { get; set; }
     }
 
@@ -169,14 +182,16 @@ namespace FallDetection.Streaming.Models
     {
         [JsonPropertyName("track_id")]
         public int TrackId { get; set; }
-        
+
+        [JsonPropertyName("keypoints")]
         public List<float> Keypoints { get; set; } = new();
-        
+
+        [JsonPropertyName("bbox")]
         public List<double>? Bbox { get; set; }
-        
+
         [JsonPropertyName("pose_label")]
         public string PoseLabel { get; set; } = string.Empty;
-        
+
         [JsonPropertyName("safety_status")]
         public string SafetyStatus { get; set; } = string.Empty;
     }

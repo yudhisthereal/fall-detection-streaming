@@ -791,20 +791,24 @@ namespace FallDetection.Streaming.Services
                 var state = GetCameraState(cameraId);
                 if (state == null)
                 {
-                    Console.WriteLine($"[StoreTracks] Camera {cameraId} not found");
+                    Console.WriteLine($"[StoreTracks] ERROR: Camera {cameraId} not found");
                     return;
                 }
 
                 var currentTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
                 var beforeCount = state.TrackingData.Count;
 
+                // LOG: Incoming tracks data with full details
+                var tracksJson = JsonSerializer.Serialize(tracks, new JsonSerializerOptions { WriteIndented = true });
                 Console.WriteLine($"[StoreTracks] Camera {cameraId}: BEFORE={beforeCount} tracks, RECEIVED={tracks.Count} tracks, timestamp={timestamp}");
+                Console.WriteLine($"[StoreTracks] FULL INCOMING TRACKS DATA:\n{tracksJson}");
 
                 // Clear all existing tracking data to prevent zombie tracks
                 // Camera is the single source of truth - empty list means no people detected
                 state.TrackingData.Clear();
 
                 // Store only the tracks from the current request
+                var storedTracks = new List<TrackingData>();
                 foreach (var track in tracks)
                 {
                     var trackingData = new TrackingData
@@ -819,11 +823,16 @@ namespace FallDetection.Streaming.Services
                     };
 
                     state.TrackingData[track.TrackId] = trackingData;
+                    storedTracks.Add(trackingData);
                 }
 
                 UpdateCameraState(cameraId, state);
                 SaveCameraStates();
+
+                // LOG: After storing with full stored data
+                var storedTracksJson = JsonSerializer.Serialize(storedTracks, new JsonSerializerOptions { WriteIndented = true });
                 Console.WriteLine($"[StoreTracks] Camera {cameraId}: AFTER={state.TrackingData.Count} tracks (cleared and stored {tracks.Count} tracks)");
+                Console.WriteLine($"[StoreTracks] FULL STORED TRACKS DATA:\n{storedTracksJson}");
             }
         }
 
@@ -840,7 +849,7 @@ namespace FallDetection.Streaming.Services
                     state.TrackingData.TryGetValue(trackId, out var trackingData))
                 {
                     // Return a copy with copied collections
-                    return new TrackingData
+                    var trackingDataCopy = new TrackingData
                     {
                         TrackId = trackingData.TrackId,
                         Keypoints = trackingData.Keypoints != null ? new List<float>(trackingData.Keypoints) : null,
@@ -850,7 +859,16 @@ namespace FallDetection.Streaming.Services
                         Timestamp = trackingData.Timestamp,
                         LastUpdated = trackingData.LastUpdated
                     };
+
+                    // LOG: Full data being returned
+                    var trackingDataJson = JsonSerializer.Serialize(trackingDataCopy, new JsonSerializerOptions { WriteIndented = true });
+                    Console.WriteLine($"[GetTrackingData] Camera {cameraId}, TrackId {trackId}: FOUND - returning 1 track");
+                    Console.WriteLine($"[GetTrackingData] FULL DATA BEING RETURNED:\n{trackingDataJson}");
+
+                    return trackingDataCopy;
                 }
+
+                Console.WriteLine($"[GetTrackingData] Camera {cameraId}, TrackId {trackId}: NOT FOUND");
                 return null;
             }
         }
@@ -869,9 +887,16 @@ namespace FallDetection.Streaming.Services
                     var count = state.TrackingData.Count;
                     Console.WriteLine($"[GetAllTrackingData] Camera {cameraId}: returning {count} tracks");
 
+                    // Create a copy for logging
+                    var trackingDataCopy = new Dictionary<int, TrackingData>(state.TrackingData);
+
+                    // LOG: Full data being returned
+                    var trackingDataJson = JsonSerializer.Serialize(trackingDataCopy, new JsonSerializerOptions { WriteIndented = true });
+                    Console.WriteLine($"[GetAllTrackingData] Camera {cameraId}: FULL DATA BEING RETURNED ({count} tracks):\n{trackingDataJson}");
+
                     // Return a copy to prevent InvalidOperationException during serialization
                     // when StoreTracks modifies the collection concurrently
-                    return new Dictionary<int, TrackingData>(state.TrackingData);
+                    return trackingDataCopy;
                 }
 
                 Console.WriteLine($"[GetAllTrackingData] Camera {cameraId}: state not found");
