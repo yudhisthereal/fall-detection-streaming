@@ -1414,8 +1414,29 @@ h1 {
 
 /* Force z-index for stream elements - use !important to prevent override */
 #streamImg {
-    position: relative !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    border-radius: 12px !important;
+    border: 2px solid var(--theme-border) !important;
+    background: #000 !important;
     z-index: 1 !important;
+    object-fit: cover !important;
+}
+
+#streamBackgroundImg {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    border-radius: 12px !important;
+    border: 2px solid var(--theme-border) !important;
+    background: #000 !important;
+    z-index: 1 !important;
+    object-fit: cover !important;
 }
 
 #canvasOverlay {

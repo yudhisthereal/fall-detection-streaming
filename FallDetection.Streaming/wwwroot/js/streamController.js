@@ -9,6 +9,7 @@ const StreamController = {
     isRefreshing: false,
     consecutiveErrors: 0,
     baseRefreshInterval: REFRESH_INTERVAL_MS,
+    backgroundRefreshInterval: 100,  // 100ms for background mode (show_raw = false)
     maxBackoffInterval: 5000,
     currentBackoffInterval: REFRESH_INTERVAL_MS,
 
@@ -117,8 +118,23 @@ const StreamController = {
         img.onload = () => {
             AppState.errorCount = 0;
             this.consecutiveErrors = 0;
-            // Reset backoff on successful load
-            this.currentBackoffInterval = this.baseRefreshInterval;
+
+            // Set interval based on show_raw flag
+            const targetInterval = showRaw ? this.baseRefreshInterval : this.backgroundRefreshInterval;
+
+            // Only restart interval if it changed significantly
+            if (Math.abs(this.currentBackoffInterval - targetInterval) > 10) {
+                this.currentBackoffInterval = targetInterval;
+                // Restart interval with new timing
+                if (AppState.streamRefreshInterval) {
+                    clearInterval(AppState.streamRefreshInterval);
+                    AppState.streamRefreshInterval = setInterval(() => {
+                        this.scheduledRefresh();
+                    }, this.currentBackoffInterval);
+                    console.log(`[StreamController] Refresh interval updated to ${this.currentBackoffInterval}ms (show_raw=${showRaw})`);
+                }
+            }
+
             this.isRefreshing = false;
             console.debug(`${endpoint} loaded successfully for ${AppState.currentCameraId}`);
 
@@ -188,6 +204,21 @@ const StreamController = {
             console.log('Restarting stream after recovery...');
             this.startHTTPStream();
         }, 1000);
+    },
+
+    // Update refresh interval based on show_raw flag
+    updateRefreshInterval() {
+        const showRaw = window.StreamDisplay && window.StreamDisplay.cameraState?.show_raw === true;
+        const targetInterval = showRaw ? this.baseRefreshInterval : this.backgroundRefreshInterval;
+
+        if (this.currentBackoffInterval !== targetInterval && AppState.streamRefreshInterval) {
+            this.currentBackoffInterval = targetInterval;
+            clearInterval(AppState.streamRefreshInterval);
+            AppState.streamRefreshInterval = setInterval(() => {
+                this.scheduledRefresh();
+            }, this.currentBackoffInterval);
+            console.log(`[StreamController] Refresh interval changed to ${this.currentBackoffInterval}ms (show_raw=${showRaw})`);
+        }
     },
 
     // Manual refresh trigger (for button click, etc.)

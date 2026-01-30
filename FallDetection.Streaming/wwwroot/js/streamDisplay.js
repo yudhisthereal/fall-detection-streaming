@@ -438,6 +438,29 @@ const StreamDisplay = {
         });
     },
 
+    // Toggle visibility between streamImg (raw) and streamBackgroundImg (background)
+    toggleStreamVisibility(showRaw) {
+        const streamImg = document.getElementById('streamImg');
+        const streamBackgroundImg = document.getElementById('streamBackgroundImg');
+
+        if (!streamImg || !streamBackgroundImg) {
+            console.warn('[StreamDisplay] Stream elements not found');
+            return;
+        }
+
+        if (showRaw) {
+            // Show raw stream, hide background
+            streamImg.style.display = 'block';
+            streamBackgroundImg.style.display = 'none';
+            console.log('[StreamDisplay] Showing raw stream (streamImg)');
+        } else {
+            // Show background, hide raw stream
+            streamImg.style.display = 'none';
+            streamBackgroundImg.style.display = 'block';
+            console.log('[StreamDisplay] Showing background (streamBackgroundImg)');
+        }
+    },
+
     // Update camera state and control flags
     updateCameraState(state) {
         if (!state) return;
@@ -462,6 +485,14 @@ const StreamDisplay = {
 
         if (oldShowRaw !== newShowRaw) {
             console.log(`[StreamDisplay] show_raw changed: ${oldShowRaw} -> ${newShowRaw}`);
+
+            // Toggle stream visibility
+            this.toggleStreamVisibility(newShowRaw);
+
+            // Update stream controller refresh interval
+            if (window.StreamController && window.StreamController.updateRefreshInterval) {
+                window.StreamController.updateRefreshInterval();
+            }
 
             // When entering background mode (show_raw: true -> false), update background image
             if (oldShowRaw === true && newShowRaw === false) {
@@ -567,6 +598,10 @@ const StreamDisplay = {
         this.fetchTrackingData();
         this.fetchSafeAreas();
         this.fetchCameraState().then((state) => {
+            // Set initial visibility based on show_raw flag
+            const showRaw = state && state.show_raw === true;
+            this.toggleStreamVisibility(showRaw);
+
             // Initial connection: fetch background if show_raw is false
             if (state && state.show_raw === false) {
                 console.log('[StreamDisplay] Initial connection in background mode - fetching background');
