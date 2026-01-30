@@ -206,42 +206,76 @@ window.confirmBackground = function() {
 
     // Set a timeout for the operation (15 seconds)
     const TIMEOUT_MS = 15000;
+    const POLL_INTERVAL_MS = 250;
+    const START_POLL_DELAY_MS = 250;
 
-    // Poll for background update completion
-    const checkInterval = setInterval(() => {
-        const elapsed = Date.now() - startTime;
-        const isPending = window.StreamDisplay?.backgroundUpdatePending === true;
+    // Start polling after initial delay
+    setTimeout(() => {
+        console.log('[confirmBackground] Starting to poll for background update completion');
 
-        // Check if background was updated successfully
-        // (backgroundUpdatePending was set to true by sending the command,
-        // and will be set to false when the new background image is loaded)
-        if (!isPending && window.StreamDisplay?.lastBackgroundTimestamp > startTime) {
-            // Success!
-            clearInterval(checkInterval);
-            if (popupStatus) popupStatus.textContent = 'Background set successfully!';
-            if (popupStatus) popupStatus.style.color = '#28a745';
+        // Poll for background update completion
+        const checkInterval = setInterval(async () => {
+            const elapsed = Date.now() - startTime;
 
-            setTimeout(() => {
-                DOMHelpers.hidePopup(DOMElements.popup);
-                // Reset popup state for next time
-                resetBackgroundPopup();
-            }, 1000);
-        } else if (elapsed >= TIMEOUT_MS) {
-            // Timeout
-            clearInterval(checkInterval);
-            if (popupStatus) popupStatus.textContent = 'Timeout - please try again';
-            if (popupStatus) popupStatus.style.color = '#ff9800';
+            if (elapsed >= TIMEOUT_MS) {
+                // Timeout
+                clearInterval(checkInterval);
+                console.error('[confirmBackground] Timeout waiting for background update');
+                if (popupStatus) {
+                    popupStatus.textContent = 'Timeout - please try again';
+                    popupStatus.style.color = '#ff9800';
+                }
 
-            setTimeout(() => {
-                DOMHelpers.hidePopup(DOMElements.popup);
-                // Reset popup state for next time
-                resetBackgroundPopup();
-            }, 2000);
-        }
-    }, 200); // Check every 200ms
+                setTimeout(() => {
+                    DOMHelpers.hidePopup(DOMElements.popup);
+                    resetBackgroundPopup();
+                }, 2000);
+                return;
+            }
 
-    // Store interval for cleanup if popup is closed manually
-    DOMElements.popup._checkInterval = checkInterval;
+            try {
+                // Check if background update is still pending on server
+                const response = await fetch(`${STREAMING_HTTP_URL}/api/stream/is-background-updating?camera_id=${AppState.currentCameraId}`);
+
+                if (response.ok) {
+                    const data = await response.json();
+                    const isUpdating = data.background_update_pending === true;
+                    const isAcknowledged = data.background_update_acknowledged === true;
+
+                    console.log(`[confirmBackground] Server status - updating: ${isUpdating}, acknowledged: ${isAcknowledged}`);
+
+                    // If not updating and acknowledged, the background is ready
+                    if (!isUpdating && isAcknowledged) {
+                        clearInterval(checkInterval);
+                        console.log('[confirmBackground] Background update complete, fetching new background');
+
+                        // Fetch the new background
+                        if (window.StreamDisplay && window.StreamDisplay.fetchBackgroundImage) {
+                            await window.StreamDisplay.fetchBackgroundImage();
+
+                            // Success!
+                            if (popupStatus) {
+                                popupStatus.textContent = 'Background set successfully!';
+                                popupStatus.style.color = '#28a745';
+                            }
+
+                            setTimeout(() => {
+                                DOMHelpers.hidePopup(DOMElements.popup);
+                                resetBackgroundPopup();
+                            }, 1000);
+                        }
+                    }
+                } else {
+                    console.warn('[confirmBackground] Failed to check background update status');
+                }
+            } catch (error) {
+                console.error('[confirmBackground] Error checking background update status:', error);
+            }
+        }, POLL_INTERVAL_MS);
+
+        // Store interval for cleanup if popup is closed manually
+        DOMElements.popup._checkInterval = checkInterval;
+    }, START_POLL_DELAY_MS);
 };
 
 // Reset popup to initial state

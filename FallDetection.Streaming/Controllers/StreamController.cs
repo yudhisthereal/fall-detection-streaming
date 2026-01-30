@@ -366,7 +366,7 @@ namespace FallDetection.Streaming.Controllers
                 if (state != null)
                 {
                     var response = new Dictionary<string, object>();
-                    
+
                     foreach (var flag in state.ControlFlags)
                     {
                         response[flag.Key] = flag.Value;
@@ -375,7 +375,7 @@ namespace FallDetection.Streaming.Controllers
                     {
                         response[flag.Key] = flag.Value;
                     }
-                    
+
                     // Add connection status
                     response["_connected"] = _cameraService.IsCameraConnected(camera_id);
                     response["_camera_status"] = state.CameraStatus ?? "null";
@@ -383,12 +383,12 @@ namespace FallDetection.Streaming.Controllers
                     response["_rtmp_connected"] = state.RtmpConnected;
                     response["_last_report"] = state.LastReport;
                     response["_last_seen"] = state.LastSeen;
-                    
+
                     // Add background update tracking
                     response["_background_update_pending"] = state.BackgroundUpdatePending;
                     response["_background_update_acknowledged"] = state.BackgroundUpdateAcknowledged;
                     response["_is_registered"] = state.IsRegistered;
-                    
+
                     return Ok(response);
                 }
 
@@ -397,6 +397,35 @@ namespace FallDetection.Streaming.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Get camera state error");
+                return StatusCode(500, new { status = "error", message = ex.Message });
+            }
+        }
+
+        [HttpGet("is-background-updating")]
+        public IActionResult IsBackgroundUpdating([FromQuery] string camera_id)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(camera_id))
+                {
+                    return BadRequest(new { error = "Camera ID is required" });
+                }
+
+                var state = _cameraService.GetCameraState(camera_id);
+                if (state != null)
+                {
+                    return Ok(new
+                    {
+                        background_update_pending = state.BackgroundUpdatePending,
+                        background_update_acknowledged = state.BackgroundUpdateAcknowledged
+                    });
+                }
+
+                return NotFound(new { error = "Camera not found" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Is background updating error");
                 return StatusCode(500, new { status = "error", message = ex.Message });
             }
         }
