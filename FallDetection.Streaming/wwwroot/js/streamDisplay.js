@@ -146,6 +146,7 @@ const StreamDisplay = {
         const streamUrl = `${STREAMING_HTTP_URL}/api/stream/background?camera_id=${AppState.currentCameraId}&t=${timestamp}`;
 
         console.log('[StreamDisplay] Fetching background image from:', streamUrl);
+        console.log('[StreamDisplay] Current backgroundImg.src:', this.backgroundImg?.src?.substring(0, 100) + '...');
         this.backgroundUpdatePending = true;
 
         // Preload the image to verify it loads before updating
@@ -498,6 +499,8 @@ const StreamDisplay = {
             if (oldShowRaw === true && newShowRaw === false) {
                 this.currentBackgroundMode = true;
                 console.log('[StreamDisplay] Entering background mode - fetching background image');
+                // Clear any pending flag to ensure we can fetch the new background
+                this.backgroundUpdatePending = false;
                 this.fetchBackgroundImage();
             }
             // When entering raw mode (show_raw: false -> true)

@@ -187,27 +187,45 @@ const UIControls = {
                 CommandManager.sendCommand("set_fall_algorithm", algorithm);
             };
         }
-        
+
         // Set Background Button
         if (DOMElements.setBackgroundBtn) {
-            DOMElements.setBackgroundBtn.onclick = () => {
-                if (DOMElements.preview && DOMElements.popup) {
-                    // Get dimensions from the IMG element (not VIDEO)
-                    // Use naturalWidth/naturalHeight which are available on loaded images
-                    const imgElement = DOMElements.streamImg;
-                    const width = imgElement.naturalWidth || imgElement.width || 320;
-                    const height = imgElement.naturalHeight || imgElement.height || 240;
-                    
-                    const canvas = document.createElement('canvas');
-                    canvas.width = width;
-                    canvas.height = height;
-                    const ctx = canvas.getContext('2d');
-                    
-                    // Draw the current image frame to canvas
-                    ctx.drawImage(imgElement, 0, 0, width, height);
-                    
-                    DOMElements.preview.src = canvas.toDataURL('image/jpeg');
-                    DOMHelpers.showPopup(DOMElements.popup);
+            DOMElements.setBackgroundBtn.onclick = async () => {
+                if (!DOMElements.preview || !DOMElements.popup) return;
+
+                if (!AppState.currentCameraId) {
+                    alert('No camera selected');
+                    return;
+                }
+
+                try {
+                    // Fetch current frame directly from server
+                    const showRaw = window.StreamDisplay && window.StreamDisplay.cameraState?.show_raw === true;
+                    const endpoint = showRaw ? 'frame' : 'background';
+                    const timestamp = Date.now();
+                    const streamUrl = `${STREAMING_HTTP_URL}/api/stream/${endpoint}?camera_id=${AppState.currentCameraId}&t=${timestamp}`;
+
+                    console.log('[Set Background] Fetching frame from server:', streamUrl);
+
+                    // Preload the image to ensure it loads before showing popup
+                    const tempImg = new Image();
+
+                    tempImg.onload = () => {
+                        console.log('[Set Background] Frame loaded, showing preview');
+                        DOMElements.preview.src = streamUrl;
+                        DOMHelpers.showPopup(DOMElements.popup);
+                    };
+
+                    tempImg.onerror = () => {
+                        console.error('[Set Background] Failed to load frame from server');
+                        alert('Failed to load current frame. Please try again.');
+                    };
+
+                    tempImg.src = streamUrl;
+
+                } catch (error) {
+                    console.error('[Set Background] Error:', error);
+                    alert('Failed to load current frame: ' + error.message);
                 }
             };
         }
