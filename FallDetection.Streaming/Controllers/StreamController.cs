@@ -377,7 +377,7 @@ namespace FallDetection.Streaming.Controllers
                     }
                     
                     // Add connection status
-                    response["_connected"] = _cameraService.GetIsConnected(camera_id);
+                    response["_connected"] = _cameraService.IsCameraConnected(camera_id);
                     response["_camera_status"] = state.CameraStatus ?? "null";
                     response["_is_recording"] = state.IsRecording;
                     response["_rtmp_connected"] = state.RtmpConnected;
@@ -415,7 +415,7 @@ namespace FallDetection.Streaming.Controllers
                     return Ok(new
                     {
                         camera_id = camera_id,
-                        connected = _cameraService.GetIsConnected(camera_id),
+                        connected = _cameraService.IsCameraConnected(camera_id),
                         camera_status = state.CameraStatus,
                         is_recording = state.IsRecording,
                         rtmp_connected = state.RtmpConnected,
@@ -568,9 +568,9 @@ namespace FallDetection.Streaming.Controllers
             try
             {
                 // LOG: Incoming GET request
-                _logger.LogInformation("[GET /api/stream/tracks] RECEIVED REQUEST for CameraId={CameraId}, TrackId={TrackId}",
-                    camera_id,
-                    track_id.HasValue ? track_id.Value.ToString() : "null (getting all tracks)");
+                // _logger.LogInformation("[GET /api/stream/tracks] RECEIVED REQUEST for CameraId={CameraId}, TrackId={TrackId}",
+                //     camera_id,
+                //     track_id.HasValue ? track_id.Value.ToString() : "null (getting all tracks)");
 
                 if (string.IsNullOrWhiteSpace(camera_id))
                 {
@@ -591,10 +591,10 @@ namespace FallDetection.Streaming.Controllers
                             tracking_data = trackingData
                         }, new JsonSerializerOptions { WriteIndented = true });
 
-                        _logger.LogInformation("[GET /api/stream/tracks] CameraId={CameraId}, TrackId={TrackId}: Returning 1 track\nFULL RESPONSE DATA:\n{FullResponse}",
-                            camera_id,
-                            track_id.Value,
-                            responseJson);
+                        // _logger.LogInformation("[GET /api/stream/tracks] CameraId={CameraId}, TrackId={TrackId}: Returning 1 track\nFULL RESPONSE DATA:\n{FullResponse}",
+                        //     camera_id,
+                        //     track_id.Value,
+                        //     responseJson);
 
                         return Ok(new
                         {
@@ -623,10 +623,10 @@ namespace FallDetection.Streaming.Controllers
                         track_count = trackingData.Count
                     }, new JsonSerializerOptions { WriteIndented = true });
 
-                    _logger.LogInformation("[GET /api/stream/tracks] CameraId={CameraId}: Returning {TrackCount} tracks\nFULL RESPONSE DATA:\n{FullResponse}",
-                        camera_id,
-                        trackingData.Count,
-                        responseJson);
+                    // _logger.LogInformation("[GET /api/stream/tracks] CameraId={CameraId}: Returning {TrackCount} tracks\nFULL RESPONSE DATA:\n{FullResponse}",
+                    //     camera_id,
+                    //     trackingData.Count,
+                    //     responseJson);
 
                     return Ok(new
                     {

@@ -4,10 +4,103 @@
 // CONNECTION STATUS DEBOUNCING
 // ============================================
 
+// Fetch timeout helper using AbortController
+async function fetchWithTimeout(url, ms = 2000) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), ms);
+
+    try {
+        const response = await fetch(url, { signal: controller.signal });
+        clearTimeout(timeoutId);
+        return response;
+    } catch (error) {
+        clearTimeout(timeoutId);
+        if (error.name === 'AbortError') {
+            throw new Error(`Request timeout after ${ms}ms`);
+        }
+        throw error;
+    }
+}
+
+// ============================================
+// CONNECTION LOGGING
+// ============================================
+
+const ConnectionLog = {
+    maxEntries: 50,
+    entries: [],
+
+    add(message, type = 'info') {
+        const timestamp = new Date().toLocaleTimeString();
+        const entry = { timestamp, message, type };
+
+        // Add to beginning of array
+        this.entries.unshift(entry);
+
+        // Keep only last maxEntries
+        if (this.entries.length > this.maxEntries) {
+            this.entries = this.entries.slice(0, this.maxEntries);
+        }
+
+        // Update UI
+        this.updateUI();
+
+        // Also log to console
+        const consoleMethod = type === 'error' ? console.error : type === 'warning' ? console.warn : console.log;
+        consoleMethod(`[Connection] ${message}`);
+    },
+
+    updateUI() {
+        const logContainer = document.getElementById('connection-log');
+        if (!logContainer) return;
+
+        // Clear existing content safely
+        while (logContainer.firstChild) {
+            logContainer.removeChild(logContainer.firstChild);
+        }
+
+        // Add entries using safe DOM methods
+        this.entries.forEach(entry => {
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-entry log-${entry.type}`;
+
+            const timeSpan = document.createElement('span');
+            timeSpan.className = 'log-time';
+            timeSpan.textContent = `[${entry.timestamp}]`;
+
+            const msgDiv = document.createElement('div');
+            msgDiv.className = 'log-message';
+            msgDiv.textContent = entry.message;
+
+            logEntry.appendChild(timeSpan);
+            logEntry.appendChild(msgDiv);
+            logContainer.appendChild(logEntry);
+        });
+    },
+
+    clear() {
+        this.entries = [];
+        this.updateUI();
+        console.log('[Connection] Log cleared');
+    }
+};
+
+// Global function to clear log
+window.clearConnectionLog = function() {
+    ConnectionLog.clear();
+};
+
 const ConnectionStatus = {
     // Lock to prevent conflicting status updates during rapid state changes
     statusUpdateInProgress: false,
     pendingConnectionState: null,
+
+    // Failure tolerance for transient network issues
+    statusFailures: 0,
+    MAX_FAILURES: 5,
+
+    // Track previous connection state for detecting transitions
+    previousConnectionState: null,
 
     updateConnectionStatusDebounced(cameraId, connected, ageSeconds = null, silent = false) {
         // console.log('[ConnectionStatus] updateConnectionStatusDebounced: camera=' + cameraId + ', connected=' + connected + ', silent=' + silent + ', currentStable=' + AppState.isConnectionStable);
@@ -76,20 +169,47 @@ const ConnectionStatus = {
 
     updateConnectionStatusImmediate(cameraId, connected, ageSeconds = null) {
         // console.log('[ConnectionStatus] updateConnectionStatusImmediate: camera=' + cameraId + ', connected=' + connected + ', age=' + ageSeconds);
-        
+
         AppState.cameraConnectionStatus[cameraId] = {
             connected: connected,
             lastUpdate: new Date(),
             ageSeconds: ageSeconds
         };
-        
+
         // Log current camera state
         // console.log('[ConnectionStatus] Current camera: ' + AppState.currentCameraId + ', isCurrent=' + (cameraId === AppState.currentCameraId));
-        
+
         // Update current camera status
         if (cameraId === AppState.currentCameraId) {
+            // Detect and log connection state transitions
+            const previousState = this.previousConnectionState;
+            if (previousState !== null && previousState !== connected) {
+                if (previousState === true && connected === false) {
+                    ConnectionLog.add(
+                        `❌ DISCONNECTED: Camera ${cameraId} - ${this.statusFailures} consecutive polling failures (age: ${ageSeconds}s since last ping)`,
+                        'disconnect'
+                    );
+                } else if (previousState === false && connected === true) {
+                    ConnectionLog.add(
+                        `✅ RECONNECTED: Camera ${cameraId} - Connection restored after ${this.statusFailures} failures`,
+                        'reconnect'
+                    );
+                }
+            } else if (previousState === null && connected === true) {
+                // First time connecting - log initial connection
+                const cameraInfo = AppState.availableCameras.find(cam => cam.camera_id === cameraId);
+                const cameraName = cameraInfo?.camera_name || cameraId;
+                ConnectionLog.add(
+                    `✅ INITIALLY CONNECTED: ${cameraName} - Age: ${ageSeconds}s`,
+                    'success'
+                );
+            }
+
+            // Update previous state
+            this.previousConnectionState = connected;
+
             AppState.isConnected = connected;
-            
+
             // Only update stability if we're disconnecting
             if (!connected) {
                 AppState.isConnectionStable = false;
@@ -98,10 +218,10 @@ const ConnectionStatus = {
             } else if (connected) {
                 // Clear wasDisconnected flag when connected (will be checked in stability check)
             }
-            
+
             // Update stream status UI with unified status display
             this.updateStreamStatusUI(connected, AppState.isConnectionStable);
-            
+
             // Update UI controls based on connection state
             if (typeof UIControls !== 'undefined' && UIControls.updateFromFlags) {
                 UIControls.updateFromFlags({});
@@ -109,7 +229,7 @@ const ConnectionStatus = {
         } else {
             // console.log('[ConnectionStatus] Not current camera (' + cameraId + ' vs ' + AppState.currentCameraId + ')');
         }
-        
+
         this.updateCameraInfoDisplay();
         this.updateCameraDropdownStatus(cameraId, connected);
     },
@@ -132,11 +252,11 @@ const ConnectionStatus = {
             // console.log('[ConnectionStatus] Skipping stability check - camera is disconnected');
             return;
         }
-        
-        // Only update UI to "connecting" if we're actually resetting stability
+
+        // Only update UI to "connected" if we're actually resetting stability
         if (shouldResetStability) {
-            // Update UI to show "connecting" state (connected but not yet stable)
-            // console.log('[ConnectionStatus] Resetting stability - showing connecting state');
+            // Update UI to show "connected" state immediately (no "connecting" state)
+            // console.log('[ConnectionStatus] Resetting stability - showing connected state');
             this.updateStreamStatusUI(true, false);
             // Reset stability flag when starting new check
             AppState.isConnectionStable = false;
@@ -217,24 +337,20 @@ const ConnectionStatus = {
             // console.log('[ConnectionStatus] WARNING: stream-status element not found!');
             return;
         }
-        
+
         // console.log('[ConnectionStatus] updateStreamStatusUI: connected=' + connected + ', stable=' + stable);
-        
+
         // Remove all state classes
         statusElement.classList.remove('connected', 'stable', 'connecting', 'disconnected');
-        
+
         if (!connected) {
             statusElement.classList.add('disconnected');
             statusElement.textContent = 'Disconnected';
             // console.log('[ConnectionStatus] UI updated to: Disconnected');
-        } else if (stable) {
-            statusElement.classList.add('connected', 'stable');
-            statusElement.textContent = 'Connected Stable';
-            // console.log('[ConnectionStatus] UI updated to: Connected Stable');
         } else {
-            statusElement.classList.add('connected', 'connecting');
-            statusElement.textContent = 'Connecting...';
-            // console.log('[ConnectionStatus] UI updated to: Connecting...');
+            statusElement.classList.add('connected', 'stable');
+            statusElement.textContent = 'Connected';
+            // console.log('[ConnectionStatus] UI updated to: Connected');
         }
     },
 
@@ -286,26 +402,32 @@ const ConnectionStatus = {
     async checkCameraConnection(cameraId) {
         // console.log('[ConnectionStatus] checkCameraConnection called for ' + cameraId);
         try {
-            // Request to Streaming Server for camera status
-            const statusResponse = await fetch(STREAMING_HTTP_URL + '/api/stream/camera-status?camera_id=' + cameraId);
+            // Request to Streaming Server for camera status with timeout
+            const statusResponse = await fetchWithTimeout(STREAMING_HTTP_URL + '/api/stream/camera-status?camera_id=' + cameraId, 2000);
             // console.log('[ConnectionStatus] Status response for ' + cameraId + ': ' + statusResponse.status + ' ' + statusResponse.statusText);
-            
+
             // Also sync pending registrations periodically
-            const pendingResponse = await fetch(STREAMING_HTTP_URL + '/api/stream/pending');
+            const pendingResponse = await fetchWithTimeout(STREAMING_HTTP_URL + '/api/stream/pending', 2000);
             // console.log('[ConnectionStatus] Pending response: ' + pendingResponse.status + ' ' + pendingResponse.statusText);
-            
+
+            // SUCCESS: Reset failure counter and process normally
+            if (this.statusFailures > 0) {
+                ConnectionLog.add(
+                    `✅ Recovered: Camera ${cameraId} - Connection restored after ${this.statusFailures} transient failures`,
+                    'success'
+                );
+            }
+            this.statusFailures = 0;
+
             if (statusResponse.ok) {
                 const data = await statusResponse.json();
                 // console.log('[ConnectionStatus] Camera ' + cameraId + ' status data:', data);
-                
+
                 // If camera is already stable, update silently to avoid restarting timer
                 const silentUpdate = AppState.isConnectionStable && data.connected;
-                
-                // If camera was disconnected, don't start a new stability check - just show disconnected
-                const wasDisconnected = !AppState.isConnected;
-                
+
                 this.updateConnectionStatusDebounced(cameraId, data.connected, data.age_seconds, silentUpdate);
-                
+
                 // Update pending registrations if available
                 if (pendingResponse.ok) {
                     const pendingData = await pendingResponse.json();
@@ -315,18 +437,53 @@ const ConnectionStatus = {
                     }
                     // console.log('[ConnectionStatus] Pending registrations: ' + AppState.pendingRegistrations.length);
                 }
-                
+
                 return data.connected;
             }
-            // console.log('[ConnectionStatus] Status response not OK, marking as disconnected');
-            // Pass silent=true to prevent triggering "Connecting..." when already disconnected
-            this.updateConnectionStatusDebounced(cameraId, false, null, true);
-            return false;
+
+            // Non-OK response: treat as failure
+            this.handleFetchFailure(cameraId, statusResponse.status);
+            return AppState.isConnected; // Return last known state
         } catch (error) {
-            console.error('[ConnectionStatus] Error checking connection for ' + cameraId + ':', error);
-            // Pass silent=true to prevent triggering "Connecting..." when already disconnected
+            // Network error or timeout: treat as failure
+            console.warn('[ConnectionStatus] Error checking connection for ' + cameraId + ':', error.message);
+            this.handleFetchFailure(cameraId, null, error.message);
+            return AppState.isConnected; // Return last known state
+        }
+    },
+
+    handleFetchFailure(cameraId, httpStatus = null, errorMessage = null) {
+        this.statusFailures++;
+
+        const failureReason = httpStatus ? `HTTP ${httpStatus}` : errorMessage || 'Network/Timeout';
+        console.warn(`[ConnectionStatus] Fetch failure ${this.statusFailures}/${this.MAX_FAILURES} for ${cameraId}: ${failureReason}`);
+
+        // Log each failure with details
+        ConnectionLog.add(
+            `⚠️ Poll failure ${this.statusFailures}/${this.MAX_FAILURES}: ${cameraId} - ${failureReason}`,
+            'warning'
+        );
+
+        // Only mark as disconnected after MAX_FAILURES consecutive failures
+        if (this.statusFailures >= this.MAX_FAILURES) {
+            const disconnectReason = httpStatus
+                ? `Server returned HTTP ${httpStatus} for ${this.statusFailures} consecutive polls`
+                : errorMessage?.includes('timeout')
+                    ? `Server timed out for ${this.statusFailures} consecutive polls`
+                    : `Network errors for ${this.statusFailures} consecutive polls`;
+
+            ConnectionLog.add(
+                `❌ DISCONNECTED: ${cameraId} - ${disconnectReason}`,
+                'disconnect'
+            );
+
+            console.error(`[ConnectionStatus] ${cameraId}: ${this.statusFailures} consecutive failures - marking DISCONNECTED`);
             this.updateConnectionStatusDebounced(cameraId, false, null, true);
-            return false;
+            // Reset counter after marking disconnected
+            this.statusFailures = 0;
+        } else {
+            // Keep last known status, don't update UI
+            console.log(`[ConnectionStatus] ${cameraId}: Tolerating failure ${this.statusFailures}/${this.MAX_FAILURES} - keeping current status`);
         }
     },
     

@@ -132,12 +132,20 @@ function startFlagSyncWorker() {
 // ============================================
 
 function startPeriodicSync() {
+    // Log that connection monitoring is starting
+    if (window.ConnectionLog) {
+        ConnectionLog.add(
+            `🔄 Starting connection monitoring - Polling every 400ms (Max ${ConnectionStatus.MAX_FAILURES} tolerated failures)`,
+            'info'
+        );
+    }
+
     // Sync camera list every 15 seconds
     AppState.cameraListTimer = setInterval(() => {
         CameraManager.syncAllCameraData();
     }, 15000);
-    
-    // Check camera connections every 5 seconds
+
+    // Check camera connections every 400ms (within 300-500ms range per requirements)
     AppState.cameraStatusTimer = setInterval(() => {
         AppState.availableCameras.forEach(camera => {
             ConnectionStatus.checkCameraConnection(camera.camera_id);
@@ -145,7 +153,7 @@ function startPeriodicSync() {
         if (AppState.currentCameraId) {
             ConnectionStatus.checkCameraConnection(AppState.currentCameraId);
         }
-    }, 5000);
+    }, 400);
 }
 
 // ============================================
@@ -174,11 +182,97 @@ function cleanup() {
 
 // Popup functions
 window.confirmBackground = function() {
+    const popupTitle = document.getElementById('popupTitle');
+    const popupLoading = document.getElementById('popupLoading');
+    const popupButtons = document.getElementById('popupButtons');
+    const popupStatus = document.getElementById('popupStatus');
+
+    // Record timestamp before sending command
+    const startTime = Date.now();
+
+    // Set the pending flag before sending command
+    if (window.StreamDisplay) {
+        window.StreamDisplay.backgroundUpdatePending = true;
+    }
+
+    // Send the command
     CommandManager.sendCommand("set_background", true);
-    DOMHelpers.hidePopup(DOMElements.popup);
+
+    // Show loading state
+    if (popupLoading) popupLoading.style.display = 'flex';
+    if (popupButtons) popupButtons.style.display = 'none';
+    if (popupTitle) popupTitle.textContent = 'Setting background...';
+
+    // Set a timeout for the operation (15 seconds)
+    const TIMEOUT_MS = 15000;
+
+    // Poll for background update completion
+    const checkInterval = setInterval(() => {
+        const elapsed = Date.now() - startTime;
+        const isPending = window.StreamDisplay?.backgroundUpdatePending === true;
+
+        // Check if background was updated successfully
+        // (backgroundUpdatePending was set to true by sending the command,
+        // and will be set to false when the new background image is loaded)
+        if (!isPending && window.StreamDisplay?.lastBackgroundTimestamp > startTime) {
+            // Success!
+            clearInterval(checkInterval);
+            if (popupStatus) popupStatus.textContent = 'Background set successfully!';
+            if (popupStatus) popupStatus.style.color = '#28a745';
+
+            setTimeout(() => {
+                DOMHelpers.hidePopup(DOMElements.popup);
+                // Reset popup state for next time
+                resetBackgroundPopup();
+            }, 1000);
+        } else if (elapsed >= TIMEOUT_MS) {
+            // Timeout
+            clearInterval(checkInterval);
+            if (popupStatus) popupStatus.textContent = 'Timeout - please try again';
+            if (popupStatus) popupStatus.style.color = '#ff9800';
+
+            setTimeout(() => {
+                DOMHelpers.hidePopup(DOMElements.popup);
+                // Reset popup state for next time
+                resetBackgroundPopup();
+            }, 2000);
+        }
+    }, 200); // Check every 200ms
+
+    // Store interval for cleanup if popup is closed manually
+    DOMElements.popup._checkInterval = checkInterval;
+};
+
+// Reset popup to initial state
+function resetBackgroundPopup() {
+    const popupTitle = document.getElementById('popupTitle');
+    const popupLoading = document.getElementById('popupLoading');
+    const popupButtons = document.getElementById('popupButtons');
+    const popupStatus = document.getElementById('popupStatus');
+
+    if (popupTitle) popupTitle.textContent = 'Set this frame as background?';
+    if (popupLoading) {
+        popupLoading.style.display = 'none';
+        if (popupStatus) {
+            popupStatus.textContent = 'Setting background...';
+            popupStatus.style.color = '';
+        }
+    }
+    if (popupButtons) popupButtons.style.display = 'block';
+    if (DOMElements.popup._checkInterval) {
+        clearInterval(DOMElements.popup._checkInterval);
+        DOMElements.popup._checkInterval = null;
+    }
 };
 
 window.hidePopup = function() {
+    // Clear any pending check interval
+    if (DOMElements.popup._checkInterval) {
+        clearInterval(DOMElements.popup._checkInterval);
+        DOMElements.popup._checkInterval = null;
+    }
+    // Reset popup state and hide
+    resetBackgroundPopup();
     DOMHelpers.hidePopup(DOMElements.popup);
 };
 

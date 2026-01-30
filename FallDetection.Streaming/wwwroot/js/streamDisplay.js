@@ -497,13 +497,13 @@ const StreamDisplay = {
         this.fetchSafeAreas();
         this.fetchCameraState();
 
-        // Overlay pass: Fetch and check for updates every 25ms (40 FPS)
+        // Overlay pass: Fetch and check for updates every 100ms (10 FPS)
         // BUT only redraw overlay if data actually changed
         this.overlayRefreshInterval = setInterval(() => {
             this.fetchTrackingData();
             this.fetchSafeAreas();
             this.fetchCameraState();
-        }, 25);
+        }, 100);
 
         this.isRunning = true;
         console.log('[StreamDisplay] Static background img + overlay canvas rendering started - Overlay: 40 FPS (only on data change)');

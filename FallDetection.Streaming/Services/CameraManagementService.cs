@@ -5,11 +5,17 @@ namespace FallDetection.Streaming.Services
 {
     public class CameraManagementService
     {
+        // Ping timeout: camera considered connected if ping received within this time
+        private const int PingTimeoutSeconds = 10;
+
+        // Stale cleanup timeout: remove ping entries older than this
+        private const int StaleCleanupSeconds = 10;
+
         private readonly HttpClient _httpClient;
         private readonly Dictionary<string, CameraState> _cameraStates = new();
         private readonly object _cameraStatesLock = new();
-        
-        // Camera ping tracking for connection status (1 second timeout)
+
+        // Camera ping tracking for connection status
         private readonly Dictionary<string, long> _cameraPings = new();
         private readonly object _cameraPingsLock = new();
         
@@ -387,9 +393,8 @@ namespace FallDetection.Streaming.Services
         {
             var cameras = new List<CameraInfo>();
             var currentTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-            var pingTimeoutSeconds = 1;
 
-            // Clean up stale cameras first (mark as disconnected after 1 second of no ping)
+            // Clean up stale cameras first
             CleanupStaleCameras(currentTime);
 
             foreach (var kvp in _cameraRegistry)
@@ -397,7 +402,7 @@ namespace FallDetection.Streaming.Services
                 var cameraId = kvp.Key;
                 var cameraData = kvp.Value;
                 var lastPing = GetCameraLastPing(cameraId);
-                var isConnected = lastPing > 0 && (currentTime - lastPing) <= pingTimeoutSeconds;
+                var isConnected = lastPing > 0 && (currentTime - lastPing) <= PingTimeoutSeconds;
 
                 cameras.Add(new CameraInfo
                 {
@@ -425,7 +430,7 @@ namespace FallDetection.Streaming.Services
             {
                 var cameraId = kvp.Key;
                 var lastPing = kvp.Value;
-                var isConnected = (currentTime - lastPing) <= pingTimeoutSeconds;
+                var isConnected = (currentTime - lastPing) <= PingTimeoutSeconds;
 
                 // Skip if already added from registry
                 if (_cameraRegistry.ContainsKey(cameraId))
@@ -480,29 +485,30 @@ namespace FallDetection.Streaming.Services
         {
             var currentTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
             var lastPing = GetCameraLastPing(cameraId);
-            return lastPing > 0 && (currentTime - lastPing) <= 1;
+            var isConnected = lastPing > 0 && (currentTime - lastPing) <= PingTimeoutSeconds;
+
+            // Log duration since last ping for current camera
+            var duration = lastPing > 0 ? currentTime - lastPing : -1;
+            Console.WriteLine($"[CameraManagementService] {cameraId}: LastPing={lastPing}, DurationSinceLastPing={duration}s, Connected={isConnected}");
+
+            return isConnected;
         }
 
         /// <summary>
         /// Gets the connection status based on ping activity.
-        /// Returns true if camera has sent a ping within the last 1 second.
+        /// Returns true if camera has sent a ping within the last PingTimeoutSeconds.
         /// </summary>
-        public bool GetIsConnected(string cameraId)
-        {
-            return IsCameraConnected(cameraId);
-        }
 
         public void CleanupStaleCameras(long? currentTime = null)
         {
             var now = currentTime ?? DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-            var pingTimeoutSeconds = 5;
 
             // Thread-safe removal of stale ping entries
             lock (_cameraPingsLock)
             {
-                // Remove or mark stale ping entries (older than 5 seconds)
+                // Remove stale ping entries (older than StaleCleanupSeconds)
                 var staleCameras = _cameraPings
-                    .Where(kvp => (now - kvp.Value) > pingTimeoutSeconds)
+                    .Where(kvp => (now - kvp.Value) > StaleCleanupSeconds)
                     .Select(kvp => kvp.Key)
                     .ToList();
 
@@ -800,8 +806,8 @@ namespace FallDetection.Streaming.Services
 
                 // LOG: Incoming tracks data with full details
                 var tracksJson = JsonSerializer.Serialize(tracks, new JsonSerializerOptions { WriteIndented = true });
-                Console.WriteLine($"[StoreTracks] Camera {cameraId}: BEFORE={beforeCount} tracks, RECEIVED={tracks.Count} tracks, timestamp={timestamp}");
-                Console.WriteLine($"[StoreTracks] FULL INCOMING TRACKS DATA:\n{tracksJson}");
+                // Console.WriteLine($"[StoreTracks] Camera {cameraId}: BEFORE={beforeCount} tracks, RECEIVED={tracks.Count} tracks, timestamp={timestamp}");
+                // Console.WriteLine($"[StoreTracks] FULL INCOMING TRACKS DATA:\n{tracksJson}");
 
                 // Clear all existing tracking data to prevent zombie tracks
                 // Camera is the single source of truth - empty list means no people detected
@@ -831,8 +837,8 @@ namespace FallDetection.Streaming.Services
 
                 // LOG: After storing with full stored data
                 var storedTracksJson = JsonSerializer.Serialize(storedTracks, new JsonSerializerOptions { WriteIndented = true });
-                Console.WriteLine($"[StoreTracks] Camera {cameraId}: AFTER={state.TrackingData.Count} tracks (cleared and stored {tracks.Count} tracks)");
-                Console.WriteLine($"[StoreTracks] FULL STORED TRACKS DATA:\n{storedTracksJson}");
+                // Console.WriteLine($"[StoreTracks] Camera {cameraId}: AFTER={state.TrackingData.Count} tracks (cleared and stored {tracks.Count} tracks)");
+                // Console.WriteLine($"[StoreTracks] FULL STORED TRACKS DATA:\n{storedTracksJson}");
             }
         }
 
@@ -892,7 +898,7 @@ namespace FallDetection.Streaming.Services
 
                     // LOG: Full data being returned
                     var trackingDataJson = JsonSerializer.Serialize(trackingDataCopy, new JsonSerializerOptions { WriteIndented = true });
-                    Console.WriteLine($"[GetAllTrackingData] Camera {cameraId}: FULL DATA BEING RETURNED ({count} tracks):\n{trackingDataJson}");
+                    // Console.WriteLine($"[GetAllTrackingData] Camera {cameraId}: FULL DATA BEING RETURNED ({count} tracks):\n{trackingDataJson}");
 
                     // Return a copy to prevent InvalidOperationException during serialization
                     // when StoreTracks modifies the collection concurrently

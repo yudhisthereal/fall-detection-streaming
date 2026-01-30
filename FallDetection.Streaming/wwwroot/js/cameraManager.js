@@ -207,6 +207,15 @@ const CameraManager = {
         if (cameraInfo) {
             AppState.currentCameraName = cameraInfo.camera_name || cameraInfo.camera_id;
             AppState.currentCameraStatus = cameraInfo.registered ? "registered" : "pending";
+
+            // Log camera switch
+            if (window.ConnectionLog) {
+                const connectionStatus = cameraInfo.online ? 'Connected' : 'Disconnected';
+                ConnectionLog.add(
+                    `📷 Switched to ${cameraInfo.camera_name || cameraId} (${connectionStatus})`,
+                    'info'
+                );
+            }
         }
         
         // Update SignalR group

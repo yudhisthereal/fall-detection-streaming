@@ -131,17 +131,32 @@
     <button id="showInfoBtn" class="btn btn-floating" onclick="showAlgorithmInfo()">ℹ️ Algorithms</button>
 
     <!-- Status Indicator -->
-    <div id="stream-status" class="status-indicator">
-        Loading...
+    <div id="stream-status" class="status-indicator disconnected">
+        Disconnected
+    </div>
+
+    <!-- Connection Log Panel -->
+    <div id="connection-log-panel" class="connection-log-panel">
+        <div class="connection-log-header">
+            <span>📡 Connection Log</span>
+            <button id="clearLogBtn" class="btn-clear" onclick="clearConnectionLog()">Clear</button>
+        </div>
+        <div id="connection-log" class="connection-log"></div>
     </div>
 
     <!-- Background Confirmation Popup -->
     <div id="popup" class="popup">
-        <h3>Set this frame as background?</h3>
+        <h3 id="popupTitle">Set this frame as background?</h3>
         <img id="preview" src="">
         <br />
-        <button onclick="confirmBackground()" class="btn btn-primary">Yes</button>
-        <button onclick="hidePopup()" class="btn btn-secondary">Cancel</button>
+        <div id="popupLoading" class="popup-loading" style="display: none;">
+            <div class="spinner"></div>
+            <span id="popupStatus">Setting background...</span>
+        </div>
+        <div id="popupButtons">
+            <button onclick="confirmBackground()" class="btn btn-primary">Yes</button>
+            <button onclick="hidePopup()" class="btn btn-secondary">Cancel</button>
+        </div>
     </div>
 
     <!-- Safe Area Editor Popup -->
