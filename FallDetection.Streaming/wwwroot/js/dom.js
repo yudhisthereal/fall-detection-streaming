@@ -11,6 +11,8 @@ const DOMElements = {
     toggleRaw: document.getElementById('toggleRaw'),
     autoUpdateBg: document.getElementById('autoUpdateBg'),
     showSafeArea: document.getElementById('showSafeArea'),
+    showBedAreas: document.getElementById('showBedAreas'),
+    showFloorAreas: document.getElementById('showFloorAreas'),
     useSafetyCheck: document.getElementById('useSafetyCheck'),
     // toggleHME: document.getElementById('toggleHME'),
     fallAlgorithmSelect: document.getElementById('fallAlgorithmSelect'),

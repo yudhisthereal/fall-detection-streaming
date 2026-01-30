@@ -20,6 +20,14 @@ const UIControls = {
             DOMElements.showSafeArea.checked = flags.show_safe_area;
             DOMElements.showSafeArea.disabled = !AppState.isConnected;
         }
+        if (typeof flags.show_bed_areas === 'boolean' && DOMElements.showBedAreas) {
+            DOMElements.showBedAreas.checked = flags.show_bed_areas;
+            DOMElements.showBedAreas.disabled = !AppState.isConnected;
+        }
+        if (typeof flags.show_floor_areas === 'boolean' && DOMElements.showFloorAreas) {
+            DOMElements.showFloorAreas.checked = flags.show_floor_areas;
+            DOMElements.showFloorAreas.disabled = !AppState.isConnected;
+        }
         if (typeof flags.use_safety_check === 'boolean' && DOMElements.useSafetyCheck) {
             DOMElements.useSafetyCheck.checked = flags.use_safety_check;
             DOMElements.useSafetyCheck.disabled = !AppState.isConnected;
@@ -45,13 +53,15 @@ const UIControls = {
             DOMElements.toggleRaw,
             DOMElements.autoUpdateBg,
             DOMElements.showSafeArea,
+            DOMElements.showBedAreas,
+            DOMElements.showFloorAreas,
             DOMElements.useSafetyCheck,
             // DOMElements.toggleHME,
             DOMElements.fallAlgorithmSelect,
             DOMElements.setBackgroundBtn,
             DOMElements.editSafeAreaBtn
         ];
-        
+
         elements.forEach(element => {
             if (element) {
                 DOMHelpers.styleDisabled(element, !AppState.isConnected);
@@ -148,6 +158,53 @@ const UIControls = {
                         'info',
                         'Flags'
                     );
+                }
+
+                // Update area display
+                if (window.EditableAreaDisplay) {
+                    window.EditableAreaDisplay.update();
+                }
+            };
+        }
+
+        // Show Bed Areas
+        if (DOMElements.showBedAreas) {
+            DOMElements.showBedAreas.onchange = () => {
+                CommandManager.sendCommand("toggle_bed_areas_display", DOMElements.showBedAreas.checked);
+
+                // Log flag change
+                if (window.LogPanel) {
+                    LogPanel.add(
+                        `🛏️ Show Bed Areas ${DOMElements.showBedAreas.checked ? 'ENABLED' : 'DISABLED'}`,
+                        'info',
+                        'Flags'
+                    );
+                }
+
+                // Update area display
+                if (window.EditableAreaDisplay) {
+                    window.EditableAreaDisplay.update();
+                }
+            };
+        }
+
+        // Show Floor Areas
+        if (DOMElements.showFloorAreas) {
+            DOMElements.showFloorAreas.onchange = () => {
+                CommandManager.sendCommand("toggle_floor_areas_display", DOMElements.showFloorAreas.checked);
+
+                // Log flag change
+                if (window.LogPanel) {
+                    LogPanel.add(
+                        `🏠 Show Floor Areas ${DOMElements.showFloorAreas.checked ? 'ENABLED' : 'DISABLED'}`,
+                        'info',
+                        'Flags'
+                    );
+                }
+
+                // Update area display
+                if (window.EditableAreaDisplay) {
+                    window.EditableAreaDisplay.update();
                 }
             };
         }

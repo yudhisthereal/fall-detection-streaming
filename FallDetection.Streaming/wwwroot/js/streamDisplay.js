@@ -107,8 +107,10 @@ const StreamDisplay = {
         const container = this.backgroundImg?.parentElement;
         if (!container) return;
 
-        const width = container.clientWidth || 1200;
-        const height = container.clientHeight || 675;
+        // Maintain 320:224 (10:7) aspect ratio
+        // Calculate height based on width to maintain correct aspect ratio
+        const width = container.clientWidth || 1280;
+        const height = Math.round(width * 7 / 10); // 320:224 = 10:7 ratio
 
         // Resize overlay canvas only (background img is auto-sized by CSS)
         if (this.overlayCanvas) {

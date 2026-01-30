@@ -276,6 +276,14 @@ namespace FallDetection.Streaming.Controllers
                             cameraState.ControlFlags["show_safe_area"] = SafeConvertToBool(command.Value);
                             _cameraService.UpdateCameraState(command.CameraId, cameraState);
                             break;
+                        case "toggle_bed_areas_display":
+                            cameraState.ControlFlags["show_bed_areas"] = SafeConvertToBool(command.Value);
+                            _cameraService.UpdateCameraState(command.CameraId, cameraState);
+                            break;
+                        case "toggle_floor_areas_display":
+                            cameraState.ControlFlags["show_floor_areas"] = SafeConvertToBool(command.Value);
+                            _cameraService.UpdateCameraState(command.CameraId, cameraState);
+                            break;
                         case "toggle_safety_check":
                             cameraState.ControlFlags["use_safety_check"] = SafeConvertToBool(command.Value);
                             _cameraService.UpdateCameraState(command.CameraId, cameraState);
@@ -295,10 +303,10 @@ namespace FallDetection.Streaming.Controllers
                         case "update_safe_areas":
                             if (command.Value is JsonElement jsonElement)
                             {
-                                var safeAreas = JsonSerializer.Deserialize<List<List<List<double>>>>(jsonElement.GetRawText());
-                                if (safeAreas != null)
+                                var editableAreas = JsonSerializer.Deserialize<List<AreaPolygon>>(jsonElement.GetRawText());
+                                if (editableAreas != null)
                                 {
-                                    cameraState.SafeAreas = safeAreas;
+                                    cameraState.EditableAreas = editableAreas;
                                     _cameraService.UpdateCameraState(command.CameraId, cameraState);
                                 }
                             }
@@ -471,7 +479,12 @@ namespace FallDetection.Streaming.Controllers
                 var state = _cameraService.GetCameraState(camera_id);
                 if (state != null)
                 {
-                    return Ok(state.SafeAreas);
+                    // Return only safe areas for backwards compatibility
+                    var safeAreas = state.EditableAreas
+                        .Where(a => a.AreaType == "safe")
+                        .Select(a => a.Coordinates)
+                        .ToList();
+                    return Ok(safeAreas);
                 }
 
                 return NotFound(new { error = "Camera not found" });
@@ -479,6 +492,54 @@ namespace FallDetection.Streaming.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Get safe areas error");
+                return StatusCode(500, new { status = "error", message = ex.Message });
+            }
+        }
+
+        [HttpGet("bed-areas")]
+        public IActionResult GetBedAreas([FromQuery] string camera_id)
+        {
+            try
+            {
+                var state = _cameraService.GetCameraState(camera_id);
+                if (state != null)
+                {
+                    var bedAreas = state.EditableAreas
+                        .Where(a => a.AreaType == "bed")
+                        .Select(a => a.Coordinates)
+                        .ToList();
+                    return Ok(bedAreas);
+                }
+
+                return NotFound(new { error = "Camera not found" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Get bed areas error");
+                return StatusCode(500, new { status = "error", message = ex.Message });
+            }
+        }
+
+        [HttpGet("floor-areas")]
+        public IActionResult GetFloorAreas([FromQuery] string camera_id)
+        {
+            try
+            {
+                var state = _cameraService.GetCameraState(camera_id);
+                if (state != null)
+                {
+                    var floorAreas = state.EditableAreas
+                        .Where(a => a.AreaType == "floor")
+                        .Select(a => a.Coordinates)
+                        .ToList();
+                    return Ok(floorAreas);
+                }
+
+                return NotFound(new { error = "Camera not found" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Get floor areas error");
                 return StatusCode(500, new { status = "error", message = ex.Message });
             }
         }
@@ -684,20 +745,21 @@ namespace FallDetection.Streaming.Controllers
                 var state = _cameraService.GetCameraState(request.CameraId);
                 if (state != null)
                 {
-                    if (request.SafeAreas != null)
+                    if (request.EditableAreas != null)
                     {
-                        state.SafeAreas = request.SafeAreas;    
-                    } else
+                        state.EditableAreas = request.EditableAreas;
+                    }
+                    else
                     {
-                        Console.WriteLine("SafeAreas is null");
+                        Console.WriteLine("EditableAreas is null");
                     }
                     _cameraService.UpdateCameraState(request.CameraId, state);
-                    
+
                     return Ok(new
                     {
                         status = "success",
                         camera_id = request.CameraId,
-                        safe_areas_count = request.SafeAreas?.Count ?? 0
+                        areas_count = request.EditableAreas?.Count ?? 0
                     });
                 }
 
@@ -945,7 +1007,14 @@ namespace FallDetection.Streaming.Controllers
     public class SafeAreasRequest
     {
         public string CameraId { get; set; } = string.Empty;
-        public List<List<List<double>>>? SafeAreas { get; set; }
+        public List<AreaPolygon>? EditableAreas { get; set; }
+
+        // For backwards compatibility, also accept the old format
+        [JsonPropertyName("safe_areas")]
+        public List<List<List<double>>>? SafeAreas
+        {
+            set => EditableAreas = value?.Select(coords => new AreaPolygon { AreaType = "safe", Coordinates = coords }).ToList();
+        }
     }
 
 public class StateReportRequest

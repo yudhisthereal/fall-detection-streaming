@@ -18,9 +18,11 @@
     <script src="~/js/streamController.js" defer></script>
     <script src="~/js/commandManager.js" defer></script>
     <script src="~/js/uiControls.js" defer></script>
-    <script src="~/js/safeAreaEditor.js" defer></script>
+    <script src="~/js/editableAreaDisplay.js" defer></script>
+    <script src="~/js/editableAreaEditor.js" defer></script>
     <script src="~/js/cameraRegistration.js" defer></script>
     <script src="~/js/cameraManagement.js" defer></script>
+    <script src="~/js/skeletonDisplay.js" defer></script>
     <script src="~/js/poseDisplay.js" defer></script>
     <script src="~/js/streamDisplay.js" defer></script>
     <script src="~/js/algorithmInfo.js" defer></script>
@@ -73,20 +75,17 @@
             <div class="control-group">
                 <input type="checkbox" id="toggleRecord">
                 <label for="toggleRecord" class="toggle-label">Record</label>
-                
+
                 <input type="checkbox" id="toggleRaw">
                 <label for="toggleRaw" class="toggle-label">Show Raw</label>
-                
+
                 <input type="checkbox" id="autoUpdateBg">
                 <label for="autoUpdateBg" class="toggle-label">Auto-update BG</label>
             </div>
             <div class="control-group">
-                <input type="checkbox" id="showSafeArea">
-                <label for="showSafeArea" class="toggle-label">Show Safe Areas</label>
-                
                 <input type="checkbox" id="useSafetyCheck">
                 <label for="useSafetyCheck" class="toggle-label">Use Safety Check</label>
-                
+
                 @* <input type="checkbox" id="toggleHME">
                 <label for="toggleHME" class="toggle-label">🔐 HME Mode</label> *@
             </div>
@@ -99,7 +98,20 @@
                     </select>
                 </label>
                 <button id="setBackgroundBtn" class="btn btn-primary" title="Set current frame as background">📸 Set BG</button>
-                <button id="editSafeAreaBtn" class="btn btn-secondary" title="Edit safety zones">🛡️ Safe Areas</button>
+                <button id="editSafeAreaBtn" class="btn btn-secondary" title="Edit zones">🛡️ Edit Areas</button>
+            </div>
+            <!-- Area Display Section -->
+            <div class="control-group">
+                <div style="width: 100%; border-top: 1px solid var(--theme-border); margin: 5px 0;"></div>
+                <label style="width: 100%; font-size: 0.85em; color: var(--theme-text-muted); margin-bottom: 5px;">Area Display</label>
+                <input type="checkbox" id="showSafeArea">
+                <label for="showSafeArea" class="toggle-label">Safe Areas</label>
+
+                <input type="checkbox" id="showBedAreas">
+                <label for="showBedAreas" class="toggle-label">Bed Areas</label>
+
+                <input type="checkbox" id="showFloorAreas">
+                <label for="showFloorAreas" class="toggle-label">Floor Areas</label>
             </div>
         </div>
 
@@ -147,7 +159,7 @@
                     <option value="BackgroundImg">BackgroundImg</option>
                     <option value="StreamImg">StreamImg</option>
                     <option value="Flags">Flags</option>
-                    <option value="SafeAreas">SafeAreas</option>
+                    <option value="EditableAreas">EditableAreas</option>
                 </select>
                 <button id="minimizeLogBtn" class="btn-minimize" onclick="toggleLogPanel()" title="Maximize">□</button>
                 <button id="clearLogBtn" class="btn-clear" onclick="clearLog()">Clear</button>
@@ -173,7 +185,7 @@
 
     <!-- Safe Area Editor Popup -->
     <div id="safeAreaPopup" class="popup">
-        <h3>🛡️ Edit Safe Areas</h3>
+        <h3>🛡️ Edit Editable Areas</h3>
         <div class="instructions">
             <p><strong>Instructions:</strong></p>
             <ul>

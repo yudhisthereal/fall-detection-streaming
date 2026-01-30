@@ -534,7 +534,7 @@ namespace FallDetection.Streaming.Services
                     {
                         ControlFlags = new Dictionary<string, bool>(state.ControlFlags),
                         ControlFlagsInt = new Dictionary<string, int>(state.ControlFlagsInt),
-                        SafeAreas = new List<List<List<double>>>(state.SafeAreas),
+                        EditableAreas = state.EditableAreas.Select(a => new AreaPolygon { AreaType = a.AreaType, Coordinates = new List<List<double>>(a.Coordinates), Name = a.Name }).ToList(),
                         IpAddress = state.IpAddress,
                         LastSeen = state.LastSeen,
                         LastReport = state.LastReport,
@@ -560,6 +560,8 @@ namespace FallDetection.Streaming.Services
                         ["set_background"] = false,
                         ["auto_update_bg"] = false,
                         ["show_safe_area"] = false,
+                        ["show_bed_areas"] = false,
+                        ["show_floor_areas"] = false,
                         ["use_safety_check"] = false,
                         ["analytics_mode"] = true,
                         ["hme"] = false
@@ -568,7 +570,7 @@ namespace FallDetection.Streaming.Services
                     {
                         ["fall_algorithm"] = 3
                     },
-                    SafeAreas = new List<List<List<double>>>(),
+                    EditableAreas = new List<AreaPolygon>(),
                     LastSeen = 0,
                     TrackingData = new Dictionary<int, TrackingData>()
                 };
@@ -666,6 +668,8 @@ namespace FallDetection.Streaming.Services
                         ["set_background"] = false,
                         ["auto_update_bg"] = false,
                         ["show_safe_area"] = false,
+                        ["show_bed_areas"] = false,
+                        ["show_floor_areas"] = false,
                         ["use_safety_check"] = false,
                         ["analytics_mode"] = true,
                         ["hme"] = false
@@ -674,7 +678,7 @@ namespace FallDetection.Streaming.Services
                     {
                         ["fall_algorithm"] = 3
                     },
-                    SafeAreas = new List<List<List<double>>>(),
+                    EditableAreas = new List<AreaPolygon>(),
                     IsRegistered = true,
                     BackgroundUpdatePending = false,
                     BackgroundUpdateAcknowledged = false,

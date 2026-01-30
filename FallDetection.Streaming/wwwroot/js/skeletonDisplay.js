@@ -49,7 +49,7 @@ const SkeletonDisplay = {
         [14, 16]  // right_knee -> right_ankle
     ],
     
-    // Color palette for different tracks
+    // Color palette for different tracks (fallback when no safety status)
     TRACK_COLORS: [
         { stroke: '#00FF00', fill: '#00FF00' },   // Green
         { stroke: '#FF6B6B', fill: '#FF6B6B' },   // Red
@@ -57,6 +57,23 @@ const SkeletonDisplay = {
         { stroke: '#FFE66D', fill: '#FFE66D' },   // Yellow
         { stroke: '#C44Dff', fill: '#C44Dff' },   // Purple
     ],
+
+    // Color palette based on SafetyStatus
+    SAFETY_STATUS_COLORS: {
+        'fall': { stroke: '#FF0000', fill: '#FF0000' },      // Red
+        'unsafe': { stroke: '#FFA500', fill: '#FFA500' },    // Orange
+        'tracking': { stroke: '#00FF00', fill: '#00FF00' }   // Green
+    },
+
+    // Get color based on safety status, fallback to track-based color
+    getColorForTrack(trackId, safetyStatus) {
+        if (safetyStatus && this.SAFETY_STATUS_COLORS[safetyStatus]) {
+            return this.SAFETY_STATUS_COLORS[safetyStatus];
+        }
+        // Fallback to track-based color
+        const colorIndex = trackId % this.TRACK_COLORS.length;
+        return this.TRACK_COLORS[colorIndex];
+    },
     
     // Camera state for control flags
     cameraState: {},
@@ -83,9 +100,9 @@ const SkeletonDisplay = {
         // Resize canvas to match video dimensions
         this.resizeCanvas();
         
-        // Initialize static canvas for safe areas
-        if (window.SafeAreaDisplay) {
-            window.SafeAreaDisplay.init();
+        // Initialize static canvas for editable areas
+        if (window.EditableAreaDisplay) {
+            window.EditableAreaDisplay.init();
         }
         
         console.log('[SkeletonDisplay] Canvas initialized');
@@ -95,22 +112,23 @@ const SkeletonDisplay = {
     resizeCanvas() {
         const streamImg = document.getElementById('streamImg');
         if (!streamImg || !this.canvas) return;
-        
+
         // Canvas z-index is handled by CSS, no need to set here
-        
-        // Use the displayed size of the video element
-        const width = streamImg.clientWidth || 1200;
-        const height = streamImg.clientHeight || 675;
-        
+
+        // Maintain 320:224 (10:7) aspect ratio
+        // Calculate height based on width to maintain correct aspect ratio
+        const width = streamImg.clientWidth || 1280;
+        const height = Math.round(width * 7 / 10); // 320:224 = 10:7 ratio
+
         // Set canvas dimensions to match displayed size
         this.canvas.width = width;
         this.canvas.height = height;
-        
+
         console.debug(`[SkeletonDisplay] Canvas resized to ${width}x${height}`);
-        
-        // Also resize the static canvas for safe areas
-        if (window.SafeAreaDisplay) {
-            window.SafeAreaDisplay.resizeCanvas();
+
+        // Also resize the static canvas for editable areas
+        if (window.EditableAreaDisplay) {
+            window.EditableAreaDisplay.resizeCanvas();
         }
     },
     
@@ -130,9 +148,9 @@ const SkeletonDisplay = {
             this.showSafeAreas = newShowSafeAreas;
             console.log(`[SkeletonDisplay] show_safe_areas: ${this.showSafeAreas}`);
             
-            // Use SafeAreaDisplay to render safe areas on the static canvas
-            if (window.SafeAreaDisplay) {
-                window.SafeAreaDisplay.update(this.showSafeAreas);
+            // Use EditableAreaDisplay to render editable areas on the static canvas
+            if (window.EditableAreaDisplay) {
+                window.EditableAreaDisplay.update();
             }
         }
     },
@@ -193,7 +211,7 @@ const SkeletonDisplay = {
     render(trackingData) {
         this.clear();
         
-        // Note: Safe areas are rendered on staticCanvas by SafeAreaDisplay
+        // Note: Safe areas are rendered on staticCanvas by EditableAreaDisplay
         // and do not need to be redrawn every frame
         
         if (!trackingData || Object.keys(trackingData).length === 0) {
@@ -224,10 +242,9 @@ const SkeletonDisplay = {
     // Render a single skeleton
     renderSkeleton(trackId, data) {
         if (!this.ctx || !data.keypoints || data.keypoints.length < 34) return;
-        
+
         const keypoints = data.keypoints;
-        const colorIndex = trackId % this.TRACK_COLORS.length;
-        const color = this.TRACK_COLORS[colorIndex];
+        const color = this.getColorForTrack(trackId, data.safety_status);
         
         // Log keypoints for debugging
         console.log(`[SkeletonDisplay] Track ${trackId} keypoints:`, keypoints);
@@ -280,28 +297,27 @@ const SkeletonDisplay = {
         
         // Draw pose label above the skeleton
         if (data.pose_label) {
-            this.drawPoseLabel(data.pose_label, keypoints, trackId, scaleX, scaleY);
+            this.drawPoseLabel(data.pose_label, keypoints, trackId, scaleX, scaleY, data.safety_status);
         }
     },
     
     // Draw pose label above the skeleton
-    drawPoseLabel(poseLabel, keypoints, trackId, scaleX = 1, scaleY = 1) {
+    drawPoseLabel(poseLabel, keypoints, trackId, scaleX = 1, scaleY = 1, safetyStatus = null) {
         // Find the topmost keypoint (nose)
         const noseX = keypoints[0] * scaleX;
         const noseY = keypoints[1] * scaleY;
-        
+
         // Skip if nose position is invalid
         if (!this.isValidCoordinate(noseX) || !this.isValidCoordinate(noseY)) {
             return;
         }
-        
+
         // Calculate label position (above the nose, clamped to canvas bounds)
         const labelX = noseX;
         const labelY = Math.max(30, noseY - 20);
-        
-        // Get color based on track
-        const colorIndex = trackId % this.TRACK_COLORS.length;
-        const baseColor = this.TRACK_COLORS[colorIndex];
+
+        // Get color based on safety status
+        const baseColor = this.getColorForTrack(trackId, safetyStatus);
         
         // Measure text width
         this.ctx.font = 'bold 14px sans-serif';
@@ -441,9 +457,9 @@ const SkeletonDisplay = {
         this.ctx = null;
         this.isInitialized = false;
         
-        // Also cleanup SafeAreaDisplay
-        if (window.SafeAreaDisplay) {
-            window.SafeAreaDisplay.destroy();
+        // Also cleanup EditableAreaDisplay
+        if (window.EditableAreaDisplay) {
+            window.EditableAreaDisplay.destroy();
         }
         
         console.log('[SkeletonDisplay] Destroyed');

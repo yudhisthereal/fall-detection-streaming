@@ -16,11 +16,35 @@ namespace FallDetection.Streaming.Models
         public bool Pending { get; set; }
     }
 
+    public class AreaPolygon
+    {
+        [JsonPropertyName("area_type")]
+        public string AreaType { get; set; } = "safe"; // "safe", "bed", "floor"
+
+        [JsonPropertyName("coordinates")]
+        public List<List<double>> Coordinates { get; set; } = new();
+
+        [JsonPropertyName("name")]
+        public string? Name { get; set; }
+    }
+
     public class CameraState
     {
         public Dictionary<string, bool> ControlFlags { get; set; } = new();
         public Dictionary<string, int> ControlFlagsInt { get; set; } = new();
-        public List<List<List<double>>> SafeAreas { get; set; } = new();
+
+        // SafeAreas is kept for backwards compatibility with existing data
+        // New code should use EditableAreas which includes area type information
+        [JsonIgnore]
+        public List<List<List<double>>> SafeAreas
+        {
+            get => EditableAreas.Where(a => a.AreaType == "safe").Select(a => a.Coordinates).ToList();
+            set => EditableAreas = value.Select(coords => new AreaPolygon { AreaType = "safe", Coordinates = coords }).ToList();
+        }
+
+        // New property that stores areas with type information
+        public List<AreaPolygon> EditableAreas { get; set; } = new();
+
         public string? IpAddress { get; set; }
         public long LastSeen { get; set; }
         public long LastReport { get; set; }
