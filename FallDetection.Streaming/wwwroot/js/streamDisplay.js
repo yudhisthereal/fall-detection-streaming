@@ -130,6 +130,58 @@ const StreamDisplay = {
         console.log('[StreamDisplay] Background placeholder set');
     },
 
+    // Fetch background image and update it with retry logic
+    async fetchBackgroundImage() {
+        if (!AppState.currentCameraId) {
+            console.warn('[StreamDisplay] No camera ID, cannot fetch background');
+            return;
+        }
+
+        if (this.backgroundUpdatePending) {
+            console.log('[StreamDisplay] Background update already in progress, skipping');
+            return;
+        }
+
+        const timestamp = Date.now();
+        const streamUrl = `${STREAMING_HTTP_URL}/api/stream/background?camera_id=${AppState.currentCameraId}&t=${timestamp}`;
+
+        console.log('[StreamDisplay] Fetching background image from:', streamUrl);
+        this.backgroundUpdatePending = true;
+
+        // Preload the image to verify it loads before updating
+        const tempImg = new Image();
+
+        tempImg.onload = () => {
+            console.log('[StreamDisplay] Background image loaded successfully, updating display');
+            this.updateBackgroundImage(streamUrl);
+        };
+
+        tempImg.onerror = () => {
+            console.error('[StreamDisplay] Failed to load background image, will retry...');
+            this.backgroundUpdatePending = false;
+
+            if (window.LogPanel) {
+                LogPanel.add(
+                    `❌ Failed to fetch background image, retrying...`,
+                    'warning',
+                    'BackgroundImg'
+                );
+            }
+
+            // Retry after 2 seconds
+            if (this.isRunning) {
+                setTimeout(() => {
+                    if (this.currentBackgroundMode) {
+                        console.log('[StreamDisplay] Retrying background fetch...');
+                        this.fetchBackgroundImage();
+                    }
+                }, 2000);
+            }
+        };
+
+        tempImg.src = streamUrl;
+    },
+
     // Update background image - ONLY called in authorized cases:
     // 1. Initial connection, once the first valid background frame is available
     // 2. Entering background mode
@@ -414,7 +466,8 @@ const StreamDisplay = {
             // When entering background mode (show_raw: true -> false), update background image
             if (oldShowRaw === true && newShowRaw === false) {
                 this.currentBackgroundMode = true;
-                console.log('[StreamDisplay] Entering background mode - will update background on next stream refresh');
+                console.log('[StreamDisplay] Entering background mode - fetching background image');
+                this.fetchBackgroundImage();
             }
             // When entering raw mode (show_raw: false -> true)
             else if (oldShowRaw === false && newShowRaw === true) {
@@ -513,7 +566,13 @@ const StreamDisplay = {
         // Initialize with current data
         this.fetchTrackingData();
         this.fetchSafeAreas();
-        this.fetchCameraState();
+        this.fetchCameraState().then((state) => {
+            // Initial connection: fetch background if show_raw is false
+            if (state && state.show_raw === false) {
+                console.log('[StreamDisplay] Initial connection in background mode - fetching background');
+                this.fetchBackgroundImage();
+            }
+        });
 
         // Overlay pass: Fetch and check for updates every 100ms (10 FPS)
         // BUT only redraw overlay if data actually changed

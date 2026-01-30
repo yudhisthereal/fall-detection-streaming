@@ -112,12 +112,6 @@ const SafeAreaEditor = {
         DOMElements.safeAreaCanvas.width = originalImageWidth;
         DOMElements.safeAreaCanvas.height = originalImageHeight;
         
-        const maxWidth = 800;
-        const maxHeight = 600;
-        const scaleX = maxWidth / originalImageWidth;
-        const scaleY = maxHeight / originalImageHeight;
-        canvasScale = Math.min(scaleX, scaleY);
-        
         canvasContext = DOMElements.safeAreaCanvas.getContext('2d');
         
         DOMElements.safeAreaCanvas.addEventListener('click', (e) => SafeAreaEditor.handleCanvasClick(e));
@@ -233,7 +227,6 @@ const SafeAreaEditor = {
         if (polygon.length === 0) return;
         
         canvasContext.strokeStyle = color;
-        canvasContext.fillStyle = color + '40';
         canvasContext.lineWidth = 2;
         canvasContext.setLineDash(isComplete ? [] : [5, 5]);
         
@@ -250,7 +243,7 @@ const SafeAreaEditor = {
         
         if (isComplete && points.length >= 3) {
             canvasContext.closePath();
-            canvasContext.fill();
+            // REMOVED: canvasContext.fill();
         }
         
         canvasContext.stroke();

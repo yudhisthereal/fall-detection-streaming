@@ -122,11 +122,9 @@ const StreamController = {
             this.isRefreshing = false;
             console.debug(`${endpoint} loaded successfully for ${AppState.currentCameraId}`);
 
-            // If background endpoint was used, update the visible background image
-            if (endpoint === 'background' && window.StreamDisplay) {
-                console.log('[StreamController] Background image loaded, updating visible background img');
-                window.StreamDisplay.updateBackgroundImage(streamUrl);
-            }
+            // Note: streamBackgroundImg is NOT updated here to prevent periodic refreshes
+            // It should only be updated by StreamDisplay in authorized cases:
+            // 1. Initial connection, 2. Entering background mode, 3. When set_background completes
 
             // Log stream frame success (throttled to avoid spam - log every 50th frame)
             if (window.LogPanel && !this.frameSuccessCount) this.frameSuccessCount = 0;
