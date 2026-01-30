@@ -11,6 +11,7 @@
     <script src="~/js/config.js" defer></script>
     <script src="~/js/state.js" defer></script>
     <script src="~/js/dom.js" defer></script>
+    <script src="~/js/logPanel.js" defer></script>
     <script src="~/js/connectionStatus.js" defer></script>
     <script src="~/js/signalr.js" defer></script>
     <script src="~/js/cameraManager.js" defer></script>
@@ -136,7 +137,7 @@
     </div>
 
     <!-- Log Panel -->
-    <div id="log-panel" class="log-panel">
+    <div id="log-panel" class="log-panel minimized">
         <div class="log-header">
             <span>📋 Logs</span>
             <div class="log-controls">
@@ -148,7 +149,7 @@
                     <option value="Flags">Flags</option>
                     <option value="SafeAreas">SafeAreas</option>
                 </select>
-                <button id="minimizeLogBtn" class="btn-minimize" onclick="toggleLogPanel()" title="Minimize">−</button>
+                <button id="minimizeLogBtn" class="btn-minimize" onclick="toggleLogPanel()" title="Maximize">□</button>
                 <button id="clearLogBtn" class="btn-clear" onclick="clearLog()">Clear</button>
             </div>
         </div>
@@ -185,7 +186,11 @@
         <div class="canvas-container">
             <canvas id="safeAreaCanvas"></canvas>
         </div>
-        <div class="toolbar">
+        <div id="safeAreaLoading" class="popup-loading" style="display: none;">
+            <div class="spinner"></div>
+            <span id="safeAreaLoadingStatus">Saving...</span>
+        </div>
+        <div class="toolbar" id="safeAreaToolbar">
             <button id="newPolygonBtn" class="btn btn-primary">New Polygon</button>
             <button id="clearAllBtn" class="btn btn-warning">Clear All</button>
             <button id="saveSafeAreasBtn" class="btn btn-success">💾 Save</button>

@@ -270,12 +270,16 @@ const SafeAreaEditor = {
             safeAreas.push([...currentPolygon]);
             currentPolygon = [];
         }
-        
-        if (DOMElements.saveStatus) {
-            DOMElements.saveStatus.textContent = "Saving...";
-            DOMElements.saveStatus.className = "status saving";
-        }
-        
+
+        // Show loading animation and hide toolbar
+        const loadingDiv = document.getElementById('safeAreaLoading');
+        const toolbar = document.getElementById('safeAreaToolbar');
+        const loadingStatus = document.getElementById('safeAreaLoadingStatus');
+
+        if (loadingDiv) loadingDiv.style.display = 'flex';
+        if (toolbar) toolbar.style.display = 'none';
+        if (loadingStatus) loadingStatus.textContent = 'Saving...';
+
         try {
             const response = await fetch(`${STREAMING_HTTP_URL}/api/stream/safe-areas`, {
                 method: 'POST',
@@ -287,11 +291,12 @@ const SafeAreaEditor = {
                     safe_areas: safeAreas
                 })
             });
-            
+
             if (response.ok) {
-                if (DOMElements.saveStatus) {
-                    DOMElements.saveStatus.textContent = "Saved successfully!";
-                    DOMElements.saveStatus.className = "status success";
+                // Update loading status to success
+                if (loadingStatus) {
+                    loadingStatus.textContent = 'Saved successfully!';
+                    loadingStatus.style.color = '#28a745';
                 }
 
                 CommandManager.sendCommand("update_safe_areas", safeAreas);
@@ -315,10 +320,18 @@ const SafeAreaEditor = {
             }
         } catch (error) {
             console.error('Save error:', error);
-            if (DOMElements.saveStatus) {
-                DOMElements.saveStatus.textContent = "Save failed";
-                DOMElements.saveStatus.className = "status error";
+
+            // Show error in loading status
+            if (loadingStatus) {
+                loadingStatus.textContent = 'Save failed';
+                loadingStatus.style.color = '#ff9800';
             }
+
+            // Hide loading and show toolbar after a delay
+            setTimeout(() => {
+                if (loadingDiv) loadingDiv.style.display = 'none';
+                if (toolbar) toolbar.style.display = 'grid';
+            }, 2000);
         }
     },
 
