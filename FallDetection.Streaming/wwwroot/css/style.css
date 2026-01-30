@@ -547,17 +547,17 @@ h1 {
 }
 
 /* ==================== */
-/* Connection Log Panel */
+/* Log Panel */
 /* ==================== */
 
-.connection-log-panel {
+.log-panel {
     position: fixed;
     top: auto;
     bottom: 20px;
     left: 20px;
-    width: 400px;
+    width: 450px;
     max-width: 90vw;
-    max-height: 300px;
+    max-height: 350px;
     background: var(--theme-surface);
     border: 2px solid var(--theme-border);
     border-radius: 15px;
@@ -567,17 +567,72 @@ h1 {
     backdrop-filter: blur(20px);
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
     overflow: hidden;
+    transition: max-height 0.3s ease, width 0.3s ease;
 }
 
-.connection-log-header {
+.log-panel.minimized {
+    max-height: 50px;
+}
+
+.log-panel.minimized .log-content {
+    display: none;
+}
+
+.log-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     padding: 12px 15px;
     background: rgba(0, 0, 0, 0.3);
     border-bottom: 1px solid var(--theme-border);
-    font-weight: 600;
-    font-size: 0.95rem;
+}
+
+.log-controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.log-filter-select {
+    background: var(--theme-surface);
+    color: white;
+    border: 1px solid var(--theme-border);
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.log-filter-select:hover {
+    border-color: var(--theme-primary);
+}
+
+.log-filter-select:focus {
+    outline: none;
+    border-color: var(--theme-primary);
+    box-shadow: 0 0 0 2px rgba(var(--theme-primary-rgb), 0.2);
+}
+
+.btn-minimize {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--theme-border);
+    border-radius: 6px;
+    color: var(--theme-text);
+    padding: 4px 10px;
+    font-size: 1rem;
+    line-height: 1;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-minimize:hover {
+    background: rgba(255, 255, 255, 0.2);
 }
 
 .btn-clear {
@@ -595,7 +650,7 @@ h1 {
     background: rgba(255, 255, 255, 0.2);
 }
 
-.connection-log {
+.log-content {
     flex: 1;
     overflow-y: auto;
     padding: 10px;
@@ -604,15 +659,15 @@ h1 {
     line-height: 1.6;
 }
 
-.connection-log::-webkit-scrollbar {
+.log-content::-webkit-scrollbar {
     width: 6px;
 }
 
-.connection-log::-webkit-scrollbar-track {
+.log-content::-webkit-scrollbar-track {
     background: rgba(0, 0, 0, 0.2);
 }
 
-.connection-log::-webkit-scrollbar-thumb {
+.log-content::-webkit-scrollbar-thumb {
     background: var(--theme-border);
     border-radius: 3px;
 }
@@ -624,6 +679,10 @@ h1 {
     background: rgba(0, 0, 0, 0.2);
     border-left: 3px solid transparent;
     animation: logFadeIn 0.3s ease-out;
+}
+
+.log-entry.hidden {
+    display: none;
 }
 
 @keyframes logFadeIn {
@@ -669,9 +728,39 @@ h1 {
     font-weight: 600;
 }
 
+.log-entry[data-category="Connection"] {
+    border-left-color: #4a9eff;
+}
+
+.log-entry[data-category="BackgroundImg"] {
+    border-left-color: #ff6b6b;
+}
+
+.log-entry[data-category="StreamImg"] {
+    border-left-color: #ffd93d;
+}
+
+.log-entry[data-category="Flags"] {
+    border-left-color: #6f42c1;
+}
+
+.log-entry[data-category="SafeAreas"] {
+    border-left-color: #20c997;
+}
+
 .log-time {
     color: #888;
     font-size: 0.75rem;
+}
+
+.log-category-tag {
+    display: inline-block;
+    font-size: 0.65rem;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    margin-left: 8px;
+    color: #ccc;
 }
 
 .log-message {

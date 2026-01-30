@@ -86,37 +86,87 @@ const UIControls = {
         if (DOMElements.toggleRecord) {
             DOMElements.toggleRecord.onchange = () => {
                 CommandManager.sendCommand("toggle_record", DOMElements.toggleRecord.checked);
+
+                // Log flag change
+                if (window.LogPanel) {
+                    LogPanel.add(
+                        `🎥 Record ${DOMElements.toggleRecord.checked ? 'STARTED' : 'STOPPED'}`,
+                        'info',
+                        'Flags'
+                    );
+                }
             };
         }
-        
+
         // Toggle Raw
         if (DOMElements.toggleRaw) {
             DOMElements.toggleRaw.onchange = () => {
                 const showRaw = DOMElements.toggleRaw.checked;
                 CommandManager.sendCommand("toggle_raw", showRaw);
-                
+
+                // Log flag change
+                if (window.LogPanel) {
+                    LogPanel.add(
+                        `🖼️ Show Raw ${showRaw ? 'ENABLED' : 'DISABLED'}`,
+                        'info',
+                        'Flags'
+                    );
+                }
+
                 // Update stream display (background vs live)
                 if (window.StreamController) {
                     window.StreamController.setShowBackground(!showRaw);
                 }
             };
         }
-        
+
         // Auto Update BG
         if (DOMElements.autoUpdateBg) {
             DOMElements.autoUpdateBg.onchange = () => {
                 CommandManager.sendCommand("auto_update_bg", DOMElements.autoUpdateBg.checked);
+
+                // Log flag change
+                if (window.LogPanel) {
+                    LogPanel.add(
+                        `🔄 Auto-update BG ${DOMElements.autoUpdateBg.checked ? 'ENABLED' : 'DISABLED'}`,
+                        'info',
+                        'Flags'
+                    );
+                }
             };
         }
-        
+
         // Show Safe Area
         if (DOMElements.showSafeArea) {
             DOMElements.showSafeArea.onchange = () => {
                 CommandManager.sendCommand("toggle_safe_area_display", DOMElements.showSafeArea.checked);
+
+                // Log flag change
+                if (window.LogPanel) {
+                    LogPanel.add(
+                        `🛡️ Show Safe Areas ${DOMElements.showSafeArea.checked ? 'ENABLED' : 'DISABLED'}`,
+                        'info',
+                        'Flags'
+                    );
+                }
             };
         }
-        
+
         // Use Safety Check
+        if (DOMElements.useSafetyCheck) {
+            DOMElements.useSafetyCheck.onchange = () => {
+                CommandManager.sendCommand("toggle_safety_check", DOMElements.useSafetyCheck.checked);
+
+                // Log flag change
+                if (window.LogPanel) {
+                    LogPanel.add(
+                        `✅ Safety Check ${DOMElements.useSafetyCheck.checked ? 'ENABLED' : 'DISABLED'}`,
+                        'info',
+                        'Flags'
+                    );
+                }
+            };
+        }
         if (DOMElements.useSafetyCheck) {
             DOMElements.useSafetyCheck.onchange = () => {
                 CommandManager.sendCommand("toggle_safety_check", DOMElements.useSafetyCheck.checked);

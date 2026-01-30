@@ -149,11 +149,29 @@ const StreamDisplay = {
             this.lastBackgroundTimestamp = Date.now();
             this.backgroundUpdatePending = false;
             console.log('[StreamDisplay] Background image updated successfully');
+
+            // Log to panel
+            if (window.LogPanel) {
+                LogPanel.add(
+                    `✅ Background image updated (timestamp: ${this.lastBackgroundTimestamp})`,
+                    'success',
+                    'BackgroundImg'
+                );
+            }
         };
 
         tempImg.onerror = () => {
             console.error('[StreamDisplay] Failed to load background image, keeping current image');
             this.backgroundUpdatePending = false;
+
+            // Log error to panel
+            if (window.LogPanel) {
+                LogPanel.add(
+                    `❌ Failed to load background image`,
+                    'error',
+                    'BackgroundImg'
+                );
+            }
         };
 
         tempImg.src = imageSrc;

@@ -128,6 +128,19 @@ const StreamController = {
                 window.StreamDisplay.updateBackgroundImage(streamUrl);
             }
 
+            // Log stream frame success (throttled to avoid spam - log every 50th frame)
+            if (window.LogPanel && !this.frameSuccessCount) this.frameSuccessCount = 0;
+            if (window.LogPanel && endpoint === 'background') {
+                this.frameSuccessCount++;
+                if (this.frameSuccessCount % 50 === 0) {
+                    LogPanel.add(
+                        `📹 Stream frames loading successfully (count: ${this.frameSuccessCount})`,
+                        'info',
+                        'StreamImg'
+                    );
+                }
+            }
+
             // Note: Connection status is determined solely by pings from the camera
             // Frame loads do NOT affect connection status
             // The camera's ping endpoint (/api/stream/ping) is the single source of truth

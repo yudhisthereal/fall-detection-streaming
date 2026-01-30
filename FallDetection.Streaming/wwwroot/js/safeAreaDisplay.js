@@ -241,21 +241,49 @@ const SafeAreaDisplay = {
         if (!AppState.currentCameraId) {
             return [];
         }
-        
+
         try {
             const response = await fetch(
                 STREAMING_HTTP_URL + '/api/stream/safe-areas?camera_id=' + AppState.currentCameraId
             );
-            
+
             if (response.ok) {
                 const safeAreas = await response.json();
                 console.log(`[SafeAreaDisplay] Loaded ${safeAreas.length} safe areas for ${AppState.currentCameraId}`);
+
+                // Log successful fetch to panel
+                if (window.LogPanel) {
+                    LogPanel.add(
+                        `✅ Fetched safe areas: ${safeAreas.length} areas`,
+                        'success',
+                        'SafeAreas'
+                    );
+                }
+
                 return safeAreas;
             } else {
+                // Log non-OK response to panel
+                if (window.LogPanel) {
+                    LogPanel.add(
+                        `⚠️ Fetch failed: HTTP ${response.status}`,
+                        'error',
+                        'SafeAreas'
+                    );
+                }
                 return [];
             }
         } catch (error) {
             console.error('[SafeAreaDisplay] Error fetching safe areas:', error);
+
+            // Log fetch error to panel
+            if (window.LogPanel) {
+                LogPanel.add(
+                    `❌ Fetch error: ${error.message}`,
+                    'error',
+                    'SafeAreas'
+                );
+            }
+
             return [];
         }
     },

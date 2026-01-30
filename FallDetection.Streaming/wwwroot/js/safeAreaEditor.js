@@ -118,9 +118,6 @@ const SafeAreaEditor = {
         const scaleY = maxHeight / originalImageHeight;
         canvasScale = Math.min(scaleX, scaleY);
         
-        DOMElements.safeAreaCanvas.style.width = (originalImageWidth * canvasScale) + 'px';
-        DOMElements.safeAreaCanvas.style.height = (originalImageHeight * canvasScale) + 'px';
-        
         canvasContext = DOMElements.safeAreaCanvas.getContext('2d');
         
         DOMElements.safeAreaCanvas.addEventListener('click', (e) => SafeAreaEditor.handleCanvasClick(e));
@@ -133,13 +130,20 @@ const SafeAreaEditor = {
     },
 
     getCanvasCoordinates(event) {
-        const rect = DOMElements.safeAreaCanvas.getBoundingClientRect();
-        const x = event.clientX - rect.left;
-        const y = event.clientY - rect.top;
-        
+        const canvas = DOMElements.safeAreaCanvas;
+        const rect = canvas.getBoundingClientRect();
+
+        // Mouse position inside displayed canvas
+        const displayX = event.clientX - rect.left;
+        const displayY = event.clientY - rect.top;
+
+        // Scale from display size → internal canvas size
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+
         return {
-            x: Math.floor(x / canvasScale),
-            y: Math.floor(y / canvasScale)
+            x: Math.floor(displayX * scaleX),
+            y: Math.floor(displayY * scaleY)
         };
     },
 
@@ -296,9 +300,20 @@ const SafeAreaEditor = {
                     DOMElements.saveStatus.textContent = "Saved successfully!";
                     DOMElements.saveStatus.className = "status success";
                 }
-                
+
                 CommandManager.sendCommand("update_safe_areas", safeAreas);
-                
+
+                // Log to panel
+                if (window.LogPanel) {
+                    const areaCount = safeAreas.length;
+                    const totalPoints = safeAreas.reduce((sum, area) => sum + area.length, 0);
+                    LogPanel.add(
+                        `✅ Safe areas saved: ${areaCount} areas, ${totalPoints} total points`,
+                        'success',
+                        'SafeAreas'
+                    );
+                }
+
                 setTimeout(() => {
                     SafeAreaEditor.hide();
                 }, 1000);
@@ -335,4 +350,3 @@ const SafeAreaEditor = {
 
 // Export
 window.SafeAreaEditor = SafeAreaEditor;
-

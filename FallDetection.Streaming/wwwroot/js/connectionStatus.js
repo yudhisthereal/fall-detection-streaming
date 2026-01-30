@@ -23,16 +23,17 @@ async function fetchWithTimeout(url, ms = 2000) {
 }
 
 // ============================================
-// CONNECTION LOGGING
+// LOGGING PANEL
 // ============================================
 
-const ConnectionLog = {
+const LogPanel = {
     maxEntries: 50,
     entries: [],
+    isMinimized: false,
 
-    add(message, type = 'info') {
+    add(message, type = 'info', category = 'Connection') {
         const timestamp = new Date().toLocaleTimeString();
-        const entry = { timestamp, message, type };
+        const entry = { timestamp, message, type, category };
 
         // Add to beginning of array
         this.entries.unshift(entry);
@@ -47,12 +48,16 @@ const ConnectionLog = {
 
         // Also log to console
         const consoleMethod = type === 'error' ? console.error : type === 'warning' ? console.warn : console.log;
-        consoleMethod(`[Connection] ${message}`);
+        consoleMethod(`[${category}] ${message}`);
     },
 
     updateUI() {
-        const logContainer = document.getElementById('connection-log');
+        const logContainer = document.getElementById('log-content');
         if (!logContainer) return;
+
+        // Get current filter
+        const filterSelect = document.getElementById('logCategoryFilter');
+        const currentFilter = filterSelect ? filterSelect.value : 'all';
 
         // Clear existing content safely
         while (logContainer.firstChild) {
@@ -61,8 +66,14 @@ const ConnectionLog = {
 
         // Add entries using safe DOM methods
         this.entries.forEach(entry => {
+            // Filter by category
+            if (currentFilter !== 'all' && entry.category !== currentFilter) {
+                return;
+            }
+
             const logEntry = document.createElement('div');
             logEntry.className = `log-entry log-${entry.type}`;
+            logEntry.dataset.category = entry.category;
 
             const timeSpan = document.createElement('span');
             timeSpan.className = 'log-time';
@@ -72,22 +83,65 @@ const ConnectionLog = {
             msgDiv.className = 'log-message';
             msgDiv.textContent = entry.message;
 
+            // Add category tag
+            const categoryTag = document.createElement('span');
+            categoryTag.className = 'log-category-tag';
+            categoryTag.textContent = entry.category;
+
+            const contentWrapper = document.createElement('div');
+            contentWrapper.appendChild(msgDiv);
+            contentWrapper.appendChild(categoryTag);
+
             logEntry.appendChild(timeSpan);
-            logEntry.appendChild(msgDiv);
+            logEntry.appendChild(contentWrapper);
             logContainer.appendChild(logEntry);
         });
     },
 
     clear() {
-        this.entries = [];
+        const filterSelect = document.getElementById('logCategoryFilter');
+        const currentFilter = filterSelect ? filterSelect.value : 'all';
+
+        if (currentFilter === 'all') {
+            // Clear all entries
+            this.entries = [];
+        } else {
+            // Clear only entries matching the current filter
+            this.entries = this.entries.filter(entry => entry.category !== currentFilter);
+        }
+
         this.updateUI();
-        console.log('[Connection] Log cleared');
+        console.log(`[LogPanel] Log cleared (filter: ${currentFilter})`);
+    },
+
+    toggleMinimize() {
+        this.isMinimized = !this.isMinimized;
+        const panel = document.getElementById('log-panel');
+        const btn = document.getElementById('minimizeLogBtn');
+
+        if (this.isMinimized) {
+            panel.classList.add('minimized');
+            btn.textContent = '□';  // Maximize icon
+            btn.title = 'Maximize';
+        } else {
+            panel.classList.remove('minimized');
+            btn.textContent = '−';  // Minimize icon
+            btn.title = 'Minimize';
+        }
     }
 };
 
-// Global function to clear log
-window.clearConnectionLog = function() {
-    ConnectionLog.clear();
+// Global functions for UI handlers
+window.clearLog = function() {
+    LogPanel.clear();
+};
+
+window.toggleLogPanel = function() {
+    LogPanel.toggleMinimize();
+};
+
+window.filterLog = function() {
+    LogPanel.updateUI();
 };
 
 const ConnectionStatus = {
@@ -185,23 +239,26 @@ const ConnectionStatus = {
             const previousState = this.previousConnectionState;
             if (previousState !== null && previousState !== connected) {
                 if (previousState === true && connected === false) {
-                    ConnectionLog.add(
+                    LogPanel.add(
                         `❌ DISCONNECTED: Camera ${cameraId} - ${this.statusFailures} consecutive polling failures (age: ${ageSeconds}s since last ping)`,
-                        'disconnect'
+                        'disconnect',
+                        'Connection'
                     );
                 } else if (previousState === false && connected === true) {
-                    ConnectionLog.add(
+                    LogPanel.add(
                         `✅ RECONNECTED: Camera ${cameraId} - Connection restored after ${this.statusFailures} failures`,
-                        'reconnect'
+                        'reconnect',
+                        'Connection'
                     );
                 }
             } else if (previousState === null && connected === true) {
                 // First time connecting - log initial connection
                 const cameraInfo = AppState.availableCameras.find(cam => cam.camera_id === cameraId);
                 const cameraName = cameraInfo?.camera_name || cameraId;
-                ConnectionLog.add(
+                LogPanel.add(
                     `✅ INITIALLY CONNECTED: ${cameraName} - Age: ${ageSeconds}s`,
-                    'success'
+                    'success',
+                    'Connection'
                 );
             }
 
@@ -412,9 +469,10 @@ const ConnectionStatus = {
 
             // SUCCESS: Reset failure counter and process normally
             if (this.statusFailures > 0) {
-                ConnectionLog.add(
+                LogPanel.add(
                     `✅ Recovered: Camera ${cameraId} - Connection restored after ${this.statusFailures} transient failures`,
-                    'success'
+                    'success',
+                    'Connection'
                 );
             }
             this.statusFailures = 0;
@@ -459,9 +517,10 @@ const ConnectionStatus = {
         console.warn(`[ConnectionStatus] Fetch failure ${this.statusFailures}/${this.MAX_FAILURES} for ${cameraId}: ${failureReason}`);
 
         // Log each failure with details
-        ConnectionLog.add(
+        LogPanel.add(
             `⚠️ Poll failure ${this.statusFailures}/${this.MAX_FAILURES}: ${cameraId} - ${failureReason}`,
-            'warning'
+            'warning',
+            'Connection'
         );
 
         // Only mark as disconnected after MAX_FAILURES consecutive failures
@@ -472,9 +531,10 @@ const ConnectionStatus = {
                     ? `Server timed out for ${this.statusFailures} consecutive polls`
                     : `Network errors for ${this.statusFailures} consecutive polls`;
 
-            ConnectionLog.add(
+            LogPanel.add(
                 `❌ DISCONNECTED: ${cameraId} - ${disconnectReason}`,
-                'disconnect'
+                'disconnect',
+                'Connection'
             );
 
             console.error(`[ConnectionStatus] ${cameraId}: ${this.statusFailures} consecutive failures - marking DISCONNECTED`);

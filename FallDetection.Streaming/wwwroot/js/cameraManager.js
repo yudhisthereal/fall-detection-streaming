@@ -209,11 +209,12 @@ const CameraManager = {
             AppState.currentCameraStatus = cameraInfo.registered ? "registered" : "pending";
 
             // Log camera switch
-            if (window.ConnectionLog) {
+            if (window.LogPanel) {
                 const connectionStatus = cameraInfo.online ? 'Connected' : 'Disconnected';
-                ConnectionLog.add(
+                LogPanel.add(
                     `📷 Switched to ${cameraInfo.camera_name || cameraId} (${connectionStatus})`,
-                    'info'
+                    'info',
+                    'Connection'
                 );
             }
         }

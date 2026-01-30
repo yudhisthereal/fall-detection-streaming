@@ -74,8 +74,26 @@ const CommandManager = {
             
             if (response.ok) {
                 console.log(`Command sent successfully`);
+
+                // Log successful command to panel
+                if (window.LogPanel) {
+                    LogPanel.add(
+                        `✅ Command sent: ${command} = ${JSON.stringify(value)}`,
+                        'info',
+                        'Flags'
+                    );
+                }
             } else {
                 console.error(`Command failed: HTTP ${response.status}`);
+
+                // Log failed command to panel
+                if (window.LogPanel) {
+                    LogPanel.add(
+                        `❌ Command failed: ${command} - HTTP ${response.status}`,
+                        'error',
+                        'Flags'
+                    );
+                }
             }
         } catch (error) {
             console.error('Command error:', error);

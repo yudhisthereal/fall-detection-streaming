@@ -133,10 +133,11 @@ function startFlagSyncWorker() {
 
 function startPeriodicSync() {
     // Log that connection monitoring is starting
-    if (window.ConnectionLog) {
-        ConnectionLog.add(
+    if (window.LogPanel) {
+        LogPanel.add(
             `🔄 Starting connection monitoring - Polling every 400ms (Max ${ConnectionStatus.MAX_FAILURES} tolerated failures)`,
-            'info'
+            'info',
+            'Connection'
         );
     }
 

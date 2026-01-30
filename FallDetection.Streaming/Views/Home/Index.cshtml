@@ -135,13 +135,24 @@
         Disconnected
     </div>
 
-    <!-- Connection Log Panel -->
-    <div id="connection-log-panel" class="connection-log-panel">
-        <div class="connection-log-header">
-            <span>📡 Connection Log</span>
-            <button id="clearLogBtn" class="btn-clear" onclick="clearConnectionLog()">Clear</button>
+    <!-- Log Panel -->
+    <div id="log-panel" class="log-panel">
+        <div class="log-header">
+            <span>📋 Logs</span>
+            <div class="log-controls">
+                <select id="logCategoryFilter" class="log-filter-select" onchange="filterLog()">
+                    <option value="all">All Categories</option>
+                    <option value="Connection">Connection</option>
+                    <option value="BackgroundImg">BackgroundImg</option>
+                    <option value="StreamImg">StreamImg</option>
+                    <option value="Flags">Flags</option>
+                    <option value="SafeAreas">SafeAreas</option>
+                </select>
+                <button id="minimizeLogBtn" class="btn-minimize" onclick="toggleLogPanel()" title="Minimize">−</button>
+                <button id="clearLogBtn" class="btn-clear" onclick="clearLog()">Clear</button>
+            </div>
         </div>
-        <div id="connection-log" class="connection-log"></div>
+        <div id="log-content" class="log-content"></div>
     </div>
 
     <!-- Background Confirmation Popup -->
