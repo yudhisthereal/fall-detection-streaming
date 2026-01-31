@@ -252,7 +252,7 @@ h1 {
     outline: none;
 }
 
-#camera-info {
+#cameraInfo {
     font-size: clamp(0.85rem, 2vw, 0.95rem);
     color: #aaa;
     padding: 10px;
@@ -528,7 +528,7 @@ h1 {
 /* Stream Status        */
 /* ==================== */
 
-#stream-status {
+#streamStatus {
     position: fixed;
     top: 15px;
     right: 15px;
@@ -545,14 +545,14 @@ h1 {
 }
 
 /* Connected - Green */
-#stream-status.connected,
-#stream-status.connected.stable {
+#streamStatus.connected,
+#streamStatus.connected.stable {
     background: linear-gradient(135deg, #28a745 0%, #34ce57 100%);
     border-color: #2ecc71;
 }
 
 /* Disconnected - Red */
-#stream-status.disconnected {
+#streamStatus.disconnected {
     background: linear-gradient(135deg, #dc3545 0%, #e4606d 100%);
     border-color: #e74c3c;
 }
@@ -905,7 +905,7 @@ h1 {
 }
 
 /* Safe Area Editor Popup */
-#safeAreaPopup {
+#editAreasPopup {
     width: min(1200px, 95vw);
     height: min(800px, 90vh);
 }
@@ -925,7 +925,7 @@ h1 {
     align-items: center;
 }
 
-#safeAreaCanvas {
+#editableAreaCanvas {
     cursor: crosshair;
 
     width: 100%;
@@ -1005,7 +1005,7 @@ h1 {
     transform: translateY(-1px);
 }
 
-.camera-info {
+.cameraInfo {
     flex: 1;
 }
 
@@ -1424,7 +1424,7 @@ h1 {
         transition-duration: 0.01ms !important;
     }
     
-    #stream-status.connecting {
+    #streamStatus.connecting {
         animation: none;
     }
 }

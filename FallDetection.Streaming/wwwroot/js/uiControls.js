@@ -44,8 +44,8 @@ const UIControls = {
         if (DOMElements.setBackgroundBtn) {
             DOMElements.setBackgroundBtn.disabled = !AppState.isConnected;
         }
-        if (DOMElements.editSafeAreaBtn) {
-            DOMElements.editSafeAreaBtn.disabled = !AppState.isConnected;
+        if (DOMElements.editAreas) {
+            DOMElements.editAreas.disabled = !AppState.isConnected;
         }
         
         const elements = [
@@ -59,7 +59,7 @@ const UIControls = {
             // DOMElements.toggleHME,
             DOMElements.fallAlgorithmSelect,
             DOMElements.setBackgroundBtn,
-            DOMElements.editSafeAreaBtn
+            DOMElements.editAreas
         ];
 
         elements.forEach(element => {
@@ -288,8 +288,8 @@ const UIControls = {
         }
         
         // Edit Safe Area Button
-        if (DOMElements.editSafeAreaBtn) {
-            DOMElements.editSafeAreaBtn.onclick = SafeAreaEditor.show.bind(SafeAreaEditor);
+        if (DOMElements.editAreas) {
+            DOMElements.editAreas.onclick = EditableAreaEditor.show.bind(EditableAreaEditor);
         }
     }
 };

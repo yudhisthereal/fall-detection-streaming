@@ -98,7 +98,7 @@ const EditableAreaEditor = {
         try {
             // Load existing editable areas
             const loadedAreas = await EditableAreaEditor.loadAreasForCamera(AppState.currentCameraId);
-            window.safeAreas = loadedAreas;
+            window.editableAreas = loadedAreas;
 
             // Save current show_raw state
             EditableAreaEditor.prevShowRaw = DOMElements.toggleRaw ? DOMElements.toggleRaw.checked : false;
@@ -118,7 +118,7 @@ const EditableAreaEditor = {
             backgroundImage = new Image();
             backgroundImage.onload = () => {
                 EditableAreaEditor.initializeCanvas();
-                DOMHelpers.showPopup(DOMElements.safeAreaPopup);
+                DOMHelpers.showPopup(DOMElements.editAreasPopup);
                 isEditing = true;
                 EditableAreaEditor.drawAreas();
 
@@ -155,18 +155,18 @@ const EditableAreaEditor = {
         originalImageWidth = backgroundImage.width;
         originalImageHeight = backgroundImage.height;
 
-        DOMElements.safeAreaCanvas.width = originalImageWidth;
-        DOMElements.safeAreaCanvas.height = originalImageHeight;
+        DOMElements.editableAreaCanvas.width = originalImageWidth;
+        DOMElements.editableAreaCanvas.height = originalImageHeight;
 
-        canvasContext = DOMElements.safeAreaCanvas.getContext('2d');
+        canvasContext = DOMElements.editableAreaCanvas.getContext('2d');
 
-        DOMElements.safeAreaCanvas.addEventListener('click', (e) => EditableAreaEditor.handleCanvasClick(e));
-        DOMElements.safeAreaCanvas.addEventListener('mousemove', (e) => EditableAreaEditor.handleCanvasMouseMove(e));
-        DOMElements.safeAreaCanvas.addEventListener('contextmenu', (e) => EditableAreaEditor.handleCanvasRightClick(e));
+        DOMElements.editableAreaCanvas.addEventListener('click', (e) => EditableAreaEditor.handleCanvasClick(e));
+        DOMElements.editableAreaCanvas.addEventListener('mousemove', (e) => EditableAreaEditor.handleCanvasMouseMove(e));
+        DOMElements.editableAreaCanvas.addEventListener('contextmenu', (e) => EditableAreaEditor.handleCanvasRightClick(e));
 
         if (DOMElements.newPolygonBtn) DOMElements.newPolygonBtn.onclick = () => EditableAreaEditor.startNewPolygon();
         if (DOMElements.clearAllBtn) DOMElements.clearAllBtn.onclick = () => EditableAreaEditor.clearAllPolygons();
-        if (DOMElements.saveSafeAreasBtn) DOMElements.saveSafeAreasBtn.onclick = () => EditableAreaEditor.saveAreas();
+        if (DOMElements.saveAreasBtn) DOMElements.saveAreasBtn.onclick = () => EditableAreaEditor.saveAreas();
     },
 
     updateAreaTypeSelector() {
@@ -214,7 +214,7 @@ const EditableAreaEditor = {
     },
 
     getCanvasCoordinates(event) {
-        const canvas = DOMElements.safeAreaCanvas;
+        const canvas = DOMElements.editableAreaCanvas;
         const rect = canvas.getBoundingClientRect();
 
         // Mouse position inside displayed canvas
@@ -289,7 +289,7 @@ const EditableAreaEditor = {
                 coordinates: [...currentPolygon],
                 name: `${EditableAreaEditor.getAreaLabel(EditableAreaEditor.currentAreaType)} ${EditableAreaEditor.getAreaCount(EditableAreaEditor.currentAreaType) + 1}`
             };
-            window.safeAreas.push(area);
+            window.editableAreas.push(area);
             currentPolygon = [];
             EditableAreaEditor.drawAreas();
         }
@@ -305,12 +305,12 @@ const EditableAreaEditor = {
     },
 
     getAreaCount(areaType) {
-        return window.safeAreas.filter(a => a.area_type === areaType).length;
+        return window.editableAreas.filter(a => a.area_type === areaType).length;
     },
 
     clearAllPolygons() {
         if (confirm("Clear all editable areas?")) {
-            window.safeAreas = [];
+            window.editableAreas = [];
             currentPolygon = [];
             EditableAreaEditor.drawAreas();
         }
@@ -323,20 +323,20 @@ const EditableAreaEditor = {
         canvasContext.drawImage(backgroundImage, 0, 0, originalImageWidth, originalImageHeight);
 
         // Draw all saved areas
-        window.safeAreas.forEach((area, index) => {
-            const color = EditableAreaEditor.getAreaColor(area.area_type, index);
+        window.editableAreas.forEach((area, _) => {
+            const color = EditableAreaEditor.getAreaColor(area.area_type);
             EditableAreaEditor.drawPolygon(area.coordinates, color, true, area.name);
         });
 
         // Draw current polygon being created
         const polygonToDraw = tempPolygon || currentPolygon;
         if (polygonToDraw.length > 0) {
-            const color = EditableAreaEditor.getAreaColor(EditableAreaEditor.currentAreaType, window.safeAreas.length);
+            const color = EditableAreaEditor.getAreaColor(EditableAreaEditor.currentAreaType);
             EditableAreaEditor.drawPolygon(polygonToDraw, color, false, null);
         }
     },
 
-    getAreaColor(areaType, index) {
+    getAreaColor(areaType) {
         const colors = {
             'safe': { stroke: 'hsl(120, 70%, 50%)', fill: 'rgba(144, 238, 144, 0.65)' },   // Light green
             'bed': { stroke: 'hsl(200, 70%, 50%)', fill: 'rgba(173, 216, 230, 0.65)' },     // Light blue
@@ -410,7 +410,7 @@ const EditableAreaEditor = {
                 coordinates: [...currentPolygon],
                 name: `${EditableAreaEditor.getAreaLabel(EditableAreaEditor.currentAreaType)} ${EditableAreaEditor.getAreaCount(EditableAreaEditor.currentAreaType) + 1}`
             };
-            window.safeAreas.push(area);
+            window.editableAreas.push(area);
             currentPolygon = [];
         }
 
@@ -431,7 +431,7 @@ const EditableAreaEditor = {
                 },
                 body: JSON.stringify({
                     camera_id: AppState.currentCameraId,
-                    editable_areas: window.safeAreas
+                    editable_areas: window.editableAreas
                 })
             });
 
@@ -442,12 +442,12 @@ const EditableAreaEditor = {
                     loadingStatus.style.color = '#28a745';
                 }
 
-                CommandManager.sendCommand("update_safe_areas", window.safeAreas);
+                CommandManager.sendCommand("update_safe_areas", window.editableAreas);
 
                 // Log to panel
                 if (window.LogPanel) {
-                    const areaCount = window.safeAreas.length;
-                    const totalPoints = window.safeAreas.reduce((sum, area) => sum + area.coordinates.length, 0);
+                    const areaCount = window.editableAreas.length;
+                    const totalPoints = window.editableAreas.reduce((sum, area) => sum + area.coordinates.length, 0);
                     LogPanel.add(
                         `✅ Editable areas saved: ${areaCount} areas, ${totalPoints} total points`,
                         'success',
@@ -479,7 +479,7 @@ const EditableAreaEditor = {
     },
 
     hide() {
-        DOMHelpers.hidePopup(DOMElements.safeAreaPopup);
+        DOMHelpers.hidePopup(DOMElements.editAreasPopup);
         isEditing = false;
 
         // Restore show_raw to its previous state
@@ -490,14 +490,12 @@ const EditableAreaEditor = {
         EditableAreaEditor.prevShowRaw = null;
 
         if (canvasContext) {
-            DOMElements.safeAreaCanvas.removeEventListener('click', (e) => EditableAreaEditor.handleCanvasClick(e));
-            DOMElements.safeAreaCanvas.removeEventListener('mousemove', (e) => EditableAreaEditor.handleCanvasMouseMove(e));
-            DOMElements.safeAreaCanvas.removeEventListener('contextmenu', (e) => EditableAreaEditor.handleCanvasRightClick(e));
+            DOMElements.editableAreaCanvas.removeEventListener('click', (e) => EditableAreaEditor.handleCanvasClick(e));
+            DOMElements.editableAreaCanvas.removeEventListener('mousemove', (e) => EditableAreaEditor.handleCanvasMouseMove(e));
+            DOMElements.editableAreaCanvas.removeEventListener('contextmenu', (e) => EditableAreaEditor.handleCanvasRightClick(e));
         }
     }
 };
 
 // Export
 window.EditableAreaEditor = EditableAreaEditor;
-// Also export as SafeAreaEditor for backwards compatibility
-window.SafeAreaEditor = EditableAreaEditor;

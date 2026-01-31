@@ -53,7 +53,7 @@ async function initializeApplication() {
             }
             
             CameraManager.switchCamera(cameraId);
-            SafeAreaEditor.loadSafeAreasForCamera(cameraId);
+            EditableAreaEditor.loadAreasForCamera(cameraId);
         };
     }
     
@@ -83,14 +83,13 @@ async function initializeApplication() {
     }
     
     // Load initial data
-    await CameraManager.syncAllCameraData();
+    await CameraManager.loadCameraList();
     console.log('Initial camera data synced');
     
     if (AppState.currentCameraId) {
         CommandManager.fetchCameraState(AppState.currentCameraId);
-        SafeAreaEditor.loadSafeAreasForCamera(AppState.currentCameraId);
+        EditableAreaEditor.loadAreasForCamera(AppState.currentCameraId);
     }
-    
     // Start periodic sync timers
     startPeriodicSync();
     
@@ -139,12 +138,14 @@ function startPeriodicSync() {
             'info',
             'Connection'
         );
+    } else {
+        console.log(`🔄 Starting connection monitoring - Polling every 400ms (Max ${ConnectionStatus.MAX_FAILURES} tolerated failures)`)
     }
 
-    // Sync camera list every 15 seconds
+    // Sync camera list every 5 seconds
     AppState.cameraListTimer = setInterval(() => {
-        CameraManager.syncAllCameraData();
-    }, 15000);
+        CameraManager.loadCameraList();
+    }, 5000);
 
     // Check camera connections every 400ms (within 300-500ms range per requirements)
     AppState.cameraStatusTimer = setInterval(() => {
@@ -312,7 +313,7 @@ window.hidePopup = function() {
 };
 
 window.hideSafeAreaPopup = function() {
-    SafeAreaEditor.hide();
+    EditableAreaEditor.hide();
 };
 
 window.hideManagementPopup = function() {

@@ -1,7 +1,7 @@
 // cameraManager.js - Camera management operations
 
 const CameraManager = {
-    async syncAllCameraData(showLoading = true) {
+    async loadCameraList(showLoading = true) {
         try {
             if (showLoading && DOMElements.cameraInfoSpan) {
                 DOMElements.cameraInfoSpan.textContent = 'Loading cameras...';
@@ -57,11 +57,6 @@ const CameraManager = {
             }
             return false;
         }
-    },
-
-    // Alias for backward compatibility (optional)
-    async loadCameraList() {
-        return this.syncAllCameraData(true);
     },
 
     async loadPendingRegistrations() {

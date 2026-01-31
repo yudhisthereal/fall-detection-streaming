@@ -19,10 +19,14 @@ const StreamDisplay = {
     // Cached overlay data (only updated when new data arrives)
     cachedTrackingData: null,
     cachedSafeAreas: null,
+    cachedBedAreas: null,
+    cachedFloorAreas: null,
 
     // Camera state for control flags
     cameraState: {},
     showSafeAreas: false,
+    showBedAreas: false,
+    showFloorAreas: false,
 
     // Background state tracking
     currentBackgroundMode: false,  // true = background mode, false = raw mode
@@ -78,6 +82,23 @@ const StreamDisplay = {
         { stroke: '#FFE66D', fill: '#FFE66D' },   // Yellow
         { stroke: '#C44Dff', fill: '#C44Dff' },   // Purple
     ],
+
+    // Color palette based on SafetyStatus
+    SAFETY_STATUS_COLORS: {
+        'fall': { stroke: '#FF0000', fill: '#FF0000' },      // Red
+        'unsafe': { stroke: '#FFA500', fill: '#FFA500' },    // Orange
+        'tracking': { stroke: '#00FF00', fill: '#00FF00' }   // Green
+    },
+
+    // Get color based on safety status, fallback to track-based color
+    getColorForTrack(trackId, safetyStatus) {
+        if (safetyStatus && this.SAFETY_STATUS_COLORS[safetyStatus]) {
+            return this.SAFETY_STATUS_COLORS[safetyStatus];
+        }
+        // Fallback to track-based color
+        const colorIndex = trackId % this.TRACK_COLORS.length;
+        return this.TRACK_COLORS[colorIndex];
+    },
 
     init() {
         if (this.isInitialized) return;
@@ -241,15 +262,24 @@ const StreamDisplay = {
     refreshOverlay() {
         if (!this.overlayCtx || !this.overlayCanvas) return;
 
-        console.log('[StreamDisplay] Refreshing overlay - Cached tracking tracks:', Object.keys(this.cachedTrackingData || {}).length, '| Cached safe areas:', (this.cachedSafeAreas || []).length);
+        console.log('[StreamDisplay] Refreshing overlay - Cached tracking tracks:', Object.keys(this.cachedTrackingData || {}).length,
+            '| Cached safe areas:', (this.cachedSafeAreas || []).length,
+            '| Cached bed areas:', (this.cachedBedAreas || []).length,
+            '| Cached floor areas:', (this.cachedFloorAreas || []).length);
 
         // Clear overlay canvas BEFORE redrawing overlays
         // This is safe because we only call this when we have new data
         this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
 
-        // Render safe areas first (behind skeletons)
+        // Render areas first (behind skeletons)
         if (this.showSafeAreas && this.cachedSafeAreas && this.cachedSafeAreas.length > 0) {
             this.renderSafeAreas(this.cachedSafeAreas);
+        }
+        if (this.showBedAreas && this.cachedBedAreas && this.cachedBedAreas.length > 0) {
+            this.renderBedAreas(this.cachedBedAreas);
+        }
+        if (this.showFloorAreas && this.cachedFloorAreas && this.cachedFloorAreas.length > 0) {
+            this.renderFloorAreas(this.cachedFloorAreas);
         }
 
         // Render skeletons on top
@@ -273,8 +303,7 @@ const StreamDisplay = {
         if (!this.overlayCtx || !data.keypoints || data.keypoints.length < 34) return;
 
         const keypoints = data.keypoints;
-        const colorIndex = trackId % this.TRACK_COLORS.length;
-        const color = this.TRACK_COLORS[colorIndex];
+        const color = this.getColorForTrack(trackId, data.safety_status);
 
         // Keypoints are in 320x224 coordinate space, scale to canvas size
         const scaleX = this.overlayCanvas.width / 320;
@@ -319,14 +348,14 @@ const StreamDisplay = {
 
         // Draw pose label
         if (data.pose_label) {
-            this.drawPoseLabel(data.pose_label, keypoints, trackId, scaleX, scaleY);
+            this.drawPoseLabel(data.pose_label, keypoints, trackId, scaleX, scaleY, data.safety_status);
         } else {
-            this.drawPoseLabel("...", keypoints, trackId, scaleX, scaleY);
+            this.drawPoseLabel("...", keypoints, trackId, scaleX, scaleY, data.safety_status);
         }
     },
 
     // Draw pose label above the skeleton
-    drawPoseLabel(poseLabel, keypoints, trackId, scaleX = 1, scaleY = 1) {
+    drawPoseLabel(poseLabel, keypoints, trackId, scaleX = 1, scaleY = 1, safetyStatus = null) {
         if (!poseLabel || !this.overlayCtx) return;
 
         // Find the topmost keypoint (nose)
@@ -342,9 +371,8 @@ const StreamDisplay = {
         const labelX = noseX;
         const labelY = Math.max(30, noseY - 20);
 
-        // Get color based on track
-        const colorIndex = trackId % this.TRACK_COLORS.length;
-        const baseColor = this.TRACK_COLORS[colorIndex];
+        // Get color based on safety status
+        const baseColor = this.getColorForTrack(trackId, safetyStatus);
 
         // Set font and measure text width
         this.overlayCtx.font = 'bold 14px sans-serif';
@@ -404,8 +432,9 @@ const StreamDisplay = {
         safeAreas.forEach((polygon, index) => {
             if (!polygon || polygon.length < 3) return;
 
-            const hue = (index * 60) % 360;
-            const color = `hsl(${hue}, 70%, 50%)`;
+            // Light green stroke and fill
+            const strokeColor = 'hsl(120, 70%, 50%)';
+            const fillColor = 'rgba(144, 238, 144, 0.65)'; // 65% transparent light green
 
             // Convert normalized coordinates to canvas coordinates
             const points = polygon.map(point => {
@@ -422,7 +451,12 @@ const StreamDisplay = {
             }
             this.overlayCtx.closePath();
 
-            this.overlayCtx.strokeStyle = color;
+            // Fill with 65% transparent color
+            this.overlayCtx.fillStyle = fillColor;
+            this.overlayCtx.fill();
+
+            // Draw border
+            this.overlayCtx.strokeStyle = strokeColor;
             this.overlayCtx.lineWidth = 2;
             this.overlayCtx.stroke();
 
@@ -430,14 +464,116 @@ const StreamDisplay = {
             points.forEach(point => {
                 this.overlayCtx.beginPath();
                 this.overlayCtx.arc(point.x, point.y, 4, 0, Math.PI * 2);
-                this.overlayCtx.fillStyle = color;
+                this.overlayCtx.fillStyle = strokeColor;
                 this.overlayCtx.fill();
             });
 
             // Add label
             this.overlayCtx.font = '12px sans-serif';
-            this.overlayCtx.fillStyle = color;
+            this.overlayCtx.fillStyle = strokeColor;
             this.overlayCtx.fillText(`Safe Area ${index + 1}`, points[0].x + 10, points[0].y + 20);
+        });
+    },
+
+    renderBedAreas(bedAreas) {
+        if (!bedAreas || bedAreas.length === 0) {
+            return;
+        }
+
+        bedAreas.forEach((polygon, index) => {
+            if (!polygon || polygon.length < 3) return;
+
+            // Light blue stroke and fill
+            const strokeColor = 'hsl(200, 70%, 50%)';
+            const fillColor = 'rgba(173, 216, 230, 0.65)'; // 65% transparent light blue
+
+            // Convert normalized coordinates to canvas coordinates
+            const points = polygon.map(point => {
+                const x = point[0] * this.overlayCanvas.width;
+                const y = point[1] * this.overlayCanvas.height;
+                return { x, y };
+            });
+
+            // Draw polygon
+            this.overlayCtx.beginPath();
+            this.overlayCtx.moveTo(points[0].x, points[0].y);
+            for (let i = 1; i < points.length; i++) {
+                this.overlayCtx.lineTo(points[i].x, points[i].y);
+            }
+            this.overlayCtx.closePath();
+
+            // Fill with 65% transparent color
+            this.overlayCtx.fillStyle = fillColor;
+            this.overlayCtx.fill();
+
+            // Draw border
+            this.overlayCtx.strokeStyle = strokeColor;
+            this.overlayCtx.lineWidth = 2;
+            this.overlayCtx.stroke();
+
+            // Draw vertices
+            points.forEach(point => {
+                this.overlayCtx.beginPath();
+                this.overlayCtx.arc(point.x, point.y, 4, 0, Math.PI * 2);
+                this.overlayCtx.fillStyle = strokeColor;
+                this.overlayCtx.fill();
+            });
+
+            // Add label
+            this.overlayCtx.font = '12px sans-serif';
+            this.overlayCtx.fillStyle = strokeColor;
+            this.overlayCtx.fillText(`Bed Area ${index + 1}`, points[0].x + 10, points[0].y + 20);
+        });
+    },
+
+    renderFloorAreas(floorAreas) {
+        if (!floorAreas || floorAreas.length === 0) {
+            return;
+        }
+
+        floorAreas.forEach((polygon, index) => {
+            if (!polygon || polygon.length < 3) return;
+
+            // Grey stroke and fill
+            const strokeColor = 'hsl(0, 0%, 50%)';
+            const fillColor = 'rgba(128, 128, 128, 0.65)'; // 65% transparent grey
+
+            // Convert normalized coordinates to canvas coordinates
+            const points = polygon.map(point => {
+                const x = point[0] * this.overlayCanvas.width;
+                const y = point[1] * this.overlayCanvas.height;
+                return { x, y };
+            });
+
+            // Draw polygon
+            this.overlayCtx.beginPath();
+            this.overlayCtx.moveTo(points[0].x, points[0].y);
+            for (let i = 1; i < points.length; i++) {
+                this.overlayCtx.lineTo(points[i].x, points[i].y);
+            }
+            this.overlayCtx.closePath();
+
+            // Fill with 65% transparent color
+            this.overlayCtx.fillStyle = fillColor;
+            this.overlayCtx.fill();
+
+            // Draw border
+            this.overlayCtx.strokeStyle = strokeColor;
+            this.overlayCtx.lineWidth = 2;
+            this.overlayCtx.stroke();
+
+            // Draw vertices
+            points.forEach(point => {
+                this.overlayCtx.beginPath();
+                this.overlayCtx.arc(point.x, point.y, 4, 0, Math.PI * 2);
+                this.overlayCtx.fillStyle = strokeColor;
+                this.overlayCtx.fill();
+            });
+
+            // Add label
+            this.overlayCtx.font = '12px sans-serif';
+            this.overlayCtx.fillStyle = strokeColor;
+            this.overlayCtx.fillText(`Floor Area ${index + 1}`, points[0].x + 10, points[0].y + 20);
         });
     },
 
@@ -474,11 +610,27 @@ const StreamDisplay = {
 
         // Check if show_safe_areas is enabled
         const newShowSafeAreas = this.cameraState.show_safe_area === true;
+        const newShowBedAreas = this.cameraState.show_bed_areas === true;
+        const newShowFloorAreas = this.cameraState.show_floor_areas === true;
 
         if (newShowSafeAreas !== this.showSafeAreas) {
             this.showSafeAreas = newShowSafeAreas;
             console.log(`[StreamDisplay] show_safe_areas: ${this.showSafeAreas}`);
             // Refresh overlay when showSafeAreas flag changes
+            this.refreshOverlay();
+        }
+
+        if (newShowBedAreas !== this.showBedAreas) {
+            this.showBedAreas = newShowBedAreas;
+            console.log(`[StreamDisplay] show_bed_areas: ${this.showBedAreas}`);
+            // Refresh overlay when showBedAreas flag changes
+            this.refreshOverlay();
+        }
+
+        if (newShowFloorAreas !== this.showFloorAreas) {
+            this.showFloorAreas = newShowFloorAreas;
+            console.log(`[StreamDisplay] show_floor_areas: ${this.showFloorAreas}`);
+            // Refresh overlay when showFloorAreas flag changes
             this.refreshOverlay();
         }
 
@@ -513,9 +665,12 @@ const StreamDisplay = {
         }
     },
 
-    // Fetch tracking data and refresh overlay ONLY if data changed
     async fetchTrackingData() {
         if (!AppState.currentCameraId) {
+            console.warn('[StreamDisplay:fetchTrackingData] No camera ID set');
+            return;
+        }
+        else if (!AppState.cameraConnectionStatus[AppState.currentCameraId]?.connected) {
             return;
         }
 
@@ -533,41 +688,130 @@ const StreamDisplay = {
                     const oldCount = Object.keys(this.cachedTrackingData || {}).length;
                     const newCount = Object.keys(trackingData).length;
                     this.cachedTrackingData = trackingData;
-                    console.log(`[StreamDisplay] Tracking data changed: ${oldCount} -> ${newCount} tracks`);
+                    console.log(`[StreamDisplay:fetchTrackingData] Tracking data changed: ${oldCount} -> ${newCount} tracks`);
                     this.refreshOverlay(); // ONLY refresh overlay when data changes
                 }
             }
         } catch (error) {
-            console.error('[StreamDisplay] Error fetching tracking data:', error);
+            console.error('[StreamDisplay:fetchTrackingData] Error fetching tracking data:', error);
             // On error, DO NOT clear overlay - cached data persists visually
         }
     },
 
-    // Fetch safe areas and refresh overlay ONLY if data changed
     async fetchSafeAreas() {
         if (!AppState.currentCameraId) {
+            console.warn('[StreamDisplay:fetchSafeAreas] No camera ID set');
+            return;
+        }
+        else if (!AppState.cameraConnectionStatus[AppState.currentCameraId]?.connected) {
+            return;
+        }
+
+        const url = STREAMING_HTTP_URL + '/api/stream/safe-areas?camera_id=' + AppState.currentCameraId;
+
+        try {
+            const response = await fetch(url);
+
+            if (!response.ok) {
+                let bodyText = "";
+                try {
+                    bodyText = await response.text(); // may fail if no body
+                } catch (_) {}
+
+                console.error('[StreamDisplay:fetchSafeAreas] Safe areas request failed', {
+                    url,
+                    status: response.status,
+                    statusText: response.statusText,
+                    body: bodyText
+                });
+                return;
+            }
+
+            const safeAreas = await response.json() || [];
+
+            // Only refresh overlay if data actually changed
+            if (JSON.stringify(safeAreas) !== JSON.stringify(this.cachedSafeAreas)) {
+                const oldCount = (this.cachedSafeAreas || []).length;
+                const newCount = safeAreas.length;
+                this.cachedSafeAreas = safeAreas;
+
+                console.log(`[StreamDisplay] Safe areas changed: ${oldCount} -> ${newCount} areas`);
+                this.refreshOverlay();
+            }
+
+        } catch (error) {
+            // Network / CORS / DNS / server-down errors
+            console.error('[StreamDisplay:fetchSafeAreas] Network error fetching safe areas', {
+                url,
+                message: error.message,
+                stack: error.stack
+            });
+        }
+    },
+
+
+    // Fetch bed areas and refresh overlay ONLY if data changed
+    async fetchBedAreas() {
+        if (!AppState.currentCameraId) {
+            console.warn('[StreamDisplay:fetchBedAreas] No camera ID set');
+            return;
+        }
+        else if (!AppState.cameraConnectionStatus[AppState.currentCameraId]?.connected) {
             return;
         }
 
         try {
             const response = await fetch(
-                STREAMING_HTTP_URL + '/api/stream/safe-areas?camera_id=' + AppState.currentCameraId
+                STREAMING_HTTP_URL + '/api/stream/bed-areas?camera_id=' + AppState.currentCameraId
             );
 
             if (response.ok) {
-                const safeAreas = await response.json() || [];
+                const bedAreas = await response.json() || [];
 
                 // Only refresh overlay if data actually changed
-                if (JSON.stringify(safeAreas) !== JSON.stringify(this.cachedSafeAreas)) {
-                    const oldCount = (this.cachedSafeAreas || []).length;
-                    const newCount = safeAreas.length;
-                    this.cachedSafeAreas = safeAreas;
-                    console.log(`[StreamDisplay] Safe areas changed: ${oldCount} -> ${newCount} areas`);
-                    this.refreshOverlay(); // ONLY refresh overlay when data changes
+                if (JSON.stringify(bedAreas) !== JSON.stringify(this.cachedBedAreas)) {
+                    const oldCount = (this.cachedBedAreas || []).length;
+                    const newCount = bedAreas.length;
+                    this.cachedBedAreas = bedAreas;
+                    console.log(`[StreamDisplay:fetchBedAreas] Bed areas changed: ${oldCount} -> ${newCount} areas`);
+                    this.refreshOverlay();
                 }
             }
         } catch (error) {
-            console.error('[StreamDisplay] Error fetching safe areas:', error);
+            console.error('[StreamDisplay:fetchBedAreas] Error fetching bed areas:', error);
+            // On error, DO NOT clear overlay - cached data persists visually
+        }
+    },
+
+    // Fetch floor areas and refresh overlay ONLY if data changed
+    async fetchFloorAreas() {
+        if (!AppState.currentCameraId) {
+            console.warn('[StreamDisplay:fetchFloorAreas] No camera ID set');
+            return;
+        }
+        else if (!AppState.cameraConnectionStatus[AppState.currentCameraId]?.connected) {
+            return;
+        }
+
+        try {
+            const response = await fetch(
+                STREAMING_HTTP_URL + '/api/stream/floor-areas?camera_id=' + AppState.currentCameraId
+            );
+
+            if (response.ok) {
+                const floorAreas = await response.json() || [];
+
+                // Only refresh overlay if data actually changed
+                if (JSON.stringify(floorAreas) !== JSON.stringify(this.cachedFloorAreas)) {
+                    const oldCount = (this.cachedFloorAreas || []).length;
+                    const newCount = floorAreas.length;
+                    this.cachedFloorAreas = floorAreas;
+                    console.log(`[StreamDisplay] Floor areas changed: ${oldCount} -> ${newCount} areas`);
+                    this.refreshOverlay();
+                }
+            }
+        } catch (error) {
+            console.error('[StreamDisplay:fetchFloorAreas] Error fetching floor areas:', error);
             // On error, DO NOT clear overlay - cached data persists visually
         }
     },
@@ -575,7 +819,11 @@ const StreamDisplay = {
     // Fetch camera state to get control flags
     async fetchCameraState() {
         if (!AppState.currentCameraId) {
+            console.warn('[StreamDisplay:fetchCameraState] No camera ID set');
             return null;
+        }
+        else if (!AppState.cameraConnectionStatus[AppState.currentCameraId]?.connected) {
+            return;
         }
 
         try {
@@ -602,6 +850,8 @@ const StreamDisplay = {
         // Initialize with current data
         this.fetchTrackingData();
         this.fetchSafeAreas();
+        this.fetchBedAreas();
+        this.fetchFloorAreas();
         this.fetchCameraState().then((state) => {
             // Set initial visibility based on show_raw flag
             const showRaw = state && state.show_raw === true;
@@ -618,7 +868,6 @@ const StreamDisplay = {
         // BUT only redraw overlay if data actually changed
         this.overlayRefreshInterval = setInterval(() => {
             this.fetchTrackingData();
-            this.fetchSafeAreas();
             this.fetchCameraState();
         }, 100);
 
@@ -642,6 +891,8 @@ const StreamDisplay = {
         // Reset cached data
         this.cachedTrackingData = null;
         this.cachedSafeAreas = null;
+        this.cachedBedAreas = null;
+        this.cachedFloorAreas = null;
 
         this.isRunning = false;
         console.log('[StreamDisplay] Static background img + overlay canvas rendering stopped');
@@ -653,6 +904,8 @@ const StreamDisplay = {
         await Promise.all([
             this.fetchTrackingData(),
             this.fetchSafeAreas(),
+            this.fetchBedAreas(),
+            this.fetchFloorAreas(),
             this.fetchCameraState()
         ]);
     },
@@ -666,8 +919,12 @@ const StreamDisplay = {
         this.isInitialized = false;
         this.cachedTrackingData = null;
         this.cachedSafeAreas = null;
+        this.cachedBedAreas = null;
+        this.cachedFloorAreas = null;
         this.cameraState = {};
         this.showSafeAreas = false;
+        this.showBedAreas = false;
+        this.showFloorAreas = false;
         console.log('[StreamDisplay] Destroyed and cleaned up');
     }
 };

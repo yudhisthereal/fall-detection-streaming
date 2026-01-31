@@ -10,13 +10,18 @@ builder.Services.AddSignalR();
 // Add CORS
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAll", policy =>
+    options.AddPolicy("FrontendOnly", policy =>
     {
-        policy.AllowAnyOrigin()
-              .AllowAnyMethod()
-              .AllowAnyHeader();
+        policy
+            .WithOrigins(
+                "http://103.150.93.198",
+                "http://103.150.93.198:8000"
+            )
+            .WithMethods("GET", "POST")
+            .AllowAnyHeader();
     });
 });
+
 
 // Register services
 builder.Services.AddSingleton<CameraManagementService>();
@@ -37,9 +42,15 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseStaticFiles();
+
 app.UseRouting();
+
+// CORS MUST be here
 app.UseCors("AllowAll");
+
 app.UseAuthorization();
+
+app.MapControllers(); // <-- important for APIs
 
 app.MapControllerRoute(
     name: "default",

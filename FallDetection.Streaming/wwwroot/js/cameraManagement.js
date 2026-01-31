@@ -23,7 +23,7 @@ const CameraManagement = {
                         const lastSeen = camera.last_seen ? new Date(camera.last_seen * 1000).toLocaleString() : 'Unknown';
                         
                         camDiv.innerHTML = `
-                            <div class="camera-info">
+                            <div class="cameraInfo">
                                 <div class="camera-name">${camera.camera_name || camera.camera_id} (${camera.camera_id})</div>
                                 <div class="camera-details">
                                     <span>📡 IP: ${camera.ip_address || 'Unknown'}</span>

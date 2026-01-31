@@ -90,7 +90,8 @@ const StreamController = {
 
     scheduledRefresh() {
         // Refresh the stream image
-        if (!this.isRefreshing) {
+        // skip refresh if refresh in progress, or if camera is not connected
+        if (!this.isRefreshing && AppState.cameraConnectionStatus[AppState.currentCameraId]?.connected) {
             this.refreshStreamImage();
         } else {
             console.debug('Skipping refresh - previous request still in progress');
@@ -131,7 +132,6 @@ const StreamController = {
                     AppState.streamRefreshInterval = setInterval(() => {
                         this.scheduledRefresh();
                     }, this.currentBackoffInterval);
-                    console.log(`[StreamController] Refresh interval updated to ${this.currentBackoffInterval}ms (show_raw=${showRaw})`);
                 }
             }
 

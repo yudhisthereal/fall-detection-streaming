@@ -53,7 +53,7 @@
                 <select id="cameraSelect">
                     <option value="camera_000">Camera 0</option>
                 </select>
-                <button id="refreshCamerasBtn" class="btn btn-primary">🔄 Refresh List</button>
+                <button id="refreshCamerasBtn" class="btn btn-primary">🔄 Refresh</button>
             </div>
             
 
@@ -67,7 +67,7 @@
                 </button>
             </div>
             
-            <span id="camera-info" class="camera-info">Loading...</span>
+            <span id="cameraInfo" class="cameraInfo">Loading...</span>
         </div>
 
         <!-- Control Panel -->
@@ -98,7 +98,7 @@
                     </select>
                 </label>
                 <button id="setBackgroundBtn" class="btn btn-primary" title="Set current frame as background">📸 Set BG</button>
-                <button id="editSafeAreaBtn" class="btn btn-secondary" title="Edit zones">🛡️ Edit Areas</button>
+                <button id="editAreas" class="btn btn-secondary" title="Edit zones">🛡️ Edit Areas</button>
             </div>
             <!-- Area Display Section -->
             <div class="control-group">
@@ -144,7 +144,7 @@
     <button id="showInfoBtn" class="btn btn-floating" onclick="showAlgorithmInfo()">ℹ️ Algorithms</button>
 
     <!-- Status Indicator -->
-    <div id="stream-status" class="status-indicator disconnected">
+    <div id="streamStatus" class="status-indicator disconnected">
         Disconnected
     </div>
 
@@ -184,7 +184,7 @@
     </div>
 
     <!-- Safe Area Editor Popup -->
-    <div id="safeAreaPopup" class="popup">
+    <div id="editAreasPopup" class="popup">
         <h3>🛡️ Edit Editable Areas</h3>
         <div class="instructions">
             <p><strong>Instructions:</strong></p>
@@ -196,7 +196,7 @@
             </ul>
         </div>
         <div class="canvas-container">
-            <canvas id="safeAreaCanvas"></canvas>
+            <canvas id="editableAreaCanvas"></canvas>
         </div>
         <div id="safeAreaLoading" class="popup-loading" style="display: none;">
             <div class="spinner"></div>
@@ -205,7 +205,7 @@
         <div class="toolbar" id="safeAreaToolbar">
             <button id="newPolygonBtn" class="btn btn-primary">New Polygon</button>
             <button id="clearAllBtn" class="btn btn-warning">Clear All</button>
-            <button id="saveSafeAreasBtn" class="btn btn-success">💾 Save</button>
+            <button id="saveAreasBtn" class="btn btn-success">💾 Save</button>
             <button onclick="hideSafeAreaPopup()" class="btn btn-secondary">Cancel</button>
         </div>
         <div id="saveStatus" class="status"></div>
@@ -232,7 +232,7 @@
         </div>
         <div id="registrationForm" style="display: none;">
             <h3>Approve Camera Registration</h3>
-            <div class="camera-info-card" style="background: var(--theme-surface-light); padding: 15px; border-radius: 10px; margin-bottom: 20px;">
+            <div class="cameraInfo-card" style="background: var(--theme-surface-light); padding: 15px; border-radius: 10px; margin-bottom: 20px;">
                 <p><strong>📡 Camera ID:</strong> <span id="regCameraID" style="color: var(--theme-primary); font-family: monospace; font-size: 1.1em;"></span></p>
                 <p><strong>📍 IP Address:</strong> <span id="regCameraIP" style="color: #4CAF50;"></span></p>
                 <p><strong>⏰ Status:</strong> <span style="color: #FF9800;">Pending Approval</span></p>

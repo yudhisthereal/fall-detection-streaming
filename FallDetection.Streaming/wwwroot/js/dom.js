@@ -19,7 +19,7 @@ const DOMElements = {
     
     // Buttons
     setBackgroundBtn: document.getElementById('setBackgroundBtn'),
-    editSafeAreaBtn: document.getElementById('editSafeAreaBtn'),
+    editAreas: document.getElementById('editAreas'),
     refreshCamerasBtn: document.getElementById('refreshCamerasBtn'),
     pendingRegBtn: document.getElementById('pendingRegistrationsBtn'),
     pendingRegCount: document.getElementById('pendingRegCount'),
@@ -27,23 +27,23 @@ const DOMElements = {
     
     // Camera selection
     cameraSelect: document.getElementById('cameraSelect'),
-    cameraInfoSpan: document.getElementById('camera-info'),
+    cameraInfoSpan: document.getElementById('cameraInfo'),
     
     // Status indicator
-    statusIndicator: document.getElementById('stream-status'),
+    statusIndicator: document.getElementById('streamStatus'),
     
     // Popups
     popup: document.getElementById('popup'),
     preview: document.getElementById('preview'),
-    safeAreaPopup: document.getElementById('safeAreaPopup'),
+    editAreasPopup: document.getElementById('editAreasPopup'),
     registrationPopup: document.getElementById('registrationPopup'),
     managementPopup: document.getElementById('managementPopup'),
     
     // Safe Area Editor Elements
-    safeAreaCanvas: document.getElementById('safeAreaCanvas'),
+    editableAreaCanvas: document.getElementById('editableAreaCanvas'),
     newPolygonBtn: document.getElementById('newPolygonBtn'),
     clearAllBtn: document.getElementById('clearAllBtn'),
-    saveSafeAreasBtn: document.getElementById('saveSafeAreasBtn'),
+    saveAreasBtn: document.getElementById('saveAreasBtn'),
     saveStatus: document.getElementById('saveStatus'),
     
     // Algorithm Info Panel
@@ -52,7 +52,7 @@ const DOMElements = {
 };
 
 // Safe Area Editor State
-let safeAreas = [];
+let editableAreas = [];
 let currentPolygon = [];
 let isEditing = false;
 let canvasContext = null;
@@ -101,6 +101,6 @@ const DOMHelpers = {
 // Export
 window.DOMElements = DOMElements;
 window.DOMHelpers = DOMHelpers;
-window.safeAreas = safeAreas;
+window.editableAreas = editableAreas;
 window.currentPolygon = currentPolygon;
 
