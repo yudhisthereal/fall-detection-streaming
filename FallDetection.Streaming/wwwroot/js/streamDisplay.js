@@ -15,6 +15,7 @@ const StreamDisplay = {
     isInitialized: false,
     isRunning: false,
     overlayRefreshInterval: null,
+    backgroundAutoRefreshInterval: null,
 
     // Cached overlay data (only updated when new data arrives)
     cachedTrackingData: null,
@@ -662,6 +663,26 @@ const StreamDisplay = {
                 this.currentBackgroundMode = false;
                 console.log('[StreamDisplay] Entering raw mode - background remains static');
             }
+        }
+
+        // Handle auto-update background interval
+        // Only auto-update if:
+        // 1. auto_update_bg flag is TRUE
+        // 2. We are in Background Mode (show_raw is FALSE) - no need to update invisible background
+        const isBackgroundMode = !newShowRaw;
+        const isAutoUpdateEnabled = this.cameraState.auto_update_bg === true;
+        const shouldAutoUpdate = isBackgroundMode && isAutoUpdateEnabled;
+
+        if (shouldAutoUpdate && !this.backgroundAutoRefreshInterval) {
+            console.log('[StreamDisplay] Auto-update background enabled - starting 10s interval');
+            this.backgroundAutoRefreshInterval = setInterval(() => {
+                console.log('[StreamDisplay] Auto-update background interval fired');
+                this.fetchBackgroundImage();
+            }, 10000);
+        } else if (!shouldAutoUpdate && this.backgroundAutoRefreshInterval) {
+            console.log('[StreamDisplay] Auto-update background disabled (or in raw mode) - stopping interval');
+            clearInterval(this.backgroundAutoRefreshInterval);
+            this.backgroundAutoRefreshInterval = null;
         }
     },
 
