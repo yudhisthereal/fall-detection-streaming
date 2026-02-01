@@ -16,7 +16,7 @@ const DOMElements = {
     useSafetyCheck: document.getElementById('useSafetyCheck'),
     // toggleHME: document.getElementById('toggleHME'),
     fallAlgorithmSelect: document.getElementById('fallAlgorithmSelect'),
-    
+
     // Buttons
     setBackgroundBtn: document.getElementById('setBackgroundBtn'),
     editAreas: document.getElementById('editAreas'),
@@ -24,28 +24,30 @@ const DOMElements = {
     pendingRegBtn: document.getElementById('pendingRegistrationsBtn'),
     pendingRegCount: document.getElementById('pendingRegCount'),
     manageCamerasBtn: document.getElementById('manageCamerasBtn'),
-    
+
     // Camera selection
     cameraSelect: document.getElementById('cameraSelect'),
     cameraInfoSpan: document.getElementById('cameraInfo'),
-    
+
     // Status indicator
     statusIndicator: document.getElementById('streamStatus'),
-    
+
     // Popups
     popup: document.getElementById('popup'),
     preview: document.getElementById('preview'),
     editAreasPopup: document.getElementById('editAreasPopup'),
     registrationPopup: document.getElementById('registrationPopup'),
     managementPopup: document.getElementById('managementPopup'),
-    
+
     // Safe Area Editor Elements
     editableAreaCanvas: document.getElementById('editableAreaCanvas'),
-    newPolygonBtn: document.getElementById('newPolygonBtn'),
-    clearAllBtn: document.getElementById('clearAllBtn'),
+    areaTypeSelector: document.getElementById('areaTypeSelector'),
+    toolPenBtn: document.getElementById('toolPenBtn'),
+    toolRemoveBtn: document.getElementById('toolRemoveBtn'),
+    toolClearBtn: document.getElementById('toolClearBtn'),
     saveAreasBtn: document.getElementById('saveAreasBtn'),
     saveStatus: document.getElementById('saveStatus'),
-    
+
     // Algorithm Info Panel
     algorithmInfo: document.getElementById('algorithmInfo'),
     showInfoBtn: document.getElementById('showInfoBtn')
@@ -65,24 +67,18 @@ let canvasScale = 1;
 const DOMHelpers = {
     // Apply disabled styling
     styleDisabled(element, disabled) {
-        if (disabled) {
-            element.style.opacity = '0.6';
-            element.style.cursor = 'not-allowed';
-        } else {
-            element.style.opacity = '1';
-            element.style.cursor = 'pointer';
-        }
+        element.disabled = disabled;
     },
-    
+
     // Show/hide popup
     showPopup(popupElement) {
         if (popupElement) popupElement.style.display = "block";
     },
-    
+
     hidePopup(popupElement) {
         if (popupElement) popupElement.style.display = "none";
     },
-    
+
     // Update button with count
     updatePendingButton(count) {
         if (DOMElements.pendingRegBtn) {

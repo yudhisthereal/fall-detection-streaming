@@ -105,9 +105,6 @@
             </div>
             <!-- Area Display Section -->
             <div class="control-group">
-                <div style="width: 100%; border-top: 1px solid var(--theme-border); margin: 5px 0;"></div>
-                <label style="width: 100%; font-size: 0.85em; color: var(--theme-text-muted); margin-bottom: 5px;">Area
-                    Display</label>
                 <input type="checkbox" id="showSafeArea">
                 <label for="showSafeArea" class="toggle-label">Safe Areas</label>
 
@@ -193,25 +190,47 @@
         <div class="instructions">
             <p><strong>Instructions:</strong></p>
             <ul>
-                <li>Click on the image to add points to the polygon</li>
-                <li>Click near the first point to close the polygon</li>
-                <li>Right-click to remove the last point</li>
-                <li>Press 'Save' when done</li>
+                <li>Select a tool from the toolbar</li>
+                <li><strong>Pen Tool:</strong> Click to add points, close polygon to finish</li>
+                <li><strong>Remove Tool:</strong> Click on a polygon to delete it</li>
+                <li>Right-click to remove the last point (Pen tool)</li>
             </ul>
         </div>
+
+        <div class="toolbar" id="editableAreaToolbar"
+            style="margin-bottom: 10px; display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px;">
+            <!-- Area Type Selector -->
+            <label
+                style="display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.05); padding: 5px; border-radius: 6px;">
+                <span style="margin-right: 8px; font-size: 0.9em;">Type:</span>
+                <select id="areaTypeSelector"
+                    style="padding: 5px; border-radius: 4px; border: 1px solid var(--theme-border); background: var(--theme-surface); color: white;">
+                    <option value="safe">🛡️ Safe Area</option>
+                    <option value="bed">🛏️ Bed Area</option>
+                    <option value="floor">🏠 Floor Area</option>
+                </select>
+            </label>
+
+            <!-- Tools -->
+            <button id="toolPenBtn" class="btn btn-primary" title="Draw Polygons">+</button>
+            <button id="toolRemoveBtn" class="btn btn-secondary" title="Remove Polygons">-</button>
+            <button id="toolClearBtn" class="btn btn-warning" title="Clear All Polygons">Clear</button>
+        </div>
+
         <div class="canvas-container">
             <canvas id="editableAreaCanvas"></canvas>
         </div>
+
         <div id="safeAreaLoading" class="popup-loading" style="display: none;">
             <div class="spinner"></div>
             <span id="safeAreaLoadingStatus">Saving...</span>
         </div>
-        <div class="toolbar" id="safeAreaToolbar">
-            <button id="newPolygonBtn" class="btn btn-primary">New Polygon</button>
-            <button id="clearAllBtn" class="btn btn-warning">Clear All</button>
+        <div class="toolbar" id="editableAreaAction">
             <button id="saveAreasBtn" class="btn btn-success">💾 Save</button>
-            <button onclick="hideSafeAreaPopup()" class="btn btn-secondary">Cancel</button>
+            <button onclick="if(window.EditableAreaEditor) window.EditableAreaEditor.hide()"
+                class="btn btn-secondary">Cancel</button>
         </div>
+
         <div id="saveStatus" class="status"></div>
     </div>
 

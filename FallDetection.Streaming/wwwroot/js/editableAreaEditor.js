@@ -1,11 +1,17 @@
 // editableAreaEditor.js - Editable Area Editor functionality
 // Supports multiple area types: safe areas, bed areas, floor areas
+// Supports tools: Pen (draw), Remove (click to delete)
 
 const EditableAreaEditor = {
     // Track previous show_raw state for restore on popup close
     prevShowRaw: null,
     // Current area type being edited
     currentAreaType: 'safe',
+    // Current active tool: 'pen' or 'remove'
+    currentTool: 'pen',
+
+    // Cache for loaded areas to compare against for changes
+    initialAreas: [],
 
     async loadAreasForCamera(cameraId) {
         try {
@@ -100,7 +106,18 @@ const EditableAreaEditor = {
             const loadedAreas = await EditableAreaEditor.loadAreasForCamera(AppState.currentCameraId);
             window.editableAreas = loadedAreas;
 
-            // Save current show_raw state
+            // Deep copy for initial state comparison if needed later (simplified for now)
+            EditableAreaEditor.initialAreas = JSON.parse(JSON.stringify(loadedAreas));
+
+            // Reset UI State for fresh open
+            // 1. Reset loading/status text
+            if (DOMElements.saveStatus) DOMElements.saveStatus.textContent = '';
+            const loadingDiv = document.getElementById('safeAreaLoading');
+            if (loadingDiv) loadingDiv.style.display = 'none';
+            const toolbar = document.getElementById('editableAreaToolbar');
+            if (toolbar) toolbar.style.display = 'grid';
+
+            // 2. Save current show_raw state
             EditableAreaEditor.prevShowRaw = DOMElements.toggleRaw ? DOMElements.toggleRaw.checked : false;
 
             // If show_raw is currently true, send command to set it to false
@@ -120,10 +137,16 @@ const EditableAreaEditor = {
                 EditableAreaEditor.initializeCanvas();
                 DOMHelpers.showPopup(DOMElements.editAreasPopup);
                 isEditing = true;
+
+                // Set default tool to 'pen'
+                EditableAreaEditor.setTool('pen');
+
                 EditableAreaEditor.drawAreas();
 
-                // Set initial area type selection
-                EditableAreaEditor.updateAreaTypeSelector();
+                // Set initial area type from selector if available
+                if (DOMElements.areaTypeSelector) {
+                    EditableAreaEditor.currentAreaType = DOMElements.areaTypeSelector.value;
+                }
             };
             backgroundImage.onerror = () => {
                 alert('Failed to load background image');
@@ -160,57 +183,59 @@ const EditableAreaEditor = {
 
         canvasContext = DOMElements.editableAreaCanvas.getContext('2d');
 
-        DOMElements.editableAreaCanvas.addEventListener('click', (e) => EditableAreaEditor.handleCanvasClick(e));
-        DOMElements.editableAreaCanvas.addEventListener('mousemove', (e) => EditableAreaEditor.handleCanvasMouseMove(e));
-        DOMElements.editableAreaCanvas.addEventListener('contextmenu', (e) => EditableAreaEditor.handleCanvasRightClick(e));
+        // Remove old listeners to prevent duplicates
+        DOMElements.editableAreaCanvas.removeEventListener('click', EditableAreaEditor.handleCanvasClick);
+        DOMElements.editableAreaCanvas.removeEventListener('mousemove', EditableAreaEditor.handleCanvasMouseMove);
+        DOMElements.editableAreaCanvas.removeEventListener('contextmenu', EditableAreaEditor.handleCanvasRightClick);
 
-        if (DOMElements.newPolygonBtn) DOMElements.newPolygonBtn.onclick = () => EditableAreaEditor.startNewPolygon();
-        if (DOMElements.clearAllBtn) DOMElements.clearAllBtn.onclick = () => EditableAreaEditor.clearAllPolygons();
+        canvasContext = DOMElements.editableAreaCanvas.getContext('2d');
+
+        DOMElements.editableAreaCanvas.addEventListener('click', EditableAreaEditor.handleCanvasClick);
+        DOMElements.editableAreaCanvas.addEventListener('mousemove', EditableAreaEditor.handleCanvasMouseMove);
+        DOMElements.editableAreaCanvas.addEventListener('contextmenu', EditableAreaEditor.handleCanvasRightClick);
+
+        // Toolbar handlers
+        if (DOMElements.toolPenBtn) DOMElements.toolPenBtn.onclick = () => EditableAreaEditor.setTool('pen');
+        if (DOMElements.toolRemoveBtn) DOMElements.toolRemoveBtn.onclick = () => EditableAreaEditor.setTool('remove');
+        if (DOMElements.toolClearBtn) DOMElements.toolClearBtn.onclick = () => EditableAreaEditor.clearAllPolygons();
         if (DOMElements.saveAreasBtn) DOMElements.saveAreasBtn.onclick = () => EditableAreaEditor.saveAreas();
+
+        if (DOMElements.areaTypeSelector) {
+            DOMElements.areaTypeSelector.onchange = (e) => {
+                EditableAreaEditor.currentAreaType = e.target.value;
+                console.log(`Area type changed to: ${EditableAreaEditor.currentAreaType}`);
+                EditableAreaEditor.drawAreas(); // Redraw in case we want to highlight current type (future feature)
+            };
+        }
     },
 
-    updateAreaTypeSelector() {
-        // Check if area type selector already exists
-        let selector = document.getElementById('areaTypeSelector');
-        if (!selector) {
-            // Create the area type selector
-            const toolbar = document.getElementById('safeAreaToolbar');
-            if (toolbar) {
-                const label = document.createElement('label');
-                label.textContent = 'Area Type:';
-                label.style.fontSize = '0.9em';
-                label.style.marginRight = '5px';
+    setTool(toolName) {
+        EditableAreaEditor.currentTool = toolName;
 
-                selector = document.createElement('select');
-                selector.id = 'areaTypeSelector';
-                selector.style.padding = '5px';
-                selector.style.marginRight = '10px';
-                selector.style.borderRadius = '5px';
-                selector.style.border = '2px solid var(--theme-primary)';
+        // Update UI
+        if (DOMElements.toolPenBtn) {
+            if (toolName === 'pen') DOMElements.toolPenBtn.classList.add('active');
+            else DOMElements.toolPenBtn.classList.remove('active');
 
-                const options = [
-                    { value: 'safe', label: '🛡️ Safe Area' },
-                    { value: 'bed', label: '🛏️ Bed Area' },
-                    { value: 'floor', label: '🏠 Floor Area' }
-                ];
-
-                options.forEach(opt => {
-                    const option = document.createElement('option');
-                    option.value = opt.value;
-                    option.textContent = opt.label;
-                    selector.appendChild(option);
-                });
-
-                selector.onchange = (e) => {
-                    EditableAreaEditor.currentAreaType = e.target.value;
-                    console.log(`Area type changed to: ${EditableAreaEditor.currentAreaType}`);
-                };
-
-                // Insert before the first button
-                toolbar.insertBefore(label, toolbar.firstChild);
-                toolbar.insertBefore(selector, toolbar.firstChild);
-            }
+            // Highlight style for active button using inline style or class
+            DOMElements.toolPenBtn.style.border = toolName === 'pen' ? '2px solid white' : 'none';
         }
+        if (DOMElements.toolRemoveBtn) {
+            if (toolName === 'remove') DOMElements.toolRemoveBtn.classList.add('active');
+            else DOMElements.toolRemoveBtn.classList.remove('active');
+
+            DOMElements.toolRemoveBtn.style.border = toolName === 'remove' ? '2px solid white' : 'none';
+        }
+
+        // Cursor style
+        if (DOMElements.editableAreaCanvas) {
+            DOMElements.editableAreaCanvas.style.cursor = toolName === 'remove' ? 'not-allowed' : 'crosshair';
+        }
+
+        console.log(`Tool selected: ${toolName}`);
+
+        // Refresh view (e.g. to hide/show unfinished polygon based on tool)
+        EditableAreaEditor.drawAreas();
     },
 
     getCanvasCoordinates(event) {
@@ -238,47 +263,81 @@ const EditableAreaEditor = {
         const normalizedX = x / originalImageWidth;
         const normalizedY = y / originalImageHeight;
 
-        if (currentPolygon.length >= 3) {
-            const firstPoint = currentPolygon[0];
-            const distance = Math.sqrt(
-                Math.pow(normalizedX - firstPoint[0], 2) +
-                Math.pow(normalizedY - firstPoint[1], 2)
+        if (EditableAreaEditor.currentTool === 'pen') {
+            // Pen Tool Logic
+            if (currentPolygon.length >= 3) {
+                const firstPoint = currentPolygon[0];
+                const distance = Math.sqrt(
+                    Math.pow(normalizedX - firstPoint[0], 2) +
+                    Math.pow(normalizedY - firstPoint[1], 2)
+                );
+
+                if (distance < 0.05) {
+                    EditableAreaEditor.finishCurrentPolygon();
+                    return;
+                }
+            }
+            currentPolygon.push([normalizedX, normalizedY]);
+            EditableAreaEditor.drawAreas();
+
+        } else if (EditableAreaEditor.currentTool === 'remove') {
+            // Remove Tool Logic
+            // Find if click is inside any polygon
+            const clickedAreaIndex = window.editableAreas.findIndex(area =>
+                EditableAreaEditor.isPointInPolygon([normalizedX, normalizedY], area.coordinates)
             );
 
-            if (distance < 0.05) {
-                EditableAreaEditor.finishCurrentPolygon();
-                return;
+            if (clickedAreaIndex !== -1) {
+                const area = window.editableAreas[clickedAreaIndex];
+                if (confirm(`Remove ${area.name}?`)) {
+                    window.editableAreas.splice(clickedAreaIndex, 1);
+                    EditableAreaEditor.drawAreas();
+                }
             }
         }
+    },
 
-        currentPolygon.push([normalizedX, normalizedY]);
-        EditableAreaEditor.drawAreas();
+    // Ray-casting algorithm to check if point is in polygon
+    isPointInPolygon(point, vs) {
+        // point [x, y]
+        // vs [[x1, y1], [x2, y2], ...]
+        const x = point[0], y = point[1];
+        let inside = false;
+        for (let i = 0, j = vs.length - 1; i < vs.length; j = i++) {
+            const xi = vs[i][0], yi = vs[i][1];
+            const xj = vs[j][0], yj = vs[j][1];
+
+            const intersect = ((yi > y) !== (yj > y))
+                && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+            if (intersect) inside = !inside;
+        }
+        return inside;
     },
 
     handleCanvasMouseMove(event) {
-        if (!isEditing || currentPolygon.length === 0) return;
+        if (!isEditing) return;
 
         const { x, y } = EditableAreaEditor.getCanvasCoordinates(event);
         const normalizedX = x / originalImageWidth;
         const normalizedY = y / originalImageHeight;
 
-        EditableAreaEditor.drawAreas([...currentPolygon, [normalizedX, normalizedY]]);
+        if (EditableAreaEditor.currentTool === 'pen' && currentPolygon.length > 0) {
+            // Show preview line for pen tool
+            EditableAreaEditor.drawAreas([...currentPolygon, [normalizedX, normalizedY]]);
+        } else {
+            // Just redraw for hover effects (if any)
+            EditableAreaEditor.drawAreas(null, [normalizedX, normalizedY]);
+        }
     },
 
     handleCanvasRightClick(event) {
         event.preventDefault();
-        if (!isEditing || currentPolygon.length === 0) return;
+        if (!isEditing) return;
 
-        currentPolygon.pop();
-        EditableAreaEditor.drawAreas();
-    },
-
-    startNewPolygon() {
-        if (currentPolygon.length >= 3) {
-            EditableAreaEditor.finishCurrentPolygon();
+        if (EditableAreaEditor.currentTool === 'pen' && currentPolygon.length > 0) {
+            currentPolygon.pop();
+            EditableAreaEditor.drawAreas();
         }
-        currentPolygon = [];
-        EditableAreaEditor.drawAreas();
     },
 
     finishCurrentPolygon() {
@@ -316,7 +375,7 @@ const EditableAreaEditor = {
         }
     },
 
-    drawAreas(tempPolygon = null) {
+    drawAreas(tempPolygon = null, hoverPoint = null) {
         if (!canvasContext || !backgroundImage) return;
 
         canvasContext.clearRect(0, 0, originalImageWidth, originalImageHeight);
@@ -325,14 +384,25 @@ const EditableAreaEditor = {
         // Draw all saved areas
         window.editableAreas.forEach((area, _) => {
             const color = EditableAreaEditor.getAreaColor(area.area_type);
-            EditableAreaEditor.drawPolygon(area.coordinates, color, true, area.name);
+
+            // If in remove tool and hovering, maybe highlight? 
+            // For now just draw standard
+            let isHovered = false;
+
+            if (EditableAreaEditor.currentTool === 'remove' && hoverPoint) {
+                isHovered = EditableAreaEditor.isPointInPolygon(hoverPoint, area.coordinates);
+            }
+
+            EditableAreaEditor.drawPolygon(area.coordinates, color, true, area.name, isHovered);
         });
 
-        // Draw current polygon being created
-        const polygonToDraw = tempPolygon || currentPolygon;
-        if (polygonToDraw.length > 0) {
-            const color = EditableAreaEditor.getAreaColor(EditableAreaEditor.currentAreaType);
-            EditableAreaEditor.drawPolygon(polygonToDraw, color, false, null);
+        // Draw current polygon being created (only if Pen tool)
+        if (EditableAreaEditor.currentTool === 'pen') {
+            const polygonToDraw = tempPolygon || currentPolygon;
+            if (polygonToDraw.length > 0) {
+                const color = EditableAreaEditor.getAreaColor(EditableAreaEditor.currentAreaType);
+                EditableAreaEditor.drawPolygon(polygonToDraw, color, false, null);
+            }
         }
     },
 
@@ -345,15 +415,15 @@ const EditableAreaEditor = {
         return colors[areaType] || colors['safe'];
     },
 
-    drawPolygon(polygon, color, isComplete, label) {
+    drawPolygon(polygon, color, isComplete, label, isHovered = false) {
         if (polygon.length === 0) return;
 
         // color is now an object with stroke and fill properties
         const strokeColor = typeof color === 'object' ? color.stroke : color;
         const fillColor = typeof color === 'object' ? color.fill : null;
 
-        canvasContext.strokeStyle = strokeColor;
-        canvasContext.lineWidth = 2;
+        canvasContext.strokeStyle = isHovered ? '#FF5722' : strokeColor; // Highlight on hover for remove tool
+        canvasContext.lineWidth = isHovered ? 4 : 2;
         canvasContext.setLineDash(isComplete ? [] : [5, 5]);
 
         const points = polygon.map(p => [
@@ -370,9 +440,9 @@ const EditableAreaEditor = {
         if (isComplete && points.length >= 3) {
             canvasContext.closePath();
 
-            // Fill with 65% transparent color
+            // Fill
             if (fillColor) {
-                canvasContext.fillStyle = fillColor;
+                canvasContext.fillStyle = isHovered ? 'rgba(255, 87, 34, 0.4)' : fillColor;
                 canvasContext.fill();
             }
         }
@@ -404,23 +474,25 @@ const EditableAreaEditor = {
     },
 
     async saveAreas() {
+        // If there's an unfinished polygon, autofinish it if possible
         if (currentPolygon.length >= 3) {
-            const area = {
-                area_type: EditableAreaEditor.currentAreaType,
-                coordinates: [...currentPolygon],
-                name: `${EditableAreaEditor.getAreaLabel(EditableAreaEditor.currentAreaType)} ${EditableAreaEditor.getAreaCount(EditableAreaEditor.currentAreaType) + 1}`
-            };
-            window.editableAreas.push(area);
-            currentPolygon = [];
+            if (confirm("You have an unfinished polygon. Do you want to include it?")) {
+                EditableAreaEditor.finishCurrentPolygon();
+            }
         }
 
         // Show loading animation and hide toolbar
         const loadingDiv = document.getElementById('safeAreaLoading');
-        const toolbar = document.getElementById('safeAreaToolbar');
+        const toolbar = document.getElementById('editableAreaToolbar');
         const loadingStatus = document.getElementById('safeAreaLoadingStatus');
 
         if (loadingDiv) loadingDiv.style.display = 'flex';
+        // if (toolbar) toolbar.style.display = 'none'; // USER FEEDBACK: Keep toolbar visible or not? 
+        // Logic: Usually hide to prevent edits while saving. 
+        // But user issue 2 said buttons hidden next time. 
+        // Let's hide it now, but make sure to SHOW it again on success/failure
         if (toolbar) toolbar.style.display = 'none';
+
         if (loadingStatus) loadingStatus.textContent = 'Saving...';
 
         try {
@@ -484,6 +556,15 @@ const EditableAreaEditor = {
     },
 
     hide() {
+        // Unfinished polygon check
+        if (currentPolygon.length > 0) {
+            if (confirm("You have an unfinished polygon. It will be lost if you close. Continue?")) {
+                currentPolygon = []; // Clear it
+            } else {
+                return; // Cancel close
+            }
+        }
+
         DOMHelpers.hidePopup(DOMElements.editAreasPopup);
         isEditing = false;
 
@@ -494,10 +575,11 @@ const EditableAreaEditor = {
         }
         EditableAreaEditor.prevShowRaw = null;
 
-        if (canvasContext) {
-            DOMElements.editableAreaCanvas.removeEventListener('click', (e) => EditableAreaEditor.handleCanvasClick(e));
-            DOMElements.editableAreaCanvas.removeEventListener('mousemove', (e) => EditableAreaEditor.handleCanvasMouseMove(e));
-            DOMElements.editableAreaCanvas.removeEventListener('contextmenu', (e) => EditableAreaEditor.handleCanvasRightClick(e));
+        if (canvasContext && DOMElements.editableAreaCanvas) {
+            DOMElements.editableAreaCanvas.removeEventListener('click', EditableAreaEditor.handleCanvasClick);
+            DOMElements.editableAreaCanvas.removeEventListener('mousemove', EditableAreaEditor.handleCanvasMouseMove);
+            DOMElements.editableAreaCanvas.removeEventListener('contextmenu', EditableAreaEditor.handleCanvasRightClick);
+            canvasContext = null;
         }
     }
 };

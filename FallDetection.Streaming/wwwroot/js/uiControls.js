@@ -41,12 +41,7 @@ const UIControls = {
             DOMElements.fallAlgorithmSelect.disabled = !AppState.isConnected;
         }
 
-        if (DOMElements.setBackgroundBtn) {
-            DOMElements.setBackgroundBtn.disabled = !AppState.isConnected;
-        }
-        if (DOMElements.editAreas) {
-            DOMElements.editAreas.disabled = !AppState.isConnected;
-        }
+
 
         const elements = [
             DOMElements.toggleRecord,
