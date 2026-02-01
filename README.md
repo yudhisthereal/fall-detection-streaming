@@ -6,6 +6,11 @@
 
 The **Streaming Server** is the central hub of the distributed patient monitoring system. Unlike traditional streaming servers that rely on RTSP/WebRTC, this system implements a **custom HTTP-based Two-Pass Rendering** architecture designed for low-latency, synchronization-critical overlay rendering.
 
+## 🔗 Related Repositories
+
+This project is part of a distributed system:
+*   [**Fall Detection Camera**](https://github.com/yudhisthereal/Private-Surveillence-MaixCAM): The Edge AI implementation running on MaixCAM devices (Python). handles skeleton detection and frame uploads.
+
 ## 🏗️ System Architecture
 
 The system avoids complex streaming protocols (RTMP/WebRTC) in favor of a robust state-synchronization model where the server acts as a high-speed state cache.
@@ -29,7 +34,7 @@ graph TD
     subgraph Client [Browser Dashboard]
         Video[Img Element] <--HTTP GET Polling--> API
         Canvas[Overlay Canvas] <--HTTP GET Polling--> API
-        Controls[React/JS UI] -->|Command| API
+        Controls[JS UI] -->|Command| API
     end
 
     UploadFrame -->|JPEG| API
