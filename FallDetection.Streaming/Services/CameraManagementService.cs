@@ -654,7 +654,8 @@ namespace FallDetection.Streaming.Services
                     },
                     ControlFlagsInt = new Dictionary<string, int>
                     {
-                        ["fall_algorithm"] = 1
+                        ["fall_algorithm"] = 1, // BBOX Only
+                        ["check_method"] = 3 // Torso + Head
                     },
                     EditableAreas = new List<AreaPolygon>(),
                     IsRegistered = true,

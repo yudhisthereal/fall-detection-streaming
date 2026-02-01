@@ -85,18 +85,25 @@
                 <label for="autoUpdateBg" class="toggle-label">Auto-update BG</label>
             </div>
             <div class="control-group">
+                <label>Safety Check Method:
+                    <select id="safetyCheckMethod">
+                        <option value="1">Hip</option>
+                        <option value="2">Torso</option>
+                        <option value="3" selected>Torso + Head</option>
+                        <option value="4">Torso + Head + Knees</option>
+                        <option value="5">Full Body</option>
+                    </select>
+                </label>
                 <input type="checkbox" id="useSafetyCheck">
-                <label for="useSafetyCheck" class="toggle-label">Use Safety Check</label>
-
-                @* <input type="checkbox" id="toggleHME">
-                <label for="toggleHME" class="toggle-label">🔐 HME Mode</label> *@
+                <label for="useSafetyCheck" class="toggle-label">Use Safety
+                    Check</label>
             </div>
             <div class="control-group">
                 <label>Fall Algorithm:
                     <select id="fallAlgorithmSelect">
-                        <option value="1">Method 1: BBox Only</option>
-                        <option value="2" selected>Method 2: Flexible Pose</option>
-                        <option value="3">Method 3: Conservative</option>
+                        <option value="1">BBox Only</option>
+                        <option value="2" selected>BBox + Pose</option>
+                        <option value="3">BBox </option>
                     </select>
                 </label>
                 <button id="setBackgroundBtn" class="btn btn-primary" title="Set current frame as background">📸 Set

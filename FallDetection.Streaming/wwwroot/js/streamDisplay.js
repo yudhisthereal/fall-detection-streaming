@@ -93,12 +93,14 @@ const StreamDisplay = {
 
     // Get color based on safety status, fallback to track-based color
     getColorForTrack(trackId, safetyStatus) {
-        if (safetyStatus && this.SAFETY_STATUS_COLORS[safetyStatus]) {
-            return this.SAFETY_STATUS_COLORS[safetyStatus];
+        if (safetyStatus === 'fall') {
+            return this.SAFETY_STATUS_COLORS['fall'];
         }
-        // Fallback to track-based color
-        const colorIndex = trackId % this.TRACK_COLORS.length;
-        return this.TRACK_COLORS[colorIndex];
+        if (safetyStatus === 'unsafe') {
+            return this.SAFETY_STATUS_COLORS['unsafe'];
+        }
+        // Default to green for everything else (safe, tracking, or undefined)
+        return this.SAFETY_STATUS_COLORS['tracking'];
     },
 
     init() {

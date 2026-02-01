@@ -41,6 +41,11 @@ const UIControls = {
             DOMElements.fallAlgorithmSelect.disabled = !AppState.isConnected;
         }
 
+        if (typeof flags.check_method === 'number' && DOMElements.safetyCheckMethod) {
+            DOMElements.safetyCheckMethod.value = flags.check_method;
+            DOMElements.safetyCheckMethod.disabled = !AppState.isConnected;
+        }
+
 
 
         const elements = [
@@ -53,6 +58,7 @@ const UIControls = {
             DOMElements.useSafetyCheck,
             // DOMElements.toggleHME,
             DOMElements.fallAlgorithmSelect,
+            DOMElements.safetyCheckMethod,
             DOMElements.setBackgroundBtn,
             DOMElements.editAreas
         ];
@@ -219,6 +225,14 @@ const UIControls = {
         if (DOMElements.useSafetyCheck) {
             DOMElements.useSafetyCheck.onchange = () => {
                 CommandManager.sendCommand("toggle_safety_check", DOMElements.useSafetyCheck.checked);
+            };
+        }
+
+        // Safety Check Method Select
+        if (DOMElements.safetyCheckMethod) {
+            DOMElements.safetyCheckMethod.onchange = () => {
+                const method = parseInt(DOMElements.safetyCheckMethod.value);
+                CommandManager.sendCommand("set_safety_check_method", method);
             };
         }
 

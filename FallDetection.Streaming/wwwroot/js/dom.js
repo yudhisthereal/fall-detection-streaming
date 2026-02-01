@@ -14,6 +14,7 @@ const DOMElements = {
     showBedAreas: document.getElementById('showBedAreas'),
     showFloorAreas: document.getElementById('showFloorAreas'),
     useSafetyCheck: document.getElementById('useSafetyCheck'),
+    safetyCheckMethod: document.getElementById('safetyCheckMethod'),
     // toggleHME: document.getElementById('toggleHME'),
     fallAlgorithmSelect: document.getElementById('fallAlgorithmSelect'),
 

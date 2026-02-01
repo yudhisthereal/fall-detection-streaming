@@ -300,6 +300,14 @@ namespace FallDetection.Streaming.Controllers
                                 _cameraService.UpdateCameraState(command.CameraId, cameraState);
                             }
                             break;
+                        case "set_safety_check_method":
+                            var method = SafeConvertToInt(command.Value);
+                            if (method >= 1 && method <= 5)
+                            {
+                                cameraState.ControlFlagsInt["check_method"] = method;
+                                _cameraService.UpdateCameraState(command.CameraId, cameraState);
+                            }
+                            break;
                         case "update_safe_areas":
                             if (command.Value is JsonElement jsonElement)
                             {
