@@ -104,7 +104,7 @@ const StreamDisplay = {
         if (this.isInitialized) return;
 
         this.backgroundImg = document.getElementById('streamBackgroundImg');
-        this.overlayCanvas = document.getElementById('streamCanvas');
+        this.overlayCanvas = document.getElementById('overlayCanvas');
 
         if (!this.backgroundImg || !this.overlayCanvas) {
             console.warn('[StreamDisplay] Elements not found');
@@ -716,7 +716,7 @@ const StreamDisplay = {
                 let bodyText = "";
                 try {
                     bodyText = await response.text(); // may fail if no body
-                } catch (_) {}
+                } catch (_) { }
 
                 console.error('[StreamDisplay:fetchSafeAreas] Safe areas request failed', {
                     url,

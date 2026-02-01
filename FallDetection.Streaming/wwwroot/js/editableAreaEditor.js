@@ -455,6 +455,11 @@ const EditableAreaEditor = {
                     );
                 }
 
+                // Refresh main display to show new areas
+                if (window.StreamDisplay && window.StreamDisplay.manualRefresh) {
+                    window.StreamDisplay.manualRefresh();
+                }
+
                 setTimeout(() => {
                     EditableAreaEditor.hide();
                 }, 1000);

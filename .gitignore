@@ -414,3 +414,4 @@ local.settings.json
 
 # Dotnet tools
 .dotnet/
+report.md

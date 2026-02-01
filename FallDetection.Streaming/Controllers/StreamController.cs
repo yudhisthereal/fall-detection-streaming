@@ -22,13 +22,13 @@ namespace FallDetection.Streaming.Controllers
         }
 
         #region Camera Management Endpoints (Moved from Analytics Server)
-        
+
         [HttpPost("register")]
         public IActionResult RegisterCamera([FromQuery] string? camera_id)
         {
             var ipAddress = HttpContext.Connection.RemoteIpAddress?.MapToIPv4()?.ToString() ?? string.Empty;
             _logger.LogInformation($"Register request from IP: {ipAddress}");
-            
+
             if (string.IsNullOrEmpty(ipAddress))
             {
                 return BadRequest(new { error = "Could not determine IP address" });
@@ -72,7 +72,7 @@ namespace FallDetection.Streaming.Controllers
         #endregion
 
         #region Streaming Endpoints
-        
+
         [HttpPost("ping")]
         public IActionResult Ping([FromQuery] string camera_id)
         {
@@ -83,7 +83,7 @@ namespace FallDetection.Streaming.Controllers
                     _logger.LogWarning("Ping called with empty camera_id");
                     return BadRequest(new { status = "error", message = "Camera ID is required" });
                 }
-                
+
                 if (!System.Text.RegularExpressions.Regex.IsMatch(camera_id, @"^camera_\d{4}$"))
                 {
                     _logger.LogWarning("Ping called with invalid camera_id format: {CameraId}", camera_id);
@@ -91,7 +91,7 @@ namespace FallDetection.Streaming.Controllers
                 }
 
                 _cameraService.UpdateCameraPing(camera_id);
-                
+
                 _logger.LogDebug("Ping received from {CameraId}", camera_id);
 
                 return Ok(new
@@ -114,7 +114,7 @@ namespace FallDetection.Streaming.Controllers
         {
             try
             {
-                _logger.LogDebug("State report received from {CameraId}: Recording={IsRecording}, RTMP={RtmpConnected}, Status={Status}", 
+                _logger.LogDebug("State report received from {CameraId}: Recording={IsRecording}, RTMP={RtmpConnected}, Status={Status}",
                     report.CameraId, report.IsRecording, report.RtmpConnected, report.Status);
 
                 // Get or create camera state
@@ -133,7 +133,7 @@ namespace FallDetection.Streaming.Controllers
                         // Note: Control flags and safe areas are NOT initialized from camera report
                         // They are managed by the server as the single source of truth
                     };
-                    
+
                     _cameraService.UpdateCameraState(report.CameraId, cameraState);
                     _logger.LogInformation("Created new camera state for {CameraId}", report.CameraId);
                 }
@@ -147,7 +147,7 @@ namespace FallDetection.Streaming.Controllers
                     cameraState.CameraStatus = report.Status;
                     cameraState.IsRecording = report.IsRecording;
                     cameraState.RtmpConnected = report.RtmpConnected;
-                    
+
                     _cameraService.UpdateCameraState(report.CameraId, cameraState);
                     _logger.LogDebug("Updated camera state for {CameraId} (timestamp/status only)", report.CameraId);
                 }
@@ -174,7 +174,7 @@ namespace FallDetection.Streaming.Controllers
 
             if (value is bool boolValue)
                 return boolValue;
-            
+
             if (value is JsonElement jsonElement)
             {
                 return jsonElement.ValueKind switch
@@ -186,12 +186,12 @@ namespace FallDetection.Streaming.Controllers
                     _ => false
                 };
             }
-            
+
             if (value is string stringValue)
             {
                 return bool.TryParse(stringValue, out var result) && result;
             }
-            
+
             return false;
         }
 
@@ -202,10 +202,10 @@ namespace FallDetection.Streaming.Controllers
 
             if (value is int intValue)
                 return intValue;
-            
+
             if (value is long longValue)
                 return (int)longValue;
-            
+
             if (value is JsonElement jsonElement)
             {
                 return jsonElement.ValueKind switch
@@ -215,12 +215,12 @@ namespace FallDetection.Streaming.Controllers
                     _ => 0
                 };
             }
-            
+
             if (value is string stringValue)
             {
                 return int.TryParse(stringValue, out var result) ? result : 0;
             }
-            
+
             return 0;
         }
 
@@ -236,7 +236,7 @@ namespace FallDetection.Streaming.Controllers
                     return BadRequest(new { status = "error", message = "CameraId is required" });
                 }
 
-                _logger.LogInformation("Command received: {Command}={Value} for {CameraId}", 
+                _logger.LogInformation("Command received: {Command}={Value} for {CameraId}",
                     command.Command, command.Value, command.CameraId);
 
                 var cameraState = _cameraService.GetCameraState(command.CameraId);
@@ -272,7 +272,7 @@ namespace FallDetection.Streaming.Controllers
                             // Camera acknowledges that it has updated the background
                             _cameraService.AcknowledgeBackgroundUpdate(command.CameraId);
                             break;
-                        case "toggle_safe_area_display":
+                        case "toggle_safe_areas_display":
                             cameraState.ControlFlags["show_safe_area"] = SafeConvertToBool(command.Value);
                             _cameraService.UpdateCameraState(command.CameraId, cameraState);
                             break;
@@ -448,7 +448,7 @@ namespace FallDetection.Streaming.Controllers
                 {
                     var currentTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
                     var ageSeconds = currentTime - state.LastSeen;
-                    
+
                     return Ok(new
                     {
                         camera_id = camera_id,
@@ -547,7 +547,7 @@ namespace FallDetection.Streaming.Controllers
         #endregion
 
         #region Pose Tracking Endpoints
-        
+
         [HttpPost("tracks")]
         public IActionResult StoreTracks([FromBody] TracksRequest request)
         {
@@ -775,7 +775,7 @@ namespace FallDetection.Streaming.Controllers
         #endregion
 
         #region HTTP JPEG Streaming Endpoints
-        
+
         [HttpPost("upload-frame")]
         public async Task<IActionResult> UploadFrame()
         {
@@ -783,7 +783,7 @@ namespace FallDetection.Streaming.Controllers
             {
                 // Get camera ID from header
                 var cameraId = Request.Headers["X-Camera-ID"].ToString();
-                
+
                 if (string.IsNullOrWhiteSpace(cameraId))
                 {
                     _logger.LogWarning("Frame upload received without X-Camera-ID header");
@@ -842,7 +842,7 @@ namespace FallDetection.Streaming.Controllers
             {
                 // Get camera ID from header
                 var cameraId = Request.Headers["X-Camera-ID"].ToString();
-                
+
                 if (string.IsNullOrWhiteSpace(cameraId))
                 {
                     _logger.LogWarning("Background upload received without X-Camera-ID header");
@@ -985,7 +985,7 @@ namespace FallDetection.Streaming.Controllers
     }
 
     #region Request Models
-    
+
     public class StreamCommand
     {
         public string CameraId { get; set; } = string.Empty;
@@ -1017,7 +1017,7 @@ namespace FallDetection.Streaming.Controllers
         }
     }
 
-public class StateReportRequest
+    public class StateReportRequest
     {
         [JsonPropertyName("camera_id")]
         public string CameraId { get; set; } = string.Empty;

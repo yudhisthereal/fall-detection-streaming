@@ -1465,7 +1465,7 @@ h1 {
     z-index: 2 !important;
 }
 
-#streamCanvas {
+#overlayCanvas {
     position: absolute !important;
     z-index: 10 !important;
 }
