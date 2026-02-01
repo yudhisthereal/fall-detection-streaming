@@ -16,8 +16,8 @@ const UIControls = {
             DOMElements.autoUpdateBg.checked = flags.auto_update_bg;
             DOMElements.autoUpdateBg.disabled = !AppState.isConnected;
         }
-        if (typeof flags.show_safe_area === 'boolean' && DOMElements.showSafeArea) {
-            DOMElements.showSafeArea.checked = flags.show_safe_area;
+        if (typeof flags.show_safe_areas === 'boolean' && DOMElements.showSafeArea) {
+            DOMElements.showSafeArea.checked = flags.show_safe_areas;
             DOMElements.showSafeArea.disabled = !AppState.isConnected;
         }
         if (typeof flags.show_bed_areas === 'boolean' && DOMElements.showBedAreas) {

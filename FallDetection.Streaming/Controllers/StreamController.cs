@@ -273,7 +273,7 @@ namespace FallDetection.Streaming.Controllers
                             _cameraService.AcknowledgeBackgroundUpdate(command.CameraId);
                             break;
                         case "toggle_safe_areas_display":
-                            cameraState.ControlFlags["show_safe_area"] = SafeConvertToBool(command.Value);
+                            cameraState.ControlFlags["show_safe_areas"] = SafeConvertToBool(command.Value);
                             _cameraService.UpdateCameraState(command.CameraId, cameraState);
                             break;
                         case "toggle_bed_areas_display":

@@ -18,18 +18,18 @@ namespace FallDetection.Streaming.Services
         // Camera ping tracking for connection status
         private readonly Dictionary<string, long> _cameraPings = new();
         private readonly object _cameraPingsLock = new();
-        
+
         // Camera Registry Storage
         private Dictionary<string, CameraRegistration> _cameraRegistry = new();
         private Dictionary<string, PendingRegistration> _pendingRegistrations = new();
         private int _cameraCounter = 0;
         private int _pendingCounter = 0;
         private readonly object _registryLock = new();
-        
+
         private readonly string _registryFilePath;
         private readonly string _pendingRegistryFilePath;
         private readonly string _cameraStatesFilePath;
-        
+
         // Analytics server URL for forwarding analytics data
         private readonly string _analyticsServerUrl = "http://103.127.136.213:5000";
 
@@ -39,19 +39,19 @@ namespace FallDetection.Streaming.Services
             {
                 Timeout = TimeSpan.FromSeconds(2)
             };
-            
+
             // Setup file paths for persistent storage
             var dataDir = Path.Combine(Directory.GetCurrentDirectory(), "Data");
             _registryFilePath = Path.Combine(dataDir, "camera_registry.json");
             _pendingRegistryFilePath = Path.Combine(dataDir, "pending_cam_registrations.json");
             _cameraStatesFilePath = Path.Combine(dataDir, "camera_states.json");
-            
+
             // Create Data directory if it doesn't exist
             if (!Directory.Exists(dataDir))
             {
                 Directory.CreateDirectory(dataDir);
             }
-            
+
             // Load existing registrations and camera states
             LoadCameraRegistry();
             LoadPendingRegistrations();
@@ -59,7 +59,7 @@ namespace FallDetection.Streaming.Services
         }
 
         #region Camera Registry Management
-        
+
         private void LoadCameraRegistry()
         {
             try
@@ -67,15 +67,15 @@ namespace FallDetection.Streaming.Services
                 if (File.Exists(_registryFilePath))
                 {
                     var json = File.ReadAllText(_registryFilePath);
-                    
+
                     using var doc = JsonDocument.Parse(json);
                     var root = doc.RootElement;
-                    
+
                     if (root.TryGetProperty("cameras", out var camerasElement))
                     {
                         _cameraRegistry = JsonSerializer.Deserialize<Dictionary<string, CameraRegistration>>(camerasElement.GetRawText()) ?? new();
                     }
-                    
+
                     if (root.TryGetProperty("counter", out var counterElement))
                     {
                         if (counterElement.ValueKind == JsonValueKind.Number)
@@ -87,7 +87,7 @@ namespace FallDetection.Streaming.Services
                             _cameraCounter = int.TryParse(counterElement.GetString(), out var parsed) ? parsed : 0;
                         }
                     }
-                    
+
                     Console.WriteLine($"Loaded {_cameraRegistry.Count} cameras from registry, counter: {_cameraCounter}");
                 }
                 else
@@ -112,15 +112,15 @@ namespace FallDetection.Streaming.Services
                 if (File.Exists(_pendingRegistryFilePath))
                 {
                     var json = File.ReadAllText(_pendingRegistryFilePath);
-                    
+
                     using var doc = JsonDocument.Parse(json);
                     var root = doc.RootElement;
-                    
+
                     if (root.TryGetProperty("pending_registrations", out var pendingElement))
                     {
                         _pendingRegistrations = JsonSerializer.Deserialize<Dictionary<string, PendingRegistration>>(pendingElement.GetRawText()) ?? new();
                     }
-                    
+
                     if (root.TryGetProperty("counter", out var counterElement))
                     {
                         if (counterElement.ValueKind == JsonValueKind.Number)
@@ -132,7 +132,7 @@ namespace FallDetection.Streaming.Services
                             _pendingCounter = int.TryParse(counterElement.GetString(), out var parsed) ? parsed : 0;
                         }
                     }
-                    
+
                     Console.WriteLine($"Loaded {_pendingRegistrations.Count} pending registrations, pending counter: {_pendingCounter}");
                 }
                 else
@@ -388,7 +388,7 @@ namespace FallDetection.Streaming.Services
         #endregion
 
         #region Camera Frame and State Management
-        
+
         public Task<List<CameraInfo>> GetCameraListAsync()
         {
             var cameras = new List<CameraInfo>();
@@ -456,13 +456,13 @@ namespace FallDetection.Streaming.Services
         public void UpdateCameraPing(string cameraId)
         {
             var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-            
+
             // Thread-safe update of ping timestamp
             lock (_cameraPingsLock)
             {
                 _cameraPings[cameraId] = timestamp;
             }
-            
+
             // Update last seen in registry if camera is registered
             lock (_registryLock)
             {
@@ -550,32 +550,10 @@ namespace FallDetection.Streaming.Services
                     };
                 }
 
-                // Initialize default state
-                var defaultState = new CameraState
-                {
-                    ControlFlags = new Dictionary<string, bool>
-                    {
-                        ["record"] = false,
-                        ["show_raw"] = false,
-                        ["set_background"] = false,
-                        ["auto_update_bg"] = false,
-                        ["show_safe_area"] = false,
-                        ["show_bed_areas"] = false,
-                        ["show_floor_areas"] = false,
-                        ["use_safety_check"] = false,
-                        ["analytics_mode"] = true,
-                        ["hme"] = false
-                    },
-                    ControlFlagsInt = new Dictionary<string, int>
-                    {
-                        ["fall_algorithm"] = 3
-                    },
-                    EditableAreas = new List<AreaPolygon>(),
-                    LastSeen = 0,
-                    TrackingData = new Dictionary<int, TrackingData>()
-                };
+                // Otherwise if not found, initialize it
+                InitializeCameraState(cameraId);
+                var defaultState = _cameraStates[cameraId];
 
-                _cameraStates[cameraId] = defaultState;
                 return defaultState;
             }
         }
@@ -599,10 +577,10 @@ namespace FallDetection.Streaming.Services
                 if (File.Exists(_cameraStatesFilePath))
                 {
                     var json = File.ReadAllText(_cameraStatesFilePath);
-                    
+
                     using var doc = JsonDocument.Parse(json);
                     var root = doc.RootElement;
-                    
+
                     if (root.TryGetProperty("camera_states", out var statesElement))
                     {
                         lock (_cameraStatesLock)
@@ -614,7 +592,7 @@ namespace FallDetection.Streaming.Services
                             }
                         }
                     }
-                    
+
                     Console.WriteLine($"Loaded {_cameraStates.Count} camera states from file");
                 }
                 else
@@ -667,7 +645,7 @@ namespace FallDetection.Streaming.Services
                         ["show_raw"] = false,
                         ["set_background"] = false,
                         ["auto_update_bg"] = false,
-                        ["show_safe_area"] = false,
+                        ["show_safe_areas"] = false,
                         ["show_bed_areas"] = false,
                         ["show_floor_areas"] = false,
                         ["use_safety_check"] = false,
@@ -676,7 +654,7 @@ namespace FallDetection.Streaming.Services
                     },
                     ControlFlagsInt = new Dictionary<string, int>
                     {
-                        ["fall_algorithm"] = 3
+                        ["fall_algorithm"] = 1
                     },
                     EditableAreas = new List<AreaPolygon>(),
                     IsRegistered = true,
@@ -917,16 +895,16 @@ namespace FallDetection.Streaming.Services
         #endregion
 
         #region Analytics Server Communication
-        
+
         public async Task ForwardAnalyticsDataAsync(string cameraId, object analyticsData)
         {
             try
             {
-                var content = new StringContent(JsonSerializer.Serialize(analyticsData), 
+                var content = new StringContent(JsonSerializer.Serialize(analyticsData),
                     System.Text.Encoding.UTF8, "application/json");
-                
+
                 var response = await _httpClient.PostAsync($"{_analyticsServerUrl}/api/camera/analytics-data", content);
-                
+
                 if (response.IsSuccessStatusCode)
                 {
                     Console.WriteLine($"Analytics data forwarded to analytics server for camera {cameraId}");

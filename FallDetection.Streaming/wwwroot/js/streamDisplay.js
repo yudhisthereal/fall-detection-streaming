@@ -609,7 +609,7 @@ const StreamDisplay = {
         this.cameraState = { ...state };
 
         // Check if show_safe_areas is enabled
-        const newShowSafeAreas = this.cameraState.show_safe_area === true;
+        const newShowSafeAreas = this.cameraState.show_safe_areas === true;
         const newShowBedAreas = this.cameraState.show_bed_areas === true;
         const newShowFloorAreas = this.cameraState.show_floor_areas === true;
 
