@@ -103,7 +103,6 @@
                     <select id="fallAlgorithmSelect">
                         <option value="1">BBox Only</option>
                         <option value="2" selected>BBox + Pose</option>
-                        <option value="3">BBox </option>
                     </select>
                 </label>
                 <button id="setBackgroundBtn" class="btn btn-primary" title="Set current frame as background">📸 Set
@@ -123,222 +122,201 @@
             </div>
         </div>
 
-        <!-- Algorithm Info (hidden by default) -->
-        <div class="algorithm-info" id="algorithmInfo" style="display: none;">
-            <h3>Fall Detection Algorithms</h3>
-            <div class="algorithm-cards">
-                <div class="card" data-algorithm="1">
-                    <h4>Method 1: BBox Motion Only</h4>
-                    <p>Uses only bounding box motion detection. Fastest but may have false positives.</p>
-                    <div class="stats">Speed: ⚡⚡⚡⚡⚡ | Accuracy: ⚡⚡⚡○○</div>
+
+
+        <!-- Status Indicator -->
+        <div id="streamStatus" class="status-indicator disconnected">
+            Disconnected
+        </div>
+
+        <!-- Log Panel -->
+        <div id="log-panel" class="log-panel minimized">
+            <div class="log-header">
+                <span>📋 Logs</span>
+                <div class="log-controls">
+                    <select id="logCategoryFilter" class="log-filter-select" onchange="filterLog()">
+                        <option value="all">All Categories</option>
+                        <option value="Connection">Connection</option>
+                        <option value="BackgroundImg">BackgroundImg</option>
+                        <option value="StreamImg">StreamImg</option>
+                        <option value="Flags">Flags</option>
+                        <option value="EditableAreas">EditableAreas</option>
+                    </select>
+                    <button id="minimizeLogBtn" class="btn-minimize" onclick="toggleLogPanel()"
+                        title="Maximize">□</button>
+                    <button id="clearLogBtn" class="btn-clear" onclick="clearLog()">Clear</button>
                 </div>
-                <div class="card" data-algorithm="2">
-                    <h4>Method 2: BBox+Pose AND</h4>
-                    <p>Combines motion with pose conditions. Requires both motion and pose criteria.</p>
-                    <div class="stats">Speed: ⚡⚡⚡⚡○ | Accuracy: ⚡⚡⚡⚡○</div>
+            </div>
+            <div id="log-content" class="log-content"></div>
+        </div>
+
+        <!-- Background Confirmation Popup -->
+        <div id="popup" class="popup">
+            <h3 id="popupTitle">Set this frame as background?</h3>
+            <img id="preview" src="">
+            <br />
+            <div id="popupLoading" class="popup-loading" style="display: none;">
+                <div class="spinner"></div>
+                <span id="popupStatus">Setting background...</span>
+            </div>
+            <div id="popupButtons">
+                <button onclick="confirmBackground()" class="btn btn-primary">Yes</button>
+                <button onclick="hidePopup()" class="btn btn-secondary">Cancel</button>
+            </div>
+        </div>
+
+        <!-- Safe Area Editor Popup -->
+        <div id="editAreasPopup" class="popup">
+            <h3>🛡️ Edit Editable Areas</h3>
+            <div class="instructions">
+                <p><strong>Instructions:</strong></p>
+                <ul>
+                    <li>Select a tool from the toolbar</li>
+                    <li><strong>Pen Tool:</strong> Click to add points, close polygon to finish</li>
+                    <li><strong>Remove Tool:</strong> Click on a polygon to delete it</li>
+                    <li>Right-click to remove the last point (Pen tool)</li>
+                </ul>
+            </div>
+
+            <div class="toolbar" id="editableAreaToolbar"
+                style="margin-bottom: 10px; display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px;">
+                <!-- Area Type Selector -->
+                <label
+                    style="display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.05); padding: 5px; border-radius: 6px;">
+                    <span style="margin-right: 8px; font-size: 0.9em;">Type:</span>
+                    <select id="areaTypeSelector"
+                        style="padding: 5px; border-radius: 4px; border: 1px solid var(--theme-border); background: var(--theme-surface); color: white;">
+                        <option value="safe">🛡️ Safe Area</option>
+                        <option value="bed">🛏️ Bed Area</option>
+                        <option value="floor">🏠 Floor Area</option>
+                    </select>
+                </label>
+
+                <!-- Tools -->
+                <button id="toolPenBtn" class="btn btn-primary" title="Draw Polygons">+</button>
+                <button id="toolRemoveBtn" class="btn btn-secondary" title="Remove Polygons">-</button>
+                <button id="toolClearBtn" class="btn btn-warning" title="Clear All Polygons">Clear</button>
+            </div>
+
+            <div class="canvas-container">
+                <canvas id="editableAreaCanvas"></canvas>
+            </div>
+
+            <div id="safeAreaLoading" class="popup-loading" style="display: none;">
+                <div class="spinner"></div>
+                <span id="safeAreaLoadingStatus">Saving...</span>
+            </div>
+            <div class="toolbar" id="editableAreaAction">
+                <button id="saveAreasBtn" class="btn btn-success">💾 Save</button>
+                <button onclick="if(window.EditableAreaEditor) window.EditableAreaEditor.hide()"
+                    class="btn btn-secondary">Cancel</button>
+            </div>
+
+            <div id="saveStatus" class="status"></div>
+        </div>
+
+        <!-- Camera Management Popup -->
+        <div id="managementPopup" class="popup" style="width: min(600px, 95vw);">
+            <div id="managementList" class="management-list">
+                <!-- List of registered cameras will be inserted here -->
+            </div>
+            <div class="popup-buttons" style="margin-top: 20px;">
+                <button onclick="hideManagementPopup()" class="btn btn-secondary" style="width: 100%;">Close</button>
+            </div>
+        </div>
+
+        <!-- Pending Registrations Popup -->
+        <div id="registrationPopup" class="popup" style="width: min(500px, 95vw);">
+            <div id="registrationList">
+                <!-- List of pending registrations will be inserted here -->
+            </div>
+            <!-- Static Close button for registration popup -->
+            <div id="registrationCloseBtn" class="popup-buttons" style="margin-top: 15px;">
+                <button onclick="hideRegistrationPopup()" class="btn btn-secondary" style="width: 100%;">Close</button>
+            </div>
+            <div id="registrationForm" style="display: none;">
+                <h3>Approve Camera Registration</h3>
+                <div class="cameraInfo-card"
+                    style="background: var(--theme-surface-light); padding: 15px; border-radius: 10px; margin-bottom: 20px;">
+                    <p><strong>📡 Camera ID:</strong> <span id="regCameraID"
+                            style="color: var(--theme-primary); font-family: monospace; font-size: 1.1em;"></span></p>
+                    <p><strong>📍 IP Address:</strong> <span id="regCameraIP" style="color: #4CAF50;"></span></p>
+                    <p><strong>⏰ Status:</strong> <span style="color: #FF9800;">Pending Approval</span></p>
                 </div>
-                <div class="card" data-algorithm="3" data-active="true">
-                    <h4>Method 3: Flexible Verification</h4>
-                    <p>Most conservative approach. Requires lying down pose verification.</p>
-                    <div class="stats">Speed: ⚡⚡⚡○○ | Accuracy: ⚡⚡⚡⚡⚡</div>
+                <label for="cameraNameInput" style="display: block; margin: 15px 0 5px 0;">Camera Name:</label>
+                <input type="text" id="cameraNameInput" placeholder="Enter camera name (e.g., Living Room Camera)"
+                    style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid var(--theme-primary); background: var(--theme-surface); color: white; font-size: 1em;">
+                <div class="popup-buttons" style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button onclick="approveRegistration()" class="btn btn-success" style="flex: 2;">Register</button>
+                    <button onclick="backToRegistrationList()" class="btn btn-secondary" style="flex: 1;">←
+                        Back</button>
+                    <button onclick="hideRegistrationPopup()" class="btn btn-danger" style="flex: 1;">Cancel</button>
                 </div>
             </div>
-            <button id="closeInfoBtn" onclick="hideAlgorithmInfo()" class="btn btn-secondary">Close</button>
         </div>
 
-    </div> <!-- End of .main-container -->
+        <script src="~/js/script.js" defer></script>
+        <script>
+            // Initialize SignalR connection
+            const connection = new signalR.HubConnectionBuilder()
+                .withUrl("/streamHub")
+                .configureLogging(signalR.LogLevel.Information)
+                .build();
 
-    <!-- Floating button for algorithm info -->
-    <button id="showInfoBtn" class="btn btn-floating" onclick="showAlgorithmInfo()">ℹ️ Algorithms</button>
+            // Use global camera state from script.js - DO NOT redefine locally
+            // The currentCameraId is initialized as "camera_000" in script.js
+            // and will be updated when cameras are loaded
 
-    <!-- Status Indicator -->
-    <div id="streamStatus" class="status-indicator disconnected">
-        Disconnected
-    </div>
+            // Stream URL - will be updated by switchCamera function in script.js
+            let streamUrl = `rtmp://103.150.93.198:1935/live/${window.currentCameraId}`;
 
-    <!-- Log Panel -->
-    <div id="log-panel" class="log-panel minimized">
-        <div class="log-header">
-            <span>📋 Logs</span>
-            <div class="log-controls">
-                <select id="logCategoryFilter" class="log-filter-select" onchange="filterLog()">
-                    <option value="all">All Categories</option>
-                    <option value="Connection">Connection</option>
-                    <option value="BackgroundImg">BackgroundImg</option>
-                    <option value="StreamImg">StreamImg</option>
-                    <option value="Flags">Flags</option>
-                    <option value="EditableAreas">EditableAreas</option>
-                </select>
-                <button id="minimizeLogBtn" class="btn-minimize" onclick="toggleLogPanel()" title="Maximize">□</button>
-                <button id="clearLogBtn" class="btn-clear" onclick="clearLog()">Clear</button>
-            </div>
-        </div>
-        <div id="log-content" class="log-content"></div>
-    </div>
+            // Global variables for UI
+            let ANALYTICS_HTTP_URL = window.location.origin;
 
-    <!-- Background Confirmation Popup -->
-    <div id="popup" class="popup">
-        <h3 id="popupTitle">Set this frame as background?</h3>
-        <img id="preview" src="">
-        <br />
-        <div id="popupLoading" class="popup-loading" style="display: none;">
-            <div class="spinner"></div>
-            <span id="popupStatus">Setting background...</span>
-        </div>
-        <div id="popupButtons">
-            <button onclick="confirmBackground()" class="btn btn-primary">Yes</button>
-            <button onclick="hidePopup()" class="btn btn-secondary">Cancel</button>
-        </div>
-    </div>
+            // Initialize on page load
+            document.addEventListener('DOMContentLoaded', function () {
+                const algorithmSelect = document.getElementById('fallAlgorithmSelect');
 
-    <!-- Safe Area Editor Popup -->
-    <div id="editAreasPopup" class="popup">
-        <h3>🛡️ Edit Editable Areas</h3>
-        <div class="instructions">
-            <p><strong>Instructions:</strong></p>
-            <ul>
-                <li>Select a tool from the toolbar</li>
-                <li><strong>Pen Tool:</strong> Click to add points, close polygon to finish</li>
-                <li><strong>Remove Tool:</strong> Click on a polygon to delete it</li>
-                <li>Right-click to remove the last point (Pen tool)</li>
-            </ul>
-        </div>
-
-        <div class="toolbar" id="editableAreaToolbar"
-            style="margin-bottom: 10px; display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px;">
-            <!-- Area Type Selector -->
-            <label
-                style="display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.05); padding: 5px; border-radius: 6px;">
-                <span style="margin-right: 8px; font-size: 0.9em;">Type:</span>
-                <select id="areaTypeSelector"
-                    style="padding: 5px; border-radius: 4px; border: 1px solid var(--theme-border); background: var(--theme-surface); color: white;">
-                    <option value="safe">🛡️ Safe Area</option>
-                    <option value="bed">🛏️ Bed Area</option>
-                    <option value="floor">🏠 Floor Area</option>
-                </select>
-            </label>
-
-            <!-- Tools -->
-            <button id="toolPenBtn" class="btn btn-primary" title="Draw Polygons">+</button>
-            <button id="toolRemoveBtn" class="btn btn-secondary" title="Remove Polygons">-</button>
-            <button id="toolClearBtn" class="btn btn-warning" title="Clear All Polygons">Clear</button>
-        </div>
-
-        <div class="canvas-container">
-            <canvas id="editableAreaCanvas"></canvas>
-        </div>
-
-        <div id="safeAreaLoading" class="popup-loading" style="display: none;">
-            <div class="spinner"></div>
-            <span id="safeAreaLoadingStatus">Saving...</span>
-        </div>
-        <div class="toolbar" id="editableAreaAction">
-            <button id="saveAreasBtn" class="btn btn-success">💾 Save</button>
-            <button onclick="if(window.EditableAreaEditor) window.EditableAreaEditor.hide()"
-                class="btn btn-secondary">Cancel</button>
-        </div>
-
-        <div id="saveStatus" class="status"></div>
-    </div>
-
-    <!-- Camera Management Popup -->
-    <div id="managementPopup" class="popup" style="width: min(600px, 95vw);">
-        <div id="managementList" class="management-list">
-            <!-- List of registered cameras will be inserted here -->
-        </div>
-        <div class="popup-buttons" style="margin-top: 20px;">
-            <button onclick="hideManagementPopup()" class="btn btn-secondary" style="width: 100%;">Close</button>
-        </div>
-    </div>
-
-    <!-- Pending Registrations Popup -->
-    <div id="registrationPopup" class="popup" style="width: min(500px, 95vw);">
-        <div id="registrationList">
-            <!-- List of pending registrations will be inserted here -->
-        </div>
-        <!-- Static Close button for registration popup -->
-        <div id="registrationCloseBtn" class="popup-buttons" style="margin-top: 15px;">
-            <button onclick="hideRegistrationPopup()" class="btn btn-secondary" style="width: 100%;">Close</button>
-        </div>
-        <div id="registrationForm" style="display: none;">
-            <h3>Approve Camera Registration</h3>
-            <div class="cameraInfo-card"
-                style="background: var(--theme-surface-light); padding: 15px; border-radius: 10px; margin-bottom: 20px;">
-                <p><strong>📡 Camera ID:</strong> <span id="regCameraID"
-                        style="color: var(--theme-primary); font-family: monospace; font-size: 1.1em;"></span></p>
-                <p><strong>📍 IP Address:</strong> <span id="regCameraIP" style="color: #4CAF50;"></span></p>
-                <p><strong>⏰ Status:</strong> <span style="color: #FF9800;">Pending Approval</span></p>
-            </div>
-            <label for="cameraNameInput" style="display: block; margin: 15px 0 5px 0;">Camera Name:</label>
-            <input type="text" id="cameraNameInput" placeholder="Enter camera name (e.g., Living Room Camera)"
-                style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid var(--theme-primary); background: var(--theme-surface); color: white; font-size: 1em;">
-            <div class="popup-buttons" style="display: flex; gap: 10px; margin-top: 20px;">
-                <button onclick="approveRegistration()" class="btn btn-success" style="flex: 2;">Register</button>
-                <button onclick="backToRegistrationList()" class="btn btn-secondary" style="flex: 1;">← Back</button>
-                <button onclick="hideRegistrationPopup()" class="btn btn-danger" style="flex: 1;">Cancel</button>
-            </div>
-        </div>
-    </div>
-
-    <script src="~/js/script.js" defer></script>
-    <script>
-        // Initialize SignalR connection
-        const connection = new signalR.HubConnectionBuilder()
-            .withUrl("/streamHub")
-            .configureLogging(signalR.LogLevel.Information)
-            .build();
-
-        // Use global camera state from script.js - DO NOT redefine locally
-        // The currentCameraId is initialized as "camera_000" in script.js
-        // and will be updated when cameras are loaded
-
-        // Stream URL - will be updated by switchCamera function in script.js
-        let streamUrl = `rtmp://103.150.93.198:1935/live/${window.currentCameraId}`;
-
-        // Global variables for UI
-        let ANALYTICS_HTTP_URL = window.location.origin;
-
-        // Initialize on page load
-        document.addEventListener('DOMContentLoaded', function () {
-            const infoPanel = document.getElementById('algorithmInfo');
-            const algorithmSelect = document.getElementById('fallAlgorithmSelect');
-            const algorithmCards = document.querySelectorAll('.card');
-
-            // Update active card when dropdown changes
-            if (algorithmSelect) {
-                algorithmSelect.addEventListener('change', function (e) {
-                    if (window.updateAlgorithmSelection) {
-                        window.updateAlgorithmSelection(e.target.value, true);
-                    }
-                });
-            }
-
-            // Click on card to select algorithm
-            algorithmCards.forEach(function (card) {
-                card.addEventListener('click', function (e) {
-                    const algorithm = card.dataset.algorithm;
-                    if (window.updateAlgorithmSelection) {
-                        window.updateAlgorithmSelection(algorithm, true);
-                    }
-                });
-            });
-
-            // Initialize from current camera state using global currentCameraId
-            setTimeout(function () {
-                if (window.fetchCameraState && window.currentCameraId) {
-                    fetch(ANALYTICS_HTTP_URL + '/api/stream/camera-state?camera_id=' + window.currentCameraId)
-                        .then(function (response) { return response.json(); })
-                        .then(function (flags) {
-                            if (flags && flags.fall_algorithm !== undefined) {
-                                if (window.updateAlgorithmSelection) {
-                                    window.updateAlgorithmSelection(flags.fall_algorithm, false);
-                                }
-                            }
-                        });
+                // Update active card when dropdown changes
+                if (algorithmSelect) {
+                    // This listener is now handled in uiControls.js primarily, but we can keep the basic command sending if needed,
+                    // OR better, remove this block if uiControls.js handles it.
+                    // Checking uiControls.js: it binds onchange to CommandManager.sendCommand.
+                    // It ALSO calls updateAlgorithmSelection which updates cards.
+                    // Since cards are gone, we don't need to update them.
+                    // uiControls.js handles the command.
+                    // checking if this listener does anything else...
+                    // It calls window.updateAlgorithmSelection(val, true).
+                    // So it's redundant if uiControls also does it (or conflicting).
+                    // Safe to remove if uiControls handles it.
                 }
-            }, 1000);
-        });
-    </script>
+
+                // Click on card to select algorithm
+                algorithmCards.forEach(function (card) {
+                    card.addEventListener('click', function (e) {
+                        const algorithm = card.dataset.algorithm;
+                        if (window.updateAlgorithmSelection) {
+                            window.updateAlgorithmSelection(algorithm, true);
+                        }
+                    });
+                });
+
+                // Initialize from current camera state using global currentCameraId
+                setTimeout(function () {
+                    if (window.fetchCameraState && window.currentCameraId) {
+                        fetch(ANALYTICS_HTTP_URL + '/api/stream/camera-state?camera_id=' + window.currentCameraId)
+                            .then(function (response) { return response.json(); })
+                            .then(function (flags) {
+                                if (flags && flags.fall_algorithm !== undefined) {
+                                    if (window.updateAlgorithmSelection) {
+                                        window.updateAlgorithmSelection(flags.fall_algorithm, false);
+                                    }
+                                }
+                            });
+                    }
+                }, 1000);
+            });
+        </script>
 </body>
 
 </html>

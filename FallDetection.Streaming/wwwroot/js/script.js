@@ -5,9 +5,9 @@
 // INITIALIZATION
 // ============================================
 
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     console.log(`Connected to streaming server: ${STREAMING_HTTP_URL}`);
-    
+
     // Initialize all modules
     initializeApplication();
 });
@@ -15,19 +15,19 @@ document.addEventListener('DOMContentLoaded', function() {
 async function initializeApplication() {
     // Initialize SignalR
     await SignalRManager.initialize();
-    
+
     // Start flag sync worker
     startFlagSyncWorker();
-    
+
     // Setup UI control handlers
     UIControls.setupControlHandlers();
-    
+
     // Setup camera selection handler
     if (DOMElements.cameraSelect) {
         DOMElements.cameraSelect.onchange = () => {
             const cameraId = DOMElements.cameraSelect.value;
             const selectedOption = DOMElements.cameraSelect.options[DOMElements.cameraSelect.selectedIndex];
-            
+
             if (selectedOption.disabled) {
                 alert('This camera is awaiting registration approval. Please approve it first.');
                 const previousCamera = AppState.availableCameras.find(
@@ -38,42 +38,42 @@ async function initializeApplication() {
                 }
                 return;
             }
-            
+
             console.log(`Switched to camera: ${AppState.currentCameraId}`);
-            
+
             const cameraInfo = AppState.availableCameras.find(cam => cam.camera_id === cameraId);
             ConnectionStatus.updateConnectionStatusDebounced(
-                cameraId, 
+                cameraId,
                 cameraInfo?.online || false
             );
-            
+
             if (cameraInfo) {
                 AppState.currentCameraName = cameraInfo.camera_name || cameraInfo.camera_id;
                 AppState.currentCameraStatus = cameraInfo.registered ? "registered" : "pending";
             }
-            
+
             CameraManager.switchCamera(cameraId);
             EditableAreaEditor.loadAreasForCamera(cameraId);
         };
     }
-    
+
     // Setup refresh button
     if (DOMElements.refreshCamerasBtn) {
         DOMElements.refreshCamerasBtn.onclick = async () => {
             console.log("Manually refreshing camera list and status...");
-            
+
             // Force refresh everything
             await CameraManager.loadCameraList();
-            
+
             if (AppState.currentCameraId) {
                 await ConnectionStatus.checkCameraConnection(AppState.currentCameraId);
                 await CommandManager.fetchCameraState(AppState.currentCameraId);
             }
-            
+
             console.log("Manual refresh completed");
         };
     }
-    
+
     // Setup registration and management buttons
     if (DOMElements.pendingRegBtn) {
         DOMElements.pendingRegBtn.onclick = () => CameraRegistration.showPopup();
@@ -81,18 +81,18 @@ async function initializeApplication() {
     if (DOMElements.manageCamerasBtn) {
         DOMElements.manageCamerasBtn.onclick = () => CameraManagement.showPopup();
     }
-    
+
     // Load initial data
     await CameraManager.loadCameraList();
     console.log('Initial camera data synced');
-    
+
     if (AppState.currentCameraId) {
         CommandManager.fetchCameraState(AppState.currentCameraId);
         EditableAreaEditor.loadAreasForCamera(AppState.currentCameraId);
     }
     // Start periodic sync timers
     startPeriodicSync();
-    
+
     // Cleanup on page unload
     window.addEventListener('beforeunload', cleanup);
 }
@@ -165,15 +165,15 @@ function startPeriodicSync() {
 function cleanup() {
     // Stop all timers
     AppState.clearTimers();
-    
+
     // Stop HTTP stream
     StreamController.stopHTTPStream();
-    
+
     // Disconnect WebRTC
     if (window.webrtcStreamer) {
         window.webrtcStreamer.disconnect();
     }
-    
+
     // Disconnect SignalR
     SignalRManager.disconnect();
 }
@@ -183,7 +183,7 @@ function cleanup() {
 // ============================================
 
 // Popup functions
-window.confirmBackground = function() {
+window.confirmBackground = function () {
     const popupTitle = document.getElementById('popupTitle');
     const popupLoading = document.getElementById('popupLoading');
     const popupButtons = document.getElementById('popupButtons');
@@ -301,7 +301,7 @@ function resetBackgroundPopup() {
     }
 };
 
-window.hidePopup = function() {
+window.hidePopup = function () {
     // Clear any pending check interval
     if (DOMElements.popup._checkInterval) {
         clearInterval(DOMElements.popup._checkInterval);
@@ -312,60 +312,53 @@ window.hidePopup = function() {
     DOMHelpers.hidePopup(DOMElements.popup);
 };
 
-window.hideSafeAreaPopup = function() {
+window.hideSafeAreaPopup = function () {
     EditableAreaEditor.hide();
 };
 
-window.hideManagementPopup = function() {
+window.hideManagementPopup = function () {
     CameraManagement.hidePopup();
 };
 
-window.hideRegistrationPopup = function() {
+window.hideRegistrationPopup = function () {
     CameraRegistration.hidePopup();
 };
 
 // Camera registration functions
-window.approveRegistration = function() {
+window.approveRegistration = function () {
     CameraRegistration.approveRegistration();
 };
 
-window.backToRegistrationList = function() {
+window.backToRegistrationList = function () {
     CameraRegistration.backToList();
 };
 
 // Camera management functions
-window.forgetCamera = function(cameraId) {
+window.forgetCamera = function (cameraId) {
     CameraManagement.forgetCamera(cameraId);
 };
 
-// Algorithm info functions
-window.showAlgorithmInfo = function() {
-    AlgorithmInfo.show();
-};
 
-window.hideAlgorithmInfo = function() {
-    AlgorithmInfo.hide();
-};
 
 // Utility functions
-window.updateAlgorithmSelection = function(algorithmValue, updateCamera) {
+window.updateAlgorithmSelection = function (algorithmValue, updateCamera) {
     UIControls.updateAlgorithmSelection(algorithmValue, updateCamera);
 };
 
 // Legacy global functions for compatibility
-window.sendCommand = function(command, value) {
+window.sendCommand = function (command, value) {
     CommandManager.sendCommand(command, value);
 };
 
-window.loadCameraList = function() {
+window.loadCameraList = function () {
     return CameraManager.loadCameraList();
 };
 
-window.fetchCameraState = function(cameraId) {
+window.fetchCameraState = function (cameraId) {
     return CommandManager.fetchCameraState(cameraId);
 };
 
-window.validateCommand = function(command, value) {
+window.validateCommand = function (command, value) {
     return CommandManager.validateCommand(command, value);
 };
 

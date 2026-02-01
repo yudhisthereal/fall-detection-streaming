@@ -294,7 +294,7 @@ namespace FallDetection.Streaming.Controllers
                             break;
                         case "set_fall_algorithm":
                             var algorithm = SafeConvertToInt(command.Value);
-                            if (algorithm >= 1 && algorithm <= 3)
+                            if (algorithm >= 1 && algorithm <= 2)
                             {
                                 cameraState.ControlFlagsInt["fall_algorithm"] = algorithm;
                                 _cameraService.UpdateCameraState(command.CameraId, cameraState);

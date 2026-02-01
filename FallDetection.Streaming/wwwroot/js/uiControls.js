@@ -77,15 +77,6 @@ const UIControls = {
             DOMElements.fallAlgorithmSelect.value = algorithmStr;
         }
 
-        const algorithmCards = document.querySelectorAll('.card');
-        algorithmCards.forEach(card => {
-            if (card.dataset.algorithm === algorithmStr) {
-                card.dataset.active = 'true';
-            } else {
-                delete card.dataset.active;
-            }
-        });
-
         if (updateCamera && AppState.isConnected) {
             console.log(`Setting fall algorithm to: ${algorithmStr}`);
             CommandManager.sendCommand("set_fall_algorithm", parseInt(algorithmStr));

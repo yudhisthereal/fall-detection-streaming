@@ -49,9 +49,7 @@ const DOMElements = {
     saveAreasBtn: document.getElementById('saveAreasBtn'),
     saveStatus: document.getElementById('saveStatus'),
 
-    // Algorithm Info Panel
-    algorithmInfo: document.getElementById('algorithmInfo'),
-    showInfoBtn: document.getElementById('showInfoBtn')
+
 };
 
 // Safe Area Editor State
