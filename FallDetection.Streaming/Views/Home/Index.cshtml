@@ -1,12 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>MaixCAM Analytics Dashboard</title>
     <link rel="stylesheet" href="~/css/style.css">
     <script src="~/lib/signalr/signalr.min.js"></script>
-    
+
     <!-- Modular JavaScript files - loaded in dependency order -->
     <script src="~/js/config.js" defer></script>
     <script src="~/js/state.js" defer></script>
@@ -18,28 +19,29 @@
     <script src="~/js/streamController.js" defer></script>
     <script src="~/js/commandManager.js" defer></script>
     <script src="~/js/uiControls.js" defer></script>
-    <script src="~/js/editableAreaDisplay.js" defer></script>
     <script src="~/js/editableAreaEditor.js" defer></script>
     <script src="~/js/cameraRegistration.js" defer></script>
     <script src="~/js/cameraManagement.js" defer></script>
-    <script src="~/js/skeletonDisplay.js" defer></script>
-    <script src="~/js/poseDisplay.js" defer></script>
     <script src="~/js/streamDisplay.js" defer></script>
     <script src="~/js/algorithmInfo.js" defer></script>
     @* <script src="~/js/webrtc.js" defer></script> *@
 </head>
+
 <body>
     <h1>📹 MaixCAM Analytics Dashboard</h1>
-    
+
     <!-- Main container for layout reordering -->
     <div class="main-container">
-        
+
         <!-- Stream comes first after title -->
-        <div style="position: relative; display: inline-block; width: 100%; max-width: 1200px; margin: 20px auto; display: block;">
+        <div
+            style="position: relative; display: inline-block; width: 100%; max-width: 1200px; margin: 20px auto; display: block;">
             <!-- Two-pass rendering: Background img (static) + Overlay canvas (skeletons & safe areas) -->
             <div style="position: relative; width: 100%; aspect-ratio: 16/9;">
-                <img id="streamBackgroundImg" alt="Background" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border-radius:12px; border:2px solid var(--theme-border); background:#000; z-index: 1; object-fit: cover;" />
-                <canvas id="streamCanvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2;"></canvas>
+                <img id="streamBackgroundImg" alt="Background"
+                    style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border-radius:12px; border:2px solid var(--theme-border); background:#000; z-index: 1; object-fit: cover;" />
+                <canvas id="streamCanvas"
+                    style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2;"></canvas>
             </div>
             <!-- Hidden img element for loading video frames (not displayed directly) -->
             <img id="streamImg" alt="Live Stream" style="display: none;" />
@@ -55,7 +57,7 @@
                 </select>
                 <button id="refreshCamerasBtn" class="btn btn-primary">🔄 Refresh</button>
             </div>
-            
+
 
             <!-- Registration and Management buttons -->
             <div class="camera-control-row">
@@ -66,7 +68,7 @@
                     📷 Manage Cameras
                 </button>
             </div>
-            
+
             <span id="cameraInfo" class="cameraInfo">Loading...</span>
         </div>
 
@@ -97,13 +99,15 @@
                         <option value="3">Method 3: Conservative</option>
                     </select>
                 </label>
-                <button id="setBackgroundBtn" class="btn btn-primary" title="Set current frame as background">📸 Set BG</button>
+                <button id="setBackgroundBtn" class="btn btn-primary" title="Set current frame as background">📸 Set
+                    BG</button>
                 <button id="editAreas" class="btn btn-secondary" title="Edit zones">🛡️ Edit Areas</button>
             </div>
             <!-- Area Display Section -->
             <div class="control-group">
                 <div style="width: 100%; border-top: 1px solid var(--theme-border); margin: 5px 0;"></div>
-                <label style="width: 100%; font-size: 0.85em; color: var(--theme-text-muted); margin-bottom: 5px;">Area Display</label>
+                <label style="width: 100%; font-size: 0.85em; color: var(--theme-text-muted); margin-bottom: 5px;">Area
+                    Display</label>
                 <input type="checkbox" id="showSafeArea">
                 <label for="showSafeArea" class="toggle-label">Safe Areas</label>
 
@@ -137,9 +141,9 @@
             </div>
             <button id="closeInfoBtn" onclick="hideAlgorithmInfo()" class="btn btn-secondary">Close</button>
         </div>
-        
+
     </div> <!-- End of .main-container -->
-    
+
     <!-- Floating button for algorithm info -->
     <button id="showInfoBtn" class="btn btn-floating" onclick="showAlgorithmInfo()">ℹ️ Algorithms</button>
 
@@ -232,13 +236,15 @@
         </div>
         <div id="registrationForm" style="display: none;">
             <h3>Approve Camera Registration</h3>
-            <div class="cameraInfo-card" style="background: var(--theme-surface-light); padding: 15px; border-radius: 10px; margin-bottom: 20px;">
-                <p><strong>📡 Camera ID:</strong> <span id="regCameraID" style="color: var(--theme-primary); font-family: monospace; font-size: 1.1em;"></span></p>
+            <div class="cameraInfo-card"
+                style="background: var(--theme-surface-light); padding: 15px; border-radius: 10px; margin-bottom: 20px;">
+                <p><strong>📡 Camera ID:</strong> <span id="regCameraID"
+                        style="color: var(--theme-primary); font-family: monospace; font-size: 1.1em;"></span></p>
                 <p><strong>📍 IP Address:</strong> <span id="regCameraIP" style="color: #4CAF50;"></span></p>
                 <p><strong>⏰ Status:</strong> <span style="color: #FF9800;">Pending Approval</span></p>
             </div>
             <label for="cameraNameInput" style="display: block; margin: 15px 0 5px 0;">Camera Name:</label>
-            <input type="text" id="cameraNameInput" placeholder="Enter camera name (e.g., Living Room Camera)" 
+            <input type="text" id="cameraNameInput" placeholder="Enter camera name (e.g., Living Room Camera)"
                 style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid var(--theme-primary); background: var(--theme-surface); color: white; font-size: 1em;">
             <div class="popup-buttons" style="display: flex; gap: 10px; margin-top: 20px;">
                 <button onclick="approveRegistration()" class="btn btn-success" style="flex: 2;">Register</button>
@@ -259,44 +265,44 @@
         // Use global camera state from script.js - DO NOT redefine locally
         // The currentCameraId is initialized as "camera_000" in script.js
         // and will be updated when cameras are loaded
-        
+
         // Stream URL - will be updated by switchCamera function in script.js
         let streamUrl = `rtmp://103.150.93.198:1935/live/${window.currentCameraId}`;
-        
+
         // Global variables for UI
         let ANALYTICS_HTTP_URL = window.location.origin;
-        
+
         // Initialize on page load
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             const infoPanel = document.getElementById('algorithmInfo');
             const algorithmSelect = document.getElementById('fallAlgorithmSelect');
             const algorithmCards = document.querySelectorAll('.card');
-            
+
             // Update active card when dropdown changes
             if (algorithmSelect) {
-                algorithmSelect.addEventListener('change', function(e) {
+                algorithmSelect.addEventListener('change', function (e) {
                     if (window.updateAlgorithmSelection) {
                         window.updateAlgorithmSelection(e.target.value, true);
                     }
                 });
             }
-            
+
             // Click on card to select algorithm
-            algorithmCards.forEach(function(card) {
-                card.addEventListener('click', function(e) {
+            algorithmCards.forEach(function (card) {
+                card.addEventListener('click', function (e) {
                     const algorithm = card.dataset.algorithm;
                     if (window.updateAlgorithmSelection) {
                         window.updateAlgorithmSelection(algorithm, true);
                     }
                 });
             });
-            
+
             // Initialize from current camera state using global currentCameraId
-            setTimeout(function() {
+            setTimeout(function () {
                 if (window.fetchCameraState && window.currentCameraId) {
                     fetch(ANALYTICS_HTTP_URL + '/api/stream/camera-state?camera_id=' + window.currentCameraId)
-                        .then(function(response) { return response.json(); })
-                        .then(function(flags) {
+                        .then(function (response) { return response.json(); })
+                        .then(function (flags) {
                             if (flags && flags.fall_algorithm !== undefined) {
                                 if (window.updateAlgorithmSelection) {
                                     window.updateAlgorithmSelection(flags.fall_algorithm, false);
@@ -308,5 +314,5 @@
         });
     </script>
 </body>
-</html>
 
+</html>

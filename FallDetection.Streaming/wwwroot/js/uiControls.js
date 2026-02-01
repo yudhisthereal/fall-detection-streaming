@@ -3,7 +3,7 @@
 const UIControls = {
     updateFromFlags(flags) {
         if (!flags) return;
-        
+
         if (typeof flags.record === 'boolean' && DOMElements.toggleRecord) {
             DOMElements.toggleRecord.checked = flags.record;
             DOMElements.toggleRecord.disabled = !AppState.isConnected;
@@ -40,14 +40,14 @@ const UIControls = {
             DOMElements.fallAlgorithmSelect.value = flags.fall_algorithm;
             DOMElements.fallAlgorithmSelect.disabled = !AppState.isConnected;
         }
-        
+
         if (DOMElements.setBackgroundBtn) {
             DOMElements.setBackgroundBtn.disabled = !AppState.isConnected;
         }
         if (DOMElements.editAreas) {
             DOMElements.editAreas.disabled = !AppState.isConnected;
         }
-        
+
         const elements = [
             DOMElements.toggleRecord,
             DOMElements.toggleRaw,
@@ -71,11 +71,11 @@ const UIControls = {
 
     updateAlgorithmSelection(algorithmValue, updateCamera = true) {
         const algorithmStr = algorithmValue.toString();
-        
+
         if (DOMElements.fallAlgorithmSelect) {
             DOMElements.fallAlgorithmSelect.value = algorithmStr;
         }
-        
+
         const algorithmCards = document.querySelectorAll('.card');
         algorithmCards.forEach(card => {
             if (card.dataset.algorithm === algorithmStr) {
@@ -84,7 +84,7 @@ const UIControls = {
                 delete card.dataset.active;
             }
         });
-        
+
         if (updateCamera && AppState.isConnected) {
             console.log(`Setting fall algorithm to: ${algorithmStr}`);
             CommandManager.sendCommand("set_fall_algorithm", parseInt(algorithmStr));
@@ -160,10 +160,7 @@ const UIControls = {
                     );
                 }
 
-                // Update area display
-                if (window.EditableAreaDisplay) {
-                    window.EditableAreaDisplay.update();
-                }
+
             };
         }
 
@@ -181,10 +178,7 @@ const UIControls = {
                     );
                 }
 
-                // Update area display
-                if (window.EditableAreaDisplay) {
-                    window.EditableAreaDisplay.update();
-                }
+
             };
         }
 
@@ -202,10 +196,7 @@ const UIControls = {
                     );
                 }
 
-                // Update area display
-                if (window.EditableAreaDisplay) {
-                    window.EditableAreaDisplay.update();
-                }
+
             };
         }
 
@@ -229,14 +220,14 @@ const UIControls = {
                 CommandManager.sendCommand("toggle_safety_check", DOMElements.useSafetyCheck.checked);
             };
         }
-        
+
         // Toggle HME
         // if (DOMElements.toggleHME) {
         //     DOMElements.toggleHME.onchange = () => {
         //         CommandManager.sendCommand("toggle_hme", DOMElements.toggleHME.checked);
         //     };
         // }
-        
+
         // Fall Algorithm Select
         if (DOMElements.fallAlgorithmSelect) {
             DOMElements.fallAlgorithmSelect.onchange = () => {
@@ -286,7 +277,7 @@ const UIControls = {
                 }
             };
         }
-        
+
         // Edit Safe Area Button
         if (DOMElements.editAreas) {
             DOMElements.editAreas.onclick = EditableAreaEditor.show.bind(EditableAreaEditor);

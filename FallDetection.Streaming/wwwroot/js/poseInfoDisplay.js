@@ -1,6 +1,6 @@
-// poseDisplay.js - Pose analysis display
+// poseInfoDisplay.js - Pose analysis display
 
-const PoseDisplay = {
+const PoseInfoDisplay = {
     update(poseData) {
         let poseDisplay = document.getElementById('poseDisplay');
         
@@ -34,5 +34,5 @@ const PoseDisplay = {
 };
 
 // Export
-window.PoseDisplay = PoseDisplay;
+window.PoseInfoDisplay = PoseInfoDisplay;
 
