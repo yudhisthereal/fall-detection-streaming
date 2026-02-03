@@ -14,6 +14,7 @@ namespace FallDetection.Streaming.Services
         private readonly HttpClient _httpClient;
         private readonly Dictionary<string, CameraState> _cameraStates = new();
         private readonly object _cameraStatesLock = new();
+        private Timer _stateSaveTimer;
 
         // Camera ping tracking for connection status
         private readonly Dictionary<string, long> _cameraPings = new();
@@ -56,6 +57,10 @@ namespace FallDetection.Streaming.Services
             LoadCameraRegistry();
             LoadPendingRegistrations();
             LoadCameraStates();
+
+            // Initialize periodic save timer (15 minutes interval)
+            _stateSaveTimer = new Timer(PeriodicSaveCallback, null, TimeSpan.FromMinutes(15), TimeSpan.FromMinutes(15));
+            Console.WriteLine("Authorized periodic camera state saving (every 15 minutes)");
         }
 
         #region Camera Registry Management
@@ -560,6 +565,8 @@ namespace FallDetection.Streaming.Services
 
         public void UpdateCameraState(string cameraId, CameraState state)
         {
+            if (string.IsNullOrWhiteSpace(cameraId)) return;
+
             lock (_cameraStatesLock)
             {
                 _cameraStates[cameraId] = state;
@@ -606,21 +613,35 @@ namespace FallDetection.Streaming.Services
             }
         }
 
+        /// <summary>
+        /// Periodic callback to save camera states to disk
+        /// </summary>
+        private void PeriodicSaveCallback(object? state)
+        {
+            Console.WriteLine("Periodic save timer fired - saving camera states...");
+            SaveCameraStates();
+        }
+
         private void SaveCameraStates()
         {
             lock (_cameraStatesLock)
             {
                 try
                 {
+                    // Filter out invalid keys before saving
+                    var validStates = _cameraStates
+                        .Where(kvp => !string.IsNullOrWhiteSpace(kvp.Key))
+                        .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+
                     var data = new Dictionary<string, object>
                     {
-                        ["camera_states"] = _cameraStates,
+                        ["camera_states"] = validStates,
                         ["last_updated"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
                     };
 
                     var json = JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true });
                     File.WriteAllText(_cameraStatesFilePath, json);
-                    Console.WriteLine($"Saved camera states with {_cameraStates.Count} cameras");
+                    Console.WriteLine($"Saved camera states with {validStates.Count} cameras");
                 }
                 catch (Exception ex)
                 {
@@ -635,6 +656,8 @@ namespace FallDetection.Streaming.Services
         /// </summary>
         public void InitializeCameraState(string cameraId)
         {
+            if (string.IsNullOrWhiteSpace(cameraId)) return;
+
             lock (_cameraStatesLock)
             {
                 var defaultState = new CameraState
@@ -665,7 +688,8 @@ namespace FallDetection.Streaming.Services
                 };
 
                 _cameraStates[cameraId] = defaultState;
-                SaveCameraStates();
+                _cameraStates[cameraId] = defaultState;
+                // SaveCameraStates(); // Defer to periodic timer
                 Console.WriteLine($"Initialized camera state for {cameraId} with IsRegistered=true");
             }
         }
@@ -703,7 +727,8 @@ namespace FallDetection.Streaming.Services
                         state.BackgroundUpdatePending = false;
                         state.ControlFlags["set_background"] = false;
                         _cameraStates[cameraId] = state;
-                        SaveCameraStates();
+                        _cameraStates[cameraId] = state;
+                        // SaveCameraStates(); // Defer to periodic timer
                         Console.WriteLine($"Background update acknowledged for {cameraId}");
                     }
                 }
@@ -723,7 +748,8 @@ namespace FallDetection.Streaming.Services
                     state.BackgroundUpdateAcknowledged = false;
                     state.ControlFlags["set_background"] = true;
                     _cameraStates[cameraId] = state;
-                    SaveCameraStates();
+                    _cameraStates[cameraId] = state;
+                    // SaveCameraStates(); // Defer to periodic timer
                     Console.WriteLine($"Background update pending for {cameraId}");
                 }
             }
@@ -765,7 +791,8 @@ namespace FallDetection.Streaming.Services
                 trackingData.LastUpdated = currentTime;
 
                 UpdateCameraState(cameraId, state);
-                SaveCameraStates();
+                UpdateCameraState(cameraId, state);
+                // SaveCameraStates(); // Defer to periodic timer
                 Console.WriteLine($"Stored pose label for camera {cameraId}, track {trackId}: {poseLabel}");
             }
         }
@@ -816,7 +843,7 @@ namespace FallDetection.Streaming.Services
                 }
 
                 UpdateCameraState(cameraId, state);
-                SaveCameraStates();
+                // SaveCameraStates(); // Defer to periodic timer
 
                 // LOG: After storing with full stored data
                 var storedTracksJson = JsonSerializer.Serialize(storedTracks, new JsonSerializerOptions { WriteIndented = true });

@@ -305,6 +305,8 @@ namespace FallDetection.Streaming.Controllers
                             if (method >= 1 && method <= 5)
                             {
                                 cameraState.ControlFlagsInt["check_method"] = method;
+                                _logger.LogInformation("Set safety check method to {Method} for camera {CameraId}", method, command.CameraId);
+                                _logger.LogInformation("Camera state: {CameraState}", JsonSerializer.Serialize(cameraState));
                                 _cameraService.UpdateCameraState(command.CameraId, cameraState);
                             }
                             break;
@@ -573,12 +575,12 @@ namespace FallDetection.Streaming.Controllers
                 }
 
                 // LOG: Full incoming request data
-                var incomingDataJson = JsonSerializer.Serialize(request, new JsonSerializerOptions { WriteIndented = true });
-                _logger.LogInformation("[POST /api/stream/tracks] RECEIVED REQUEST for CameraId={CameraId}, Timestamp={Timestamp}, TracksCount={TracksCount}\nFULL REQUEST DATA:\n{FullData}",
-                    request.CameraId,
-                    request.Timestamp,
-                    request.Tracks.Count,
-                    incomingDataJson);
+                // var incomingDataJson = JsonSerializer.Serialize(request, new JsonSerializerOptions { WriteIndented = true });
+                // _logger.LogInformation("[POST /api/stream/tracks] RECEIVED REQUEST for CameraId={CameraId}, Timestamp={Timestamp}, TracksCount={TracksCount}\nFULL REQUEST DATA:\n{FullData}",
+                //     request.CameraId,
+                //     request.Timestamp,
+                //     request.Tracks.Count,
+                //     incomingDataJson);
 
                 // Validate and filter tracks
                 var validTracks = new List<TrackItem>();
@@ -1014,7 +1016,9 @@ namespace FallDetection.Streaming.Controllers
 
     public class SafeAreasRequest
     {
+        [JsonPropertyName("camera_id")]
         public string CameraId { get; set; } = string.Empty;
+        [JsonPropertyName("editable_areas")]
         public List<AreaPolygon>? EditableAreas { get; set; }
 
         // For backwards compatibility, also accept the old format

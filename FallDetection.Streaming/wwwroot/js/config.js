@@ -8,7 +8,7 @@ const VALID_COMMANDS = [
     'toggle_record', 'toggle_raw', 'auto_update_bg', 'set_background',
     'toggle_safe_areas_display', 'toggle_bed_areas_display', 'toggle_floor_areas_display',
     'toggle_safety_check', 'toggle_hme',
-    'set_fall_algorithm', 'update_safe_areas'
+    'set_fall_algorithm', 'update_safe_areas', 'set_safety_check_method'
 ];
 
 // Command value validators

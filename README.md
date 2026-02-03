@@ -84,6 +84,52 @@ To prevent "flicker" (blank frames between updates), the system uses a **Double 
     *   **Video**: Recursive `onload` trigger ensures max possible frame rate.
     *   **Data**: Periodic polling allows the UI to remain responsive even if video lags.
 
+## 📡 API Reference
+
+The server exposes a RESTful API for camera management, state reporting, and data streaming. All endpoints are prefixed with `/api/Stream`.
+
+### 📷 Camera Management
+
+| Method | Endpoint | Description | Query Params / Body | Response |
+| :--- | :--- | :--- | :--- | :--- |
+| `POST` | `/register` | Register a new camera device | `?camera_id={string}` | `{ "camera_id": "...", "status": "pending", "message": "..." }` |
+| `POST` | `/approve` | Approve a pending camera | Body: `{ "ipAddress": "...", "cameraName": "..." }` | `{ "status": "registered", "camera_id": "..." }` |
+| `POST` | `/forget` | Remove a known camera | Body: `{ "cameraId": "..." }` | `{ "status": "success", "message": "..." }` |
+| `GET` | `/pending` | List cameras waiting for approval | - | `{ "pending": [...], "count": N }` |
+| `GET` | `/registered` | List all active cameras | - | `{ "cameras": [...], "count": N }` |
+| `GET` | `/cameras` | Unified list of all cameras | - | `{ "cameras": [...], "connected_count": N }` |
+
+### 🔄 State & Commands
+
+| Method | Endpoint | Description | Query Params / Body | Response |
+| :--- | :--- | :--- | :--- | :--- |
+| `POST` | `/ping` | Keep-alive heartbeat | `?camera_id={string}` | `{ "status": "success", "timestamp": 1234, ... }` |
+| `POST` | `/report-state` | Report device status (recording, online) | Body: `{ "camera_id": "...", "timestamp": 123, "status": "online", ... }` | `{ "status": "success", "message": "State report received" }` |
+| `GET` | `/camera-state` | Get full server-side state of a camera | `?camera_id={string}` | JSON Dict with flags (e.g. `{"record": false, "_connected": true}`) |
+| `GET` | `/camera-status` | Get lightweight status (online/recording) | `?camera_id={string}` | `{ "connected": true, "is_recording": false, ... }` |
+| `GET` | `/is-background-updating` | Check background sync status | `?camera_id={string}` | `{ "background_update_pending": bool, ... }` |
+| `POST` | `/command` | Send control command to server state | Body: `{ "cameraId": "...", "command": "toggle_record", "value": true }` | `{ "status": "success", "command": "...", "value": ... }` |
+
+### 🖼️ Streaming (Images)
+
+| Method | Endpoint | Description | Headers / Query Params | Response |
+| :--- | :--- | :--- | :--- | :--- |
+| `POST` | `/upload-frame` | Upload raw JPEG frame | Header: `X-Camera-ID: {id}` <br> Body: Binary JPEG | `{ "status": "success", "size": 1234 }` |
+| `POST` | `/upload-bg` | Upload background reference frame | Header: `X-Camera-ID: {id}` <br> Body: Binary JPEG | `{ "status": "success", "size": 1234 }` |
+| `GET` | `/frame` | Get latest live frame | `?camera_id={string}` | Binary JPEG Image (image/jpeg) |
+| `GET` | `/background` | Get current background frame | `?camera_id={string}` | Binary JPEG Image (image/jpeg) |
+
+### 🦴 Tracking & Data
+
+| Method | Endpoint | Description | Query Params / Body | Response |
+| :--- | :--- | :--- | :--- | :--- |
+| `POST` | `/tracks` | Upload detected skeletons (Pose) | Body: `{ "camera_id": "...", "tracks": [...], "timestamp": 123.45 }` | `{ "status": "success", "tracks_processed": N }` |
+| `GET` | `/tracks` | Get latest tracking data | `?camera_id={string}&track_id={opt}` | `{ "tracking_data": {...}, "track_count": N }` |
+| `POST` | `/safe-areas` | Update safe/exclusion zones | Body: `{ "cameraId": "...", "editableAreas": [...] }` | `{ "status": "success", "areas_count": N }` |
+| `GET` | `/safe-areas` | Get defined safe zones | `?camera_id={string}` | Array `[ [[x,y],...], ... ]` |
+| `GET` | `/bed-areas` | Get defined bed zones | `?camera_id={string}` | Array `[ [[x,y],...], ... ]` |
+| `GET` | `/floor-areas` | Get defined floor zones | `?camera_id={string}` | Array `[ [[x,y],...], ... ]` |
+
 ## 🚀 Installation & Dev
 
 ### 1. Manual Run (Recommended)
