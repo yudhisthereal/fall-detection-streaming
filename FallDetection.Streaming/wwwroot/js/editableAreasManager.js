@@ -4,7 +4,6 @@
 const EditableAreasManager = {
     // Cache for area data to avoid redundant fetches
     cache: {
-        safeAreas: null,
         bedAreas: null,
         floorAreas: null,
         couchAreas: null,
@@ -12,7 +11,6 @@ const EditableAreasManager = {
         chairAreas: null,
         cameraState: null,
         lastFetch: {
-            safeAreas: 0,
             bedAreas: 0,
             floorAreas: 0,
             couchAreas: 0,
@@ -35,55 +33,6 @@ const EditableAreasManager = {
         return AppState.cameraConnectionStatus[AppState.currentCameraId]?.connected;
     },
 
-    // Fetch safe areas for current camera
-    async fetchSafeAreas(useCache = true) {
-        if (!AppState.currentCameraId) {
-            console.warn('[EditableAreasManager] No camera ID set');
-            return [];
-        }
-
-        // Check connection status
-        if (!this.isCameraConnected()) {
-            return this.cache.safeAreas || [];
-        }
-
-        // Return cached data if valid
-        if (useCache && this.cache.safeAreas && this.isCacheValid(this.cache.lastFetch.safeAreas)) {
-            return this.cache.safeAreas;
-        }
-
-        try {
-            const response = await fetch(
-                STREAMING_HTTP_URL + '/api/stream/safe-areas?camera_id=' + AppState.currentCameraId
-            );
-
-            if (!response.ok) {
-                let bodyText = "";
-                try {
-                    bodyText = await response.text();
-                } catch (_) { }
-
-                console.error('[EditableAreasManager] Safe areas request failed', {
-                    status: response.status,
-                    statusText: response.statusText,
-                    body: bodyText
-                });
-                return this.cache.safeAreas || [];
-            }
-
-            const safeAreas = await response.json() || [];
-            this.cache.safeAreas = safeAreas;
-            this.cache.lastFetch.safeAreas = Date.now();
-
-            if (window.LogPanel) {
-                LogPanel.add(`Safe areas: ${JSON.stringify(safeAreas)}`, 'info', 'EditableAreas');
-            }
-            return safeAreas;
-        } catch (error) {
-            console.error('[EditableAreasManager] Error fetching safe areas:', error);
-            return this.cache.safeAreas || [];
-        }
-    },
 
     // Fetch bed areas for current camera
     async fetchBedAreas(useCache = true) {
@@ -330,10 +279,9 @@ const EditableAreasManager = {
         }
 
         try {
-            // Fetch all area types in parallel
-            const [safeAreas, bedAreas, floorAreas, couchAreas, benchAreas, chairAreas] = await Promise.all([
-                this.fetchSafeAreas(false),  // force fresh fetch
-                this.fetchBedAreas(false),
+            // Fetch all 5 area types in parallel
+            const [bedAreas, floorAreas, couchAreas, benchAreas, chairAreas] = await Promise.all([
+                this.fetchBedAreas(false),  // force fresh fetch
                 this.fetchFloorAreas(false),
                 this.fetchCouchAreas(false),
                 this.fetchBenchAreas(false),
@@ -342,7 +290,6 @@ const EditableAreasManager = {
 
             // Cache is already updated by individual fetch methods
             return {
-                safeAreas,
                 bedAreas,
                 floorAreas,
                 couchAreas,
@@ -352,7 +299,6 @@ const EditableAreasManager = {
         } catch (error) {
             console.error('[EditableAreasManager] Error in fetchAllAreas:', error);
             return {
-                safeAreas: [],
                 bedAreas: [],
                 floorAreas: [],
                 couchAreas: [],
@@ -364,10 +310,6 @@ const EditableAreasManager = {
 
     // Invalidate cache (call after saving/deleting areas)
     invalidateCache(areaType = null) {
-        if (areaType === 'safe' || areaType === null) {
-            this.cache.safeAreas = null;
-            this.cache.lastFetch.safeAreas = 0;
-        }
         if (areaType === 'bed' || areaType === null) {
             this.cache.bedAreas = null;
             this.cache.lastFetch.bedAreas = 0;

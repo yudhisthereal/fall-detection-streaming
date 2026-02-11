@@ -6,7 +6,7 @@ const EditableAreaEditor = {
     // Track previous show_raw state for restore on popup close
     prevShowRaw: null,
     // Current area type being edited
-    currentAreaType: 'safe',
+    currentAreaType: 'bed',
     // Current active tool: 'pen' or 'remove'
     currentTool: 'pen',
 
@@ -16,19 +16,12 @@ const EditableAreaEditor = {
     async loadAreasForCamera(cameraId) {
         try {
             // Fetch all area types from server (will update cache)
-            const { safeAreas, bedAreas, floorAreas, couchAreas, benchAreas, chairAreas } =
+            const { bedAreas, floorAreas, couchAreas, benchAreas, chairAreas } =
                 await EditableAreasManager.fetchAllAreas();
 
             const editableAreas = [];
 
             // Convert to editable area format
-            safeAreas.forEach((coords, index) => {
-                editableAreas.push({
-                    area_type: 'safe',
-                    coordinates: coords,
-                    name: `Safe Area ${index + 1}`
-                });
-            });
 
             bedAreas.forEach((coords, index) => {
                 editableAreas.push({
@@ -369,7 +362,6 @@ const EditableAreaEditor = {
 
     getAreaLabel(areaType) {
         const labels = {
-            'safe': 'Safe Area',
             'bed': 'Bed Area',
             'floor': 'Floor Area',
             'couch': 'Couch Area',
@@ -424,14 +416,13 @@ const EditableAreaEditor = {
 
     getAreaColor(areaType) {
         const colors = {
-            'safe': { stroke: 'hsl(120, 70%, 50%)', fill: 'rgba(144, 238, 144, 0.65)' },   // Light green
             'bed': { stroke: 'hsl(200, 70%, 50%)', fill: 'rgba(173, 216, 230, 0.65)' },     // Light blue
             'floor': { stroke: 'hsl(0, 0%, 50%)', fill: 'rgba(128, 128, 128, 0.65)' },      // Grey
             'couch': { stroke: 'hsl(30, 70%, 50%)', fill: 'rgba(255, 165, 0, 0.65)' },      // Orange
             'bench': { stroke: 'hsl(30, 50%, 40%)', fill: 'rgba(139, 90, 43, 0.65)' },      // Brown
             'chair': { stroke: 'hsl(270, 50%, 50%)', fill: 'rgba(147, 112, 219, 0.65)' }    // Purple
         };
-        return colors[areaType] || colors['safe'];
+        return colors[areaType] || colors['floor'];
     },
 
     drawPolygon(polygon, color, isComplete, label, isHovered = false) {

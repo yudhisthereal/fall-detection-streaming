@@ -28,7 +28,6 @@ const StreamDisplay = {
 
     // Camera state for control flags
     cameraState: {},
-    showSafeAreas: false,
     showBedAreas: false,
     showFloorAreas: false,
     showCouchAreas: false,
@@ -272,7 +271,6 @@ const StreamDisplay = {
         if (!this.overlayCtx || !this.overlayCanvas) return;
 
         console.log('[StreamDisplay] Refreshing overlay - Cached tracking tracks:', Object.keys(this.cachedTrackingData || {}).length,
-            '| Safe areas:', (EditableAreasManager.cache.safeAreas || []).length,
             '| Bed areas:', (EditableAreasManager.cache.bedAreas || []).length,
             '| Floor areas:', (EditableAreasManager.cache.floorAreas || []).length,
             '| Couch areas:', (EditableAreasManager.cache.couchAreas || []).length,
@@ -284,9 +282,6 @@ const StreamDisplay = {
         this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
 
         // Render areas first (behind skeletons) - read directly from EditableAreasManager.cache
-        if (this.showSafeAreas && EditableAreasManager.cache.safeAreas && EditableAreasManager.cache.safeAreas.length > 0) {
-            this.renderSafeAreas(EditableAreasManager.cache.safeAreas);
-        }
         if (this.showBedAreas && EditableAreasManager.cache.bedAreas && EditableAreasManager.cache.bedAreas.length > 0) {
             this.renderBedAreas(EditableAreasManager.cache.bedAreas);
         }
@@ -445,56 +440,6 @@ const StreamDisplay = {
         this.overlayCtx.fillText(poseLabel, boxX + padding, boxY + padding);
     },
 
-    renderSafeAreas(safeAreas) {
-        if (!safeAreas || safeAreas.length === 0) {
-            return;
-        }
-
-        safeAreas.forEach((polygon, index) => {
-            if (!polygon || polygon.length < 3) return;
-
-            // Light green stroke and fill
-            const strokeColor = 'hsl(120, 70%, 50%)';
-            const fillColor = 'rgba(144, 238, 144, 0.65)'; // 65% transparent light green
-
-            // Convert normalized coordinates to canvas coordinates
-            const points = polygon.map(point => {
-                const x = point[0] * this.overlayCanvas.width;
-                const y = point[1] * this.overlayCanvas.height;
-                return { x, y };
-            });
-
-            // Draw polygon
-            this.overlayCtx.beginPath();
-            this.overlayCtx.moveTo(points[0].x, points[0].y);
-            for (let i = 1; i < points.length; i++) {
-                this.overlayCtx.lineTo(points[i].x, points[i].y);
-            }
-            this.overlayCtx.closePath();
-
-            // Fill with 65% transparent color
-            this.overlayCtx.fillStyle = fillColor;
-            this.overlayCtx.fill();
-
-            // Draw border
-            this.overlayCtx.strokeStyle = strokeColor;
-            this.overlayCtx.lineWidth = 2;
-            this.overlayCtx.stroke();
-
-            // Draw vertices
-            points.forEach(point => {
-                this.overlayCtx.beginPath();
-                this.overlayCtx.arc(point.x, point.y, 4, 0, Math.PI * 2);
-                this.overlayCtx.fillStyle = strokeColor;
-                this.overlayCtx.fill();
-            });
-
-            // Add label
-            this.overlayCtx.font = '12px sans-serif';
-            this.overlayCtx.fillStyle = strokeColor;
-            this.overlayCtx.fillText(`Safe Area ${index + 1}`, points[0].x + 10, points[0].y + 20);
-        });
-    },
 
     renderBedAreas(bedAreas) {
         if (!bedAreas || bedAreas.length === 0) {
@@ -723,13 +668,6 @@ const StreamDisplay = {
         const newShowCouchAreas = this.cameraState.show_couch_areas === true;
         const newShowBenchAreas = this.cameraState.show_bench_areas === true;
         const newShowChairAreas = this.cameraState.show_chair_areas === true;
-
-        if (newShowSafeAreas !== this.showSafeAreas) {
-            this.showSafeAreas = newShowSafeAreas;
-            console.log(`[StreamDisplay] show_safe_areas: ${this.showSafeAreas}`);
-            // Refresh overlay when showSafeAreas flag changes
-            this.refreshOverlay();
-        }
 
         if (newShowBedAreas !== this.showBedAreas) {
             this.showBedAreas = newShowBedAreas;
@@ -964,7 +902,6 @@ const StreamDisplay = {
         this.cachedBenchAreas = null;
         this.cachedChairAreas = null;
         this.cameraState = {};
-        this.showSafeAreas = false;
         this.showBedAreas = false;
         this.showFloorAreas = false;
         this.showCouchAreas = false;

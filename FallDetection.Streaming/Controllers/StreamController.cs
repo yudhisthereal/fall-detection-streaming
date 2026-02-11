@@ -498,30 +498,7 @@ namespace FallDetection.Streaming.Controllers
             }
         }
 
-        [HttpGet("safe-areas")]
-        public IActionResult GetSafeAreas([FromQuery] string camera_id)
-        {
-            try
-            {
-                var state = _cameraService.GetCameraState(camera_id);
-                if (state != null)
-                {
-                    // Return only safe areas for backwards compatibility
-                    var safeAreas = state.EditableAreas
-                        .Where(a => a.AreaType == "safe")
-                        .Select(a => a.Coordinates)
-                        .ToList();
-                    return Ok(safeAreas);
-                }
 
-                return NotFound(new { error = "Camera not found" });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Get safe areas error");
-                return StatusCode(500, new { status = "error", message = ex.Message });
-            }
-        }
 
         [HttpGet("bed-areas")]
         public IActionResult GetBedAreas([FromQuery] string camera_id)

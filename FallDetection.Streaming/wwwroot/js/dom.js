@@ -10,7 +10,6 @@ const DOMElements = {
     toggleRecord: document.getElementById('toggleRecord'),
     toggleRaw: document.getElementById('toggleRaw'),
     autoUpdateBg: document.getElementById('autoUpdateBg'),
-    showSafeArea: document.getElementById('showSafeArea'),
     showBedAreas: document.getElementById('showBedAreas'),
     showFloorAreas: document.getElementById('showFloorAreas'),
     showCouchAreas: document.getElementById('showCouchAreas'),

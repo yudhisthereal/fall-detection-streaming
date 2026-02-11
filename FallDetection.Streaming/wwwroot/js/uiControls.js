@@ -153,26 +153,6 @@ const UIControls = {
             };
         }
 
-        // Show Safe Area
-        if (DOMElements.showSafeArea) {
-            DOMElements.showSafeArea.onchange = () => {
-                CommandManager.sendCommand("toggle_safe_areas_display", DOMElements.showSafeArea.checked);
-
-                // Log flag change
-                if (window.LogPanel) {
-                    LogPanel.add(
-                        `🛡️ Show Safe Areas ${DOMElements.showSafeArea.checked ? 'ENABLED' : 'DISABLED'}`,
-                        'info',
-                        'Flags'
-                    );
-                }
-
-                if (window.StreamDisplay && DOMElements.showSafeArea.checked) {
-                    window.StreamDisplay.refreshOverlay();
-                }
-            };
-        }
-
         // Show Bed Areas
         if (DOMElements.showBedAreas) {
             DOMElements.showBedAreas.onchange = () => {
