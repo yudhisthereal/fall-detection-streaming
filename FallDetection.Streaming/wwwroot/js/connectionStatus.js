@@ -150,6 +150,12 @@ const ConnectionStatus = {
                 AppState.isConnectionStable = false;
                 AppState.wasDisconnected = true;
                 // console.log('[ConnectionStatus] Disconnected - setting isConnectionStable=false');
+
+                // IMMEDIATELY clear overlay on disconnect
+                if (typeof StreamDisplay !== 'undefined' && StreamDisplay.clearForDisconnect) {
+                    console.log('[ConnectionStatus] Disconnected - clearing overlay immediately');
+                    StreamDisplay.clearForDisconnect();
+                }
             } else if (connected) {
                 // Clear wasDisconnected flag when connected (will be checked in stability check)
             }
@@ -441,6 +447,7 @@ const ConnectionStatus = {
         if (cameraId === AppState.currentCameraId) {
             AppState.isConnectionStable = true;
             this.updateStreamStatusUI(true, true);
+
             // console.log('[ConnectionStatus] Connection manually marked as stable for ' + cameraId);
         }
     },

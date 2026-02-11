@@ -265,6 +265,15 @@ const StreamDisplay = {
         return value !== null && value !== undefined && value >= 0;
     },
 
+    // Clear overlay when disconnected for too long
+    clearForDisconnect() {
+        if (!this.overlayCtx || !this.overlayCanvas) return;
+
+        console.log('[StreamDisplay] Clearing overlay due to disconnection');
+        this.cachedTrackingData = null;
+        this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
+    },
+
     //OVERLAY PASS: Clear and redraw overlays ONLY when new data arrives
     // This is called ONLY when fetchTrackingData or fetchSafeAreas returns new data
     refreshOverlay() {
@@ -759,8 +768,9 @@ const StreamDisplay = {
         if (!AppState.currentCameraId) {
             console.warn('[StreamDisplay:fetchTrackingData] No camera ID set');
             return;
-        }
-        else if (!AppState.cameraConnectionStatus[AppState.currentCameraId]?.connected) {
+        } else if (!AppState.cameraConnectionStatus[AppState.currentCameraId]?.connected) {
+            // console.log('[StreamDisplay:fetchTrackingData] Camera disconnected - skipping fetch & clearing overlay');
+            this.clearForDisconnect();
             return;
         }
 
