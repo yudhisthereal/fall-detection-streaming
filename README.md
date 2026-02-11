@@ -125,7 +125,7 @@ The server exposes a RESTful API for camera management, state reporting, and dat
 | :--- | :--- | :--- | :--- | :--- |
 | `POST` | `/tracks` | Upload detected skeletons (Pose) | Body: `{ "camera_id": "...", "tracks": [...], "timestamp": 123.45 }` | `{ "status": "success", "tracks_processed": N }` |
 | `GET` | `/tracks` | Get latest tracking data | `?camera_id={string}&track_id={opt}` | `{ "tracking_data": {...}, "track_count": N }` |
-| `POST` | `/safe-areas` | Update safe/exclusion zones | Body: `{ "cameraId": "...", "editableAreas": [...] }` | `{ "status": "success", "areas_count": N }` |
+| `POST` | `/editable-areas` | Update safe/exclusion zones | Body: `{ "cameraId": "...", "editableAreas": [...] }` | `{ "status": "success", "areas_count": N }` |
 | `GET` | `/safe-areas` | Get defined safe zones | `?camera_id={string}` | Array `[ [[x,y],...], ... ]` |
 | `GET` | `/bed-areas` | Get defined bed zones | `?camera_id={string}` | Array `[ [[x,y],...], ... ]` |
 | `GET` | `/floor-areas` | Get defined floor zones | `?camera_id={string}` | Array `[ [[x,y],...], ... ]` |

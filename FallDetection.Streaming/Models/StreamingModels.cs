@@ -19,7 +19,7 @@ namespace FallDetection.Streaming.Models
     public class AreaPolygon
     {
         [JsonPropertyName("area_type")]
-        public string AreaType { get; set; } = "safe"; // "safe", "bed", "floor"
+        public string AreaType { get; set; } = "safe"; // "safe", "bed", "floor", "couch", "bench", "chair"
 
         [JsonPropertyName("coordinates")]
         public List<List<double>> Coordinates { get; set; } = new();
@@ -48,7 +48,7 @@ namespace FallDetection.Streaming.Models
         public string? IpAddress { get; set; }
         public long LastSeen { get; set; }
         public long LastReport { get; set; }
-        
+
         // Camera status properties reported by camera
         public bool IsRecording { get; set; }
         public bool RtmpConnected { get; set; }
@@ -149,16 +149,16 @@ namespace FallDetection.Streaming.Models
     {
         [JsonPropertyName("camera_id")]
         public string CameraId { get; set; } = string.Empty;
-        
+
         [JsonPropertyName("track_id")]
         public int TrackId { get; set; }
-        
+
         [JsonPropertyName("pose_label")]
         public string PoseLabel { get; set; } = string.Empty;
-        
+
         [JsonPropertyName("safety_status")]
         public string SafetyStatus { get; set; } = string.Empty;
-        
+
         public double Timestamp { get; set; }
     }
 
@@ -169,19 +169,19 @@ namespace FallDetection.Streaming.Models
     {
         [JsonPropertyName("camera_id")]
         public string CameraId { get; set; } = string.Empty;
-        
+
         [JsonPropertyName("track_id")]
         public int TrackId { get; set; }
-        
+
         public List<float> Keypoints { get; set; } = new();
-        
+
         [JsonPropertyName("safety_status")]
         public string SafetyStatus { get; set; } = string.Empty;
-        
+
         public double Timestamp { get; set; }
-        
+
         public List<double>? Bbox { get; set; }
-        
+
         [JsonPropertyName("pose_label")]
         public string PoseLabel { get; set; } = string.Empty;
     }
@@ -193,9 +193,9 @@ namespace FallDetection.Streaming.Models
     {
         [JsonPropertyName("camera_id")]
         public string CameraId { get; set; } = string.Empty;
-        
+
         public List<TrackItem> Tracks { get; set; } = new();
-        
+
         public double Timestamp { get; set; }
     }
 

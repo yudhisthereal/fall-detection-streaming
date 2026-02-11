@@ -22,12 +22,18 @@ const StreamDisplay = {
     cachedSafeAreas: null,
     cachedBedAreas: null,
     cachedFloorAreas: null,
+    cachedCouchAreas: null,
+    cachedBenchAreas: null,
+    cachedChairAreas: null,
 
     // Camera state for control flags
     cameraState: {},
     showSafeAreas: false,
     showBedAreas: false,
     showFloorAreas: false,
+    showCouchAreas: false,
+    showBenchAreas: false,
+    showChairAreas: false,
 
     // Background state tracking
     currentBackgroundMode: false,  // true = background mode, false = raw mode
@@ -260,29 +266,41 @@ const StreamDisplay = {
         return value !== null && value !== undefined && value >= 0;
     },
 
-    // OVERLAY PASS: Clear and redraw overlays ONLY when new data arrives
+    //OVERLAY PASS: Clear and redraw overlays ONLY when new data arrives
     // This is called ONLY when fetchTrackingData or fetchSafeAreas returns new data
     refreshOverlay() {
         if (!this.overlayCtx || !this.overlayCanvas) return;
 
         console.log('[StreamDisplay] Refreshing overlay - Cached tracking tracks:', Object.keys(this.cachedTrackingData || {}).length,
-            '| Cached safe areas:', (this.cachedSafeAreas || []).length,
-            '| Cached bed areas:', (this.cachedBedAreas || []).length,
-            '| Cached floor areas:', (this.cachedFloorAreas || []).length);
+            '| Safe areas:', (EditableAreasManager.cache.safeAreas || []).length,
+            '| Bed areas:', (EditableAreasManager.cache.bedAreas || []).length,
+            '| Floor areas:', (EditableAreasManager.cache.floorAreas || []).length,
+            '| Couch areas:', (EditableAreasManager.cache.couchAreas || []).length,
+            '| Bench areas:', (EditableAreasManager.cache.benchAreas || []).length,
+            '| Chair areas:', (EditableAreasManager.cache.chairAreas || []).length);
 
         // Clear overlay canvas BEFORE redrawing overlays
         // This is safe because we only call this when we have new data
         this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
 
-        // Render areas first (behind skeletons)
-        if (this.showSafeAreas && this.cachedSafeAreas && this.cachedSafeAreas.length > 0) {
-            this.renderSafeAreas(this.cachedSafeAreas);
+        // Render areas first (behind skeletons) - read directly from EditableAreasManager.cache
+        if (this.showSafeAreas && EditableAreasManager.cache.safeAreas && EditableAreasManager.cache.safeAreas.length > 0) {
+            this.renderSafeAreas(EditableAreasManager.cache.safeAreas);
         }
-        if (this.showBedAreas && this.cachedBedAreas && this.cachedBedAreas.length > 0) {
-            this.renderBedAreas(this.cachedBedAreas);
+        if (this.showBedAreas && EditableAreasManager.cache.bedAreas && EditableAreasManager.cache.bedAreas.length > 0) {
+            this.renderBedAreas(EditableAreasManager.cache.bedAreas);
         }
-        if (this.showFloorAreas && this.cachedFloorAreas && this.cachedFloorAreas.length > 0) {
-            this.renderFloorAreas(this.cachedFloorAreas);
+        if (this.showFloorAreas && EditableAreasManager.cache.floorAreas && EditableAreasManager.cache.floorAreas.length > 0) {
+            this.renderFloorAreas(EditableAreasManager.cache.floorAreas);
+        }
+        if (this.showCouchAreas && EditableAreasManager.cache.couchAreas && EditableAreasManager.cache.couchAreas.length > 0) {
+            this.renderCouchAreas(EditableAreasManager.cache.couchAreas);
+        }
+        if (this.showBenchAreas && EditableAreasManager.cache.benchAreas && EditableAreasManager.cache.benchAreas.length > 0) {
+            this.renderBenchAreas(EditableAreasManager.cache.benchAreas);
+        }
+        if (this.showChairAreas && EditableAreasManager.cache.chairAreas && EditableAreasManager.cache.chairAreas.length > 0) {
+            this.renderChairAreas(EditableAreasManager.cache.chairAreas);
         }
 
         // Render skeletons on top
@@ -580,6 +598,93 @@ const StreamDisplay = {
         });
     },
 
+    renderCouchAreas(couchAreas) {
+        const strokeColor = 'hsl(30, 70%, 50%)';  // Orange
+        const fillColor = 'rgba(255, 165, 0, 0.4)';  // Semi-transparent orange
+
+        couchAreas.forEach((coordinates, index) => {
+            const points = coordinates.map(([x, y]) => ({
+                x: x * this.overlayCanvas.width,
+                y: y * this.overlayCanvas.height
+            }));
+
+            this.overlayCtx.beginPath();
+            this.overlayCtx.moveTo(points[0].x, points[0].y);
+            points.slice(1).forEach(p => this.overlayCtx.lineTo(p.x, p.y));
+            this.overlayCtx.closePath();
+
+            this.overlayCtx.strokeStyle = strokeColor;
+            this.overlayCtx.lineWidth = 3;
+            this.overlayCtx.stroke();
+
+            this.overlayCtx.fillStyle = fillColor;
+            this.overlayCtx.fill();
+
+            // Add label
+            this.overlayCtx.font = '12px sans-serif';
+            this.overlayCtx.fillStyle = strokeColor;
+            this.overlayCtx.fillText(`Couch Area ${index + 1}`, points[0].x + 10, points[0].y + 20);
+        });
+    },
+
+    renderBenchAreas(benchAreas) {
+        const strokeColor = 'hsl(30, 50%, 40%)';  // Brown
+        const fillColor = 'rgba(139, 90, 43, 0.4)';  // Semi-transparent brown
+
+        benchAreas.forEach((coordinates, index) => {
+            const points = coordinates.map(([x, y]) => ({
+                x: x * this.overlayCanvas.width,
+                y: y * this.overlayCanvas.height
+            }));
+
+            this.overlayCtx.beginPath();
+            this.overlayCtx.moveTo(points[0].x, points[0].y);
+            points.slice(1).forEach(p => this.overlayCtx.lineTo(p.x, p.y));
+            this.overlayCtx.closePath();
+
+            this.overlayCtx.strokeStyle = strokeColor;
+            this.overlayCtx.lineWidth = 3;
+            this.overlayCtx.stroke();
+
+            this.overlayCtx.fillStyle = fillColor;
+            this.overlayCtx.fill();
+
+            // Add label
+            this.overlayCtx.font = '12px sans-serif';
+            this.overlayCtx.fillStyle = strokeColor;
+            this.overlayCtx.fillText(`Bench Area ${index + 1}`, points[0].x + 10, points[0].y + 20);
+        });
+    },
+
+    renderChairAreas(chairAreas) {
+        const strokeColor = 'hsl(270, 50%, 50%)';  // Purple
+        const fillColor = 'rgba(147, 112, 219, 0.4)';  // Semi-transparent purple
+
+        chairAreas.forEach((coordinates, index) => {
+            const points = coordinates.map(([x, y]) => ({
+                x: x * this.overlayCanvas.width,
+                y: y * this.overlayCanvas.height
+            }));
+
+            this.overlayCtx.beginPath();
+            this.overlayCtx.moveTo(points[0].x, points[0].y);
+            points.slice(1).forEach(p => this.overlayCtx.lineTo(p.x, p.y));
+            this.overlayCtx.closePath();
+
+            this.overlayCtx.strokeStyle = strokeColor;
+            this.overlayCtx.lineWidth = 3;
+            this.overlayCtx.stroke();
+
+            this.overlayCtx.fillStyle = fillColor;
+            this.overlayCtx.fill();
+
+            // Add label
+            this.overlayCtx.font = '12px sans-serif';
+            this.overlayCtx.fillStyle = strokeColor;
+            this.overlayCtx.fillText(`Chair Area ${index + 1}`, points[0].x + 10, points[0].y + 20);
+        });
+    },
+
     // Toggle visibility between streamImg (raw) and streamBackgroundImg (background)
     toggleStreamVisibility(showRaw) {
         const streamImg = document.getElementById('streamImg');
@@ -615,6 +720,9 @@ const StreamDisplay = {
         const newShowSafeAreas = this.cameraState.show_safe_areas === true;
         const newShowBedAreas = this.cameraState.show_bed_areas === true;
         const newShowFloorAreas = this.cameraState.show_floor_areas === true;
+        const newShowCouchAreas = this.cameraState.show_couch_areas === true;
+        const newShowBenchAreas = this.cameraState.show_bench_areas === true;
+        const newShowChairAreas = this.cameraState.show_chair_areas === true;
 
         if (newShowSafeAreas !== this.showSafeAreas) {
             this.showSafeAreas = newShowSafeAreas;
@@ -634,6 +742,27 @@ const StreamDisplay = {
             this.showFloorAreas = newShowFloorAreas;
             console.log(`[StreamDisplay] show_floor_areas: ${this.showFloorAreas}`);
             // Refresh overlay when showFloorAreas flag changes
+            this.refreshOverlay();
+        }
+
+        if (newShowCouchAreas !== this.showCouchAreas) {
+            this.showCouchAreas = newShowCouchAreas;
+            console.log(`[StreamDisplay] show_couch_areas: ${this.showCouchAreas}`);
+            // Refresh overlay when showCouchAreas flag changes
+            this.refreshOverlay();
+        }
+
+        if (newShowBenchAreas !== this.showBenchAreas) {
+            this.showBenchAreas = newShowBenchAreas;
+            console.log(`[StreamDisplay] show_bench_areas: ${this.showBenchAreas}`);
+            // Refresh overlay when showBenchAreas flag changes
+            this.refreshOverlay();
+        }
+
+        if (newShowChairAreas !== this.showChairAreas) {
+            this.showChairAreas = newShowChairAreas;
+            console.log(`[StreamDisplay] show_chair_areas: ${this.showChairAreas}`);
+            // Refresh overlay when showChairAreas flag changes
             this.refreshOverlay();
         }
 
@@ -721,123 +850,9 @@ const StreamDisplay = {
         }
     },
 
-    async fetchSafeAreas() {
-        if (!AppState.currentCameraId) {
-            console.warn('[StreamDisplay:fetchSafeAreas] No camera ID set');
-            return;
-        }
-        else if (!AppState.cameraConnectionStatus[AppState.currentCameraId]?.connected) {
-            return;
-        }
-
-        const url = STREAMING_HTTP_URL + '/api/stream/safe-areas?camera_id=' + AppState.currentCameraId;
-
-        try {
-            const response = await fetch(url);
-
-            if (!response.ok) {
-                let bodyText = "";
-                try {
-                    bodyText = await response.text(); // may fail if no body
-                } catch (_) { }
-
-                console.error('[StreamDisplay:fetchSafeAreas] Safe areas request failed', {
-                    url,
-                    status: response.status,
-                    statusText: response.statusText,
-                    body: bodyText
-                });
-                return;
-            }
-
-            const safeAreas = await response.json() || [];
-
-            // Only refresh overlay if data actually changed
-            if (JSON.stringify(safeAreas) !== JSON.stringify(this.cachedSafeAreas)) {
-                const oldCount = (this.cachedSafeAreas || []).length;
-                const newCount = safeAreas.length;
-                this.cachedSafeAreas = safeAreas;
-
-                console.log(`[StreamDisplay] Safe areas changed: ${oldCount} -> ${newCount} areas`);
-                this.refreshOverlay();
-            }
-
-        } catch (error) {
-            // Network / CORS / DNS / server-down errors
-            console.error('[StreamDisplay:fetchSafeAreas] Network error fetching safe areas', {
-                url,
-                message: error.message,
-                stack: error.stack
-            });
-        }
-    },
-
-
-    // Fetch bed areas and refresh overlay ONLY if data changed
-    async fetchBedAreas() {
-        if (!AppState.currentCameraId) {
-            console.warn('[StreamDisplay:fetchBedAreas] No camera ID set');
-            return;
-        }
-        else if (!AppState.cameraConnectionStatus[AppState.currentCameraId]?.connected) {
-            return;
-        }
-
-        try {
-            const response = await fetch(
-                STREAMING_HTTP_URL + '/api/stream/bed-areas?camera_id=' + AppState.currentCameraId
-            );
-
-            if (response.ok) {
-                const bedAreas = await response.json() || [];
-
-                // Only refresh overlay if data actually changed
-                if (JSON.stringify(bedAreas) !== JSON.stringify(this.cachedBedAreas)) {
-                    const oldCount = (this.cachedBedAreas || []).length;
-                    const newCount = bedAreas.length;
-                    this.cachedBedAreas = bedAreas;
-                    console.log(`[StreamDisplay:fetchBedAreas] Bed areas changed: ${oldCount} -> ${newCount} areas`);
-                    this.refreshOverlay();
-                }
-            }
-        } catch (error) {
-            console.error('[StreamDisplay:fetchBedAreas] Error fetching bed areas:', error);
-            // On error, DO NOT clear overlay - cached data persists visually
-        }
-    },
-
-    // Fetch floor areas and refresh overlay ONLY if data changed
-    async fetchFloorAreas() {
-        if (!AppState.currentCameraId) {
-            console.warn('[StreamDisplay:fetchFloorAreas] No camera ID set');
-            return;
-        }
-        else if (!AppState.cameraConnectionStatus[AppState.currentCameraId]?.connected) {
-            return;
-        }
-
-        try {
-            const response = await fetch(
-                STREAMING_HTTP_URL + '/api/stream/floor-areas?camera_id=' + AppState.currentCameraId
-            );
-
-            if (response.ok) {
-                const floorAreas = await response.json() || [];
-
-                // Only refresh overlay if data actually changed
-                if (JSON.stringify(floorAreas) !== JSON.stringify(this.cachedFloorAreas)) {
-                    const oldCount = (this.cachedFloorAreas || []).length;
-                    const newCount = floorAreas.length;
-                    this.cachedFloorAreas = floorAreas;
-                    console.log(`[StreamDisplay] Floor areas changed: ${oldCount} -> ${newCount} areas`);
-                    this.refreshOverlay();
-                }
-            }
-        } catch (error) {
-            console.error('[StreamDisplay:fetchFloorAreas] Error fetching floor areas:', error);
-            // On error, DO NOT clear overlay - cached data persists visually
-        }
-    },
+    // Centralized fetch for all area types using EditableAreasManager
+    // Sync areas from EditableAreasManager cache to streamDisplay cache
+    // This is called periodically and when camera state changes
 
     // Fetch camera state to get control flags
     async fetchCameraState() {
@@ -872,9 +887,6 @@ const StreamDisplay = {
 
         // Initialize with current data
         this.fetchTrackingData();
-        this.fetchSafeAreas();
-        this.fetchBedAreas();
-        this.fetchFloorAreas();
         this.fetchCameraState().then((state) => {
             // Set initial visibility based on show_raw flag
             const showRaw = state && state.show_raw === true;
@@ -895,7 +907,7 @@ const StreamDisplay = {
         }, 100);
 
         this.isRunning = true;
-        console.log('[StreamDisplay] Static background img + overlay canvas rendering started - Overlay: 40 FPS (only on data change)');
+        console.log('[StreamDisplay] Static background img + overlay canvas rendering started - Overlay: 10 FPS (only on data change)');
     },
 
     stop() {
@@ -916,6 +928,9 @@ const StreamDisplay = {
         this.cachedSafeAreas = null;
         this.cachedBedAreas = null;
         this.cachedFloorAreas = null;
+        this.cachedCouchAreas = null;
+        this.cachedBenchAreas = null;
+        this.cachedChairAreas = null;
 
         this.isRunning = false;
         console.log('[StreamDisplay] Static background img + overlay canvas rendering stopped');
@@ -926,11 +941,12 @@ const StreamDisplay = {
         // Fetch all data and refresh overlay
         await Promise.all([
             this.fetchTrackingData(),
-            this.fetchSafeAreas(),
-            this.fetchBedAreas(),
-            this.fetchFloorAreas(),
             this.fetchCameraState()
         ]);
+        // Also fetch fresh areas from server
+        await EditableAreasManager.fetchAllAreas();
+        // Refresh overlay to show latest data
+        this.refreshOverlay();
     },
 
     // Cleanup
@@ -944,10 +960,16 @@ const StreamDisplay = {
         this.cachedSafeAreas = null;
         this.cachedBedAreas = null;
         this.cachedFloorAreas = null;
+        this.cachedCouchAreas = null;
+        this.cachedBenchAreas = null;
+        this.cachedChairAreas = null;
         this.cameraState = {};
         this.showSafeAreas = false;
         this.showBedAreas = false;
         this.showFloorAreas = false;
+        this.showCouchAreas = false;
+        this.showBenchAreas = false;
+        this.showChairAreas = false;
         console.log('[StreamDisplay] Destroyed and cleaned up');
     }
 };

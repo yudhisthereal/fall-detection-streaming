@@ -7,11 +7,17 @@ const EditableAreasManager = {
         safeAreas: null,
         bedAreas: null,
         floorAreas: null,
+        couchAreas: null,
+        benchAreas: null,
+        chairAreas: null,
         cameraState: null,
         lastFetch: {
             safeAreas: 0,
             bedAreas: 0,
             floorAreas: 0,
+            couchAreas: 0,
+            benchAreas: 0,
+            chairAreas: 0,
             cameraState: 0
         }
     },
@@ -55,7 +61,7 @@ const EditableAreasManager = {
                 let bodyText = "";
                 try {
                     bodyText = await response.text();
-                } catch (_) {}
+                } catch (_) { }
 
                 console.error('[EditableAreasManager] Safe areas request failed', {
                     status: response.status,
@@ -69,7 +75,9 @@ const EditableAreasManager = {
             this.cache.safeAreas = safeAreas;
             this.cache.lastFetch.safeAreas = Date.now();
 
-            console.log(`[EditableAreasManager] Fetched ${safeAreas.length} safe areas`);
+            if (window.LogPanel) {
+                LogPanel.add(`Safe areas: ${JSON.stringify(safeAreas)}`, 'info', 'EditableAreas');
+            }
             return safeAreas;
         } catch (error) {
             console.error('[EditableAreasManager] Error fetching safe areas:', error);
@@ -104,7 +112,9 @@ const EditableAreasManager = {
                 this.cache.bedAreas = bedAreas;
                 this.cache.lastFetch.bedAreas = Date.now();
 
-                console.log(`[EditableAreasManager] Fetched ${bedAreas.length} bed areas`);
+                if (window.LogPanel) {
+                    LogPanel.add(`Bed areas: ${JSON.stringify(bedAreas)}`, 'info', 'EditableAreas');
+                }
                 return bedAreas;
             }
 
@@ -142,7 +152,9 @@ const EditableAreasManager = {
                 this.cache.floorAreas = floorAreas;
                 this.cache.lastFetch.floorAreas = Date.now();
 
-                console.log(`[EditableAreasManager] Fetched ${floorAreas.length} floor areas`);
+                if (window.LogPanel) {
+                    LogPanel.add(`Floor areas: ${JSON.stringify(floorAreas)}`, 'info', 'EditableAreas');
+                }
                 return floorAreas;
             }
 
@@ -150,6 +162,127 @@ const EditableAreasManager = {
         } catch (error) {
             console.error('[EditableAreasManager] Error fetching floor areas:', error);
             return this.cache.floorAreas || [];
+        }
+    },
+
+    // Fetch couch areas for current camera
+    async fetchCouchAreas(useCache = true) {
+
+        if (!AppState.currentCameraId) {
+            console.warn('[EditableAreasManager] No camera ID set');
+            return [];
+        }
+
+        // Check connection status
+        if (!this.isCameraConnected()) {
+            return this.cache.couchAreas || [];
+        }
+
+        // Return cached data if valid
+        if (useCache && this.cache.couchAreas && this.isCacheValid(this.cache.lastFetch.couchAreas)) {
+            return this.cache.couchAreas;
+        }
+
+        try {
+            const response = await fetch(
+                STREAMING_HTTP_URL + '/api/stream/couch-areas?camera_id=' + AppState.currentCameraId
+            );
+
+            if (response.ok) {
+                const couchAreas = await response.json() || [];
+                this.cache.couchAreas = couchAreas;
+                this.cache.lastFetch.couchAreas = Date.now();
+
+                if (window.LogPanel) {
+                    LogPanel.add(`Couch areas: ${JSON.stringify(couchAreas)}`, 'info', 'EditableAreas');
+                }
+                return couchAreas;
+            }
+
+            return this.cache.couchAreas || [];
+        } catch (error) {
+            console.error('[EditableAreasManager] Error fetching couch areas:', error);
+            return this.cache.couchAreas || [];
+        }
+    },
+
+    // Fetch bench areas for current camera
+    async fetchBenchAreas(useCache = true) {
+        if (!AppState.currentCameraId) {
+            console.warn('[EditableAreasManager] No camera ID set');
+            return [];
+        }
+
+        // Check connection status
+        if (!this.isCameraConnected()) {
+            return this.cache.benchAreas || [];
+        }
+
+        // Return cached data if valid
+        if (useCache && this.cache.benchAreas && this.isCacheValid(this.cache.lastFetch.benchAreas)) {
+            return this.cache.benchAreas;
+        }
+
+        try {
+            const response = await fetch(
+                STREAMING_HTTP_URL + '/api/stream/bench-areas?camera_id=' + AppState.currentCameraId
+            );
+
+            if (response.ok) {
+                const benchAreas = await response.json() || [];
+                this.cache.benchAreas = benchAreas;
+                this.cache.lastFetch.benchAreas = Date.now();
+
+                if (window.LogPanel) {
+                    LogPanel.add(`Bench areas: ${JSON.stringify(benchAreas)}`, 'info', 'EditableAreas');
+                }
+                return benchAreas;
+            }
+
+            return this.cache.benchAreas || [];
+        } catch (error) {
+            console.error('[EditableAreasManager] Error fetching bench areas:', error);
+            return this.cache.benchAreas || [];
+        }
+    },
+
+    // Fetch chair areas for current camera
+    async fetchChairAreas(useCache = true) {
+        if (!AppState.currentCameraId) {
+            console.warn('[EditableAreasManager] No camera ID set');
+            return [];
+        }
+
+        // Check connection status
+        if (!this.isCameraConnected()) {
+            return this.cache.chairAreas || [];
+        }
+
+        // Return cached data if valid
+        if (useCache && this.cache.chairAreas && this.isCacheValid(this.cache.lastFetch.chairAreas)) {
+            return this.cache.chairAreas;
+        }
+
+        try {
+            const response = await fetch(
+                STREAMING_HTTP_URL + '/api/stream/chair-areas?camera_id=' + AppState.currentCameraId
+            );
+
+            if (response.ok) {
+                const chairAreas = await response.json() || [];
+                this.cache.chairAreas = chairAreas;
+                this.cache.lastFetch.chairAreas = Date.now();
+
+                if (window.LogPanel) {
+                    LogPanel.add(`Chair areas: ${JSON.stringify(chairAreas)}`, 'info', 'EditableAreas');
+                }
+                return chairAreas;
+            }
+
+            return this.cache.chairAreas || [];
+        } catch (error) {
+            console.error('[EditableAreasManager] Error fetching chair areas:', error);
+            return this.cache.chairAreas || [];
         }
     },
 
@@ -189,85 +322,42 @@ const EditableAreasManager = {
         }
     },
 
-    // Fetch all areas (for editable area display)
-    // Returns array of { area_type, coordinates, name }
-    async fetchAllAreas(showSafeAreas, showBedAreas, showFloorAreas) {
+    // Fetch all areas from server and update cache
+    // Always fetches all 6 area types regardless of display settings
+    async fetchAllAreas() {
         if (!AppState.currentCameraId || !this.isCameraConnected()) {
             return [];
         }
 
-        const editableAreas = [];
-
-        // Fetch safe areas if enabled
-        if (showSafeAreas) {
-            const safeAreas = await this.fetchSafeAreas(true);
-            safeAreas.forEach((coords, index) => {
-                editableAreas.push({
-                    area_type: 'safe',
-                    coordinates: coords,
-                    name: `Safe Area ${index + 1}`
-                });
-            });
-        }
-
-        // Fetch bed areas if enabled
-        if (showBedAreas) {
-            const bedAreas = await this.fetchBedAreas(true);
-            bedAreas.forEach((coords, index) => {
-                editableAreas.push({
-                    area_type: 'bed',
-                    coordinates: coords,
-                    name: `Bed Area ${index + 1}`
-                });
-            });
-        }
-
-        // Fetch floor areas if enabled
-        if (showFloorAreas) {
-            const floorAreas = await this.fetchFloorAreas(true);
-            floorAreas.forEach((coords, index) => {
-                editableAreas.push({
-                    area_type: 'floor',
-                    coordinates: coords,
-                    name: `Floor Area ${index + 1}`
-                });
-            });
-        }
-
-        console.log(`[EditableAreasManager] Loaded ${editableAreas.length} total areas`);
-        return editableAreas;
-    },
-
-    // Fetch all area types in parallel (for stream display)
-    async fetchAllAreaTypes() {
-        if (!AppState.currentCameraId) {
-            console.warn('[EditableAreasManager] No camera ID set');
-            return { safeAreas: [], bedAreas: [], floorAreas: [] };
-        }
-
-        // Check connection status
-        if (!this.isCameraConnected()) {
-            return {
-                safeAreas: this.cache.safeAreas || [],
-                bedAreas: this.cache.bedAreas || [],
-                floorAreas: this.cache.floorAreas || []
-            };
-        }
-
         try {
-            const [safeAreas, bedAreas, floorAreas] = await Promise.all([
-                this.fetchSafeAreas(true),
-                this.fetchBedAreas(true),
-                this.fetchFloorAreas(true)
+            // Fetch all area types in parallel
+            const [safeAreas, bedAreas, floorAreas, couchAreas, benchAreas, chairAreas] = await Promise.all([
+                this.fetchSafeAreas(false),  // force fresh fetch
+                this.fetchBedAreas(false),
+                this.fetchFloorAreas(false),
+                this.fetchCouchAreas(false),
+                this.fetchBenchAreas(false),
+                this.fetchChairAreas(false)
             ]);
 
-            return { safeAreas, bedAreas, floorAreas };
-        } catch (error) {
-            console.error('[EditableAreasManager] Error fetching area types:', error);
+            // Cache is already updated by individual fetch methods
             return {
-                safeAreas: this.cache.safeAreas || [],
-                bedAreas: this.cache.bedAreas || [],
-                floorAreas: this.cache.floorAreas || []
+                safeAreas,
+                bedAreas,
+                floorAreas,
+                couchAreas,
+                benchAreas,
+                chairAreas
+            };
+        } catch (error) {
+            console.error('[EditableAreasManager] Error in fetchAllAreas:', error);
+            return {
+                safeAreas: [],
+                bedAreas: [],
+                floorAreas: [],
+                couchAreas: [],
+                benchAreas: [],
+                chairAreas: []
             };
         }
     },
@@ -286,11 +376,22 @@ const EditableAreasManager = {
             this.cache.floorAreas = null;
             this.cache.lastFetch.floorAreas = 0;
         }
+        if (areaType === 'couch' || areaType === null) {
+            this.cache.couchAreas = null;
+            this.cache.lastFetch.couchAreas = 0;
+        }
+        if (areaType === 'bench' || areaType === null) {
+            this.cache.benchAreas = null;
+            this.cache.lastFetch.benchAreas = 0;
+        }
+        if (areaType === 'chair' || areaType === null) {
+            this.cache.chairAreas = null;
+            this.cache.lastFetch.chairAreas = 0;
+        }
         if (areaType === null) {
             this.cache.cameraState = null;
             this.cache.lastFetch.cameraState = 0;
         }
-        console.log(`[EditableAreasManager] Cache invalidated${areaType ? ` for ${areaType}` : ''}`);
     },
 
     // Clear all cache (call on camera switch or disconnect)
@@ -299,15 +400,20 @@ const EditableAreasManager = {
             safeAreas: null,
             bedAreas: null,
             floorAreas: null,
+            couchAreas: null,
+            benchAreas: null,
+            chairAreas: null,
             cameraState: null,
             lastFetch: {
                 safeAreas: 0,
                 bedAreas: 0,
                 floorAreas: 0,
+                couchAreas: 0,
+                benchAreas: 0,
+                chairAreas: 0,
                 cameraState: 0
             }
         };
-        console.log('[EditableAreasManager] All cache cleared');
     }
 };
 

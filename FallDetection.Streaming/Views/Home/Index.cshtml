@@ -19,6 +19,7 @@
     <script src="~/js/streamController.js" defer></script>
     <script src="~/js/commandManager.js" defer></script>
     <script src="~/js/uiControls.js" defer></script>
+    <script src="~/js/editableAreasManager.js" defer></script>
     <script src="~/js/editableAreaEditor.js" defer></script>
     <script src="~/js/cameraRegistration.js" defer></script>
     <script src="~/js/cameraManagement.js" defer></script>
@@ -119,6 +120,15 @@
 
                 <input type="checkbox" id="showFloorAreas">
                 <label for="showFloorAreas" class="toggle-label">Floor Areas</label>
+
+                <input type="checkbox" id="showCouchAreas">
+                <label for="showCouchAreas" class="toggle-label">Couch Areas</label>
+
+                <input type="checkbox" id="showBenchAreas">
+                <label for="showBenchAreas" class="toggle-label">Bench Areas</label>
+
+                <input type="checkbox" id="showChairAreas">
+                <label for="showChairAreas" class="toggle-label">Chair Areas</label>
             </div>
         </div>
 
@@ -189,6 +199,9 @@
                         <option value="safe">🛡️ Safe Area</option>
                         <option value="bed">🛏️ Bed Area</option>
                         <option value="floor">🏠 Floor Area</option>
+                        <option value="couch">🛋️ Couch Area</option>
+                        <option value="bench">🪑 Bench Area</option>
+                        <option value="chair">💺 Chair Area</option>
                     </select>
                 </label>
 

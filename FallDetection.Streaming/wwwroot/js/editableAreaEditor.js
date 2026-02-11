@@ -1,5 +1,5 @@
 // editableAreaEditor.js - Editable Area Editor functionality
-// Supports multiple area types: safe areas, bed areas, floor areas
+// Supports multiple area types: safe areas, bed areas, floor areas, couch areas, bench areas, chair areas
 // Supports tools: Pen (draw), Remove (click to delete)
 
 const EditableAreaEditor = {
@@ -15,47 +15,60 @@ const EditableAreaEditor = {
 
     async loadAreasForCamera(cameraId) {
         try {
-            // Fetch all area types
-            const [safeResponse, bedResponse, floorResponse] = await Promise.all([
-                fetch(`${STREAMING_HTTP_URL}/api/stream/safe-areas?camera_id=${cameraId}`),
-                fetch(`${STREAMING_HTTP_URL}/api/stream/bed-areas?camera_id=${cameraId}`),
-                fetch(`${STREAMING_HTTP_URL}/api/stream/floor-areas?camera_id=${cameraId}`)
-            ]);
+            // Fetch all area types from server (will update cache)
+            const { safeAreas, bedAreas, floorAreas, couchAreas, benchAreas, chairAreas } =
+                await EditableAreasManager.fetchAllAreas();
 
             const editableAreas = [];
 
-            if (safeResponse.ok) {
-                const safeAreas = await safeResponse.json();
-                safeAreas.forEach((coords, index) => {
-                    editableAreas.push({
-                        area_type: 'safe',
-                        coordinates: coords,
-                        name: `Safe Area ${index + 1}`
-                    });
+            // Convert to editable area format
+            safeAreas.forEach((coords, index) => {
+                editableAreas.push({
+                    area_type: 'safe',
+                    coordinates: coords,
+                    name: `Safe Area ${index + 1}`
                 });
-            }
+            });
 
-            if (bedResponse.ok) {
-                const bedAreas = await bedResponse.json();
-                bedAreas.forEach((coords, index) => {
-                    editableAreas.push({
-                        area_type: 'bed',
-                        coordinates: coords,
-                        name: `Bed Area ${index + 1}`
-                    });
+            bedAreas.forEach((coords, index) => {
+                editableAreas.push({
+                    area_type: 'bed',
+                    coordinates: coords,
+                    name: `Bed Area ${index + 1}`
                 });
-            }
+            });
 
-            if (floorResponse.ok) {
-                const floorAreas = await floorResponse.json();
-                floorAreas.forEach((coords, index) => {
-                    editableAreas.push({
-                        area_type: 'floor',
-                        coordinates: coords,
-                        name: `Floor Area ${index + 1}`
-                    });
+            floorAreas.forEach((coords, index) => {
+                editableAreas.push({
+                    area_type: 'floor',
+                    coordinates: coords,
+                    name: `Floor Area ${index + 1}`
                 });
-            }
+            });
+
+            couchAreas.forEach((coords, index) => {
+                editableAreas.push({
+                    area_type: 'couch',
+                    coordinates: coords,
+                    name: `Couch Area ${index + 1}`
+                });
+            });
+
+            benchAreas.forEach((coords, index) => {
+                editableAreas.push({
+                    area_type: 'bench',
+                    coordinates: coords,
+                    name: `Bench Area ${index + 1}`
+                });
+            });
+
+            chairAreas.forEach((coords, index) => {
+                editableAreas.push({
+                    area_type: 'chair',
+                    coordinates: coords,
+                    name: `Chair Area ${index + 1}`
+                });
+            });
 
             console.log(`Loaded ${editableAreas.length} editable areas for ${cameraId}`);
             return editableAreas;
@@ -358,7 +371,10 @@ const EditableAreaEditor = {
         const labels = {
             'safe': 'Safe Area',
             'bed': 'Bed Area',
-            'floor': 'Floor Area'
+            'floor': 'Floor Area',
+            'couch': 'Couch Area',
+            'bench': 'Bench Area',
+            'chair': 'Chair Area'
         };
         return labels[areaType] || 'Area';
     },
@@ -410,7 +426,10 @@ const EditableAreaEditor = {
         const colors = {
             'safe': { stroke: 'hsl(120, 70%, 50%)', fill: 'rgba(144, 238, 144, 0.65)' },   // Light green
             'bed': { stroke: 'hsl(200, 70%, 50%)', fill: 'rgba(173, 216, 230, 0.65)' },     // Light blue
-            'floor': { stroke: 'hsl(0, 0%, 50%)', fill: 'rgba(128, 128, 128, 0.65)' }       // Grey
+            'floor': { stroke: 'hsl(0, 0%, 50%)', fill: 'rgba(128, 128, 128, 0.65)' },      // Grey
+            'couch': { stroke: 'hsl(30, 70%, 50%)', fill: 'rgba(255, 165, 0, 0.65)' },      // Orange
+            'bench': { stroke: 'hsl(30, 50%, 40%)', fill: 'rgba(139, 90, 43, 0.65)' },      // Brown
+            'chair': { stroke: 'hsl(270, 50%, 50%)', fill: 'rgba(147, 112, 219, 0.65)' }    // Purple
         };
         return colors[areaType] || colors['safe'];
     },
@@ -495,8 +514,22 @@ const EditableAreaEditor = {
 
         if (loadingStatus) loadingStatus.textContent = 'Saving...';
 
+        // Log what we're about to save
+        if (window.LogPanel) {
+            const areasByType = {};
+            window.editableAreas.forEach(area => {
+                areasByType[area.area_type] = (areasByType[area.area_type] || 0) + 1;
+            });
+            const summary = Object.entries(areasByType).map(([type, count]) => `${count} ${type}`).join(', ');
+            LogPanel.add(
+                `Saving ${window.editableAreas.length} areas: ${summary}`,
+                'info',
+                'EditableAreas'
+            );
+        }
+
         try {
-            const response = await fetch(`${STREAMING_HTTP_URL}/api/stream/safe-areas`, {
+            const response = await fetch(`${STREAMING_HTTP_URL}/api/stream/editable-areas`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -508,13 +541,24 @@ const EditableAreaEditor = {
             });
 
             if (response.ok) {
+                const result = await response.json();
+
+                // Log success to panel
+                if (window.LogPanel && result.saved_to_disk) {
+                    LogPanel.add(
+                        `Saved ${result.areas_count} areas to disk for ${result.camera_id}`,
+                        'success',
+                        'EditableAreas'
+                    );
+                }
+
                 // Update loading status to success
                 if (loadingStatus) {
                     loadingStatus.textContent = 'Saved successfully!';
                     loadingStatus.style.color = '#28a745';
                 }
 
-                CommandManager.sendCommand("update_safe_areas", window.editableAreas);
+                CommandManager.sendCommand("update_editable_areas", window.editableAreas);
 
                 // Log to panel
                 if (window.LogPanel) {
@@ -525,6 +569,11 @@ const EditableAreaEditor = {
                         'success',
                         'EditableAreas'
                     );
+                }
+
+                // Invalidate cache so fresh data is fetched
+                if (window.EditableAreasManager) {
+                    EditableAreasManager.invalidateCache();
                 }
 
                 // Refresh main display to show new areas

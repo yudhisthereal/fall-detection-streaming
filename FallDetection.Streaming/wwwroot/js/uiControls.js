@@ -28,6 +28,18 @@ const UIControls = {
             DOMElements.showFloorAreas.checked = flags.show_floor_areas;
             DOMElements.showFloorAreas.disabled = !AppState.isConnected;
         }
+        if (typeof flags.show_couch_areas === 'boolean' && DOMElements.showCouchAreas) {
+            DOMElements.showCouchAreas.checked = flags.show_couch_areas;
+            DOMElements.showCouchAreas.disabled = !AppState.isConnected;
+        }
+        if (typeof flags.show_bench_areas === 'boolean' && DOMElements.showBenchAreas) {
+            DOMElements.showBenchAreas.checked = flags.show_bench_areas;
+            DOMElements.showBenchAreas.disabled = !AppState.isConnected;
+        }
+        if (typeof flags.show_chair_areas === 'boolean' && DOMElements.showChairAreas) {
+            DOMElements.showChairAreas.checked = flags.show_chair_areas;
+            DOMElements.showChairAreas.disabled = !AppState.isConnected;
+        }
         if (typeof flags.use_safety_check === 'boolean' && DOMElements.useSafetyCheck) {
             DOMElements.useSafetyCheck.checked = flags.use_safety_check;
             DOMElements.useSafetyCheck.disabled = !AppState.isConnected;
@@ -55,6 +67,9 @@ const UIControls = {
             DOMElements.showSafeArea,
             DOMElements.showBedAreas,
             DOMElements.showFloorAreas,
+            DOMElements.showCouchAreas,
+            DOMElements.showBenchAreas,
+            DOMElements.showChairAreas,
             DOMElements.useSafetyCheck,
             // DOMElements.toggleHME,
             DOMElements.fallAlgorithmSelect,
@@ -153,7 +168,7 @@ const UIControls = {
                 }
 
                 if (window.StreamDisplay && DOMElements.showSafeArea.checked) {
-                    window.StreamDisplay.fetchSafeAreas();
+                    window.StreamDisplay.refreshOverlay();
                 }
             };
         }
@@ -173,7 +188,7 @@ const UIControls = {
                 }
 
                 if (window.StreamDisplay && DOMElements.showBedAreas.checked) {
-                    window.StreamDisplay.fetchBedAreas();
+                    window.StreamDisplay.refreshOverlay();
                 }
             };
         }
@@ -193,7 +208,67 @@ const UIControls = {
                 }
 
                 if (window.StreamDisplay && DOMElements.showFloorAreas.checked) {
-                    window.StreamDisplay.fetchFloorAreas();
+                    window.StreamDisplay.refreshOverlay();
+                }
+            };
+        }
+
+        // Show Couch Areas
+        if (DOMElements.showCouchAreas) {
+            DOMElements.showCouchAreas.onchange = () => {
+                CommandManager.sendCommand("toggle_couch_areas_display", DOMElements.showCouchAreas.checked);
+
+                // Log flag change
+                if (window.LogPanel) {
+                    LogPanel.add(
+                        `🛋️ Show Couch Areas ${DOMElements.showCouchAreas.checked ? 'ENABLED' : 'DISABLED'}`,
+                        'info',
+                        'Flags'
+                    );
+                }
+
+                if (window.StreamDisplay && DOMElements.showCouchAreas.checked) {
+                    window.StreamDisplay.refreshOverlay();
+                }
+            };
+        }
+
+        // Show Bench Areas
+        if (DOMElements.showBenchAreas) {
+            DOMElements.showBenchAreas.onchange = () => {
+                CommandManager.sendCommand("toggle_bench_areas_display", DOMElements.showBenchAreas.checked);
+
+                // Log flag change
+                if (window.LogPanel) {
+                    LogPanel.add(
+                        `🪑 Show Bench Areas ${DOMElements.showBenchAreas.checked ? 'ENABLED' : 'DISABLED'}`,
+                        'info',
+                        'Flags'
+                    );
+                }
+
+                if (window.StreamDisplay && DOMElements.showBenchAreas.checked) {
+                    window.StreamDisplay.refreshOverlay();
+                }
+            };
+        }
+
+        // Show Chair Areas
+        if (DOMElements.showChairAreas) {
+            DOMElements.showChairAreas.onchange = () => {
+                CommandManager.sendCommand("toggle_chair_areas_display", DOMElements.showChairAreas.checked);
+
+                // Log flag change
+                if (window.LogPanel) {
+                    LogPanel.add(
+                        `💺 Show Chair Areas ${DOMElements.showChairAreas.checked ? 'ENABLED' : 'DISABLED'}`,
+                        'info',
+                        'Flags'
+                    );
+                }
+
+                if (window.StreamDisplay && DOMElements.showChairAreas.checked) {
+                    window.StreamDisplay.refreshOverlay();
                 }
             };
         }

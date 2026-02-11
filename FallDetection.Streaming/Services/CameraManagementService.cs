@@ -494,7 +494,7 @@ namespace FallDetection.Streaming.Services
 
             // Log duration since last ping for current camera
             var duration = lastPing > 0 ? currentTime - lastPing : -1;
-            Console.WriteLine($"[CameraManagementService] {cameraId}: LastPing={lastPing}, DurationSinceLastPing={duration}s, Connected={isConnected}");
+            // Console.WriteLine($"[CameraManagementService] {cameraId}: LastPing={lastPing}, DurationSinceLastPing={duration}s, Connected={isConnected}");
 
             return isConnected;
         }
@@ -529,6 +529,13 @@ namespace FallDetection.Streaming.Services
         /// </summary>
         public CameraState? GetCameraState(string cameraId)
         {
+            // Safety check for empty camera ID
+            if (string.IsNullOrWhiteSpace(cameraId))
+            {
+                Console.WriteLine("[GetCameraState] Empty camera ID provided, returning null");
+                return null;
+            }
+
             lock (_cameraStatesLock)
             {
                 if (_cameraStates.TryGetValue(cameraId, out var state))
@@ -557,9 +564,15 @@ namespace FallDetection.Streaming.Services
 
                 // Otherwise if not found, initialize it
                 InitializeCameraState(cameraId);
-                var defaultState = _cameraStates[cameraId];
 
-                return defaultState;
+                // Check again after initialization (in case InitializeCameraState didn't add it due to empty ID)
+                if (_cameraStates.TryGetValue(cameraId, out var defaultState))
+                {
+                    return defaultState;
+                }
+
+                // If still not found (shouldn't happen with valid camera ID), return null
+                return null;
             }
         }
 
@@ -570,6 +583,21 @@ namespace FallDetection.Streaming.Services
             lock (_cameraStatesLock)
             {
                 _cameraStates[cameraId] = state;
+
+            }
+        }
+
+        public void UpdateCameraState2(string cameraId, CameraState state)
+        {
+            if (string.IsNullOrWhiteSpace(cameraId)) return;
+
+            lock (_cameraStatesLock)
+            {
+                _cameraStates[cameraId] = state;
+
+                var areasJson = JsonSerializer.Serialize(state.EditableAreas, new JsonSerializerOptions { WriteIndented = true });
+                Console.WriteLine($"{cameraId} state now has {state.EditableAreas.Count} editable areas:\n{areasJson}");
+
             }
         }
 
@@ -671,6 +699,9 @@ namespace FallDetection.Streaming.Services
                         ["show_safe_areas"] = false,
                         ["show_bed_areas"] = false,
                         ["show_floor_areas"] = false,
+                        ["show_couch_areas"] = false,
+                        ["show_bench_areas"] = false,
+                        ["show_chair_areas"] = false,
                         ["use_safety_check"] = false,
                         ["analytics_mode"] = true,
                         ["hme"] = false
@@ -901,7 +932,7 @@ namespace FallDetection.Streaming.Services
                 if (_cameraStates.TryGetValue(cameraId, out var state))
                 {
                     var count = state.TrackingData.Count;
-                    Console.WriteLine($"[GetAllTrackingData] Camera {cameraId}: returning {count} tracks");
+                    // Console.WriteLine($"[GetAllTrackingData] Camera {cameraId}: returning {count} tracks");
 
                     // Create a copy for logging
                     var trackingDataCopy = new Dictionary<int, TrackingData>(state.TrackingData);
@@ -915,7 +946,7 @@ namespace FallDetection.Streaming.Services
                     return trackingDataCopy;
                 }
 
-                Console.WriteLine($"[GetAllTrackingData] Camera {cameraId}: state not found");
+                // Console.WriteLine($"[GetAllTrackingData] Camera {cameraId}: state not found");
                 return null;
             }
         }

@@ -114,8 +114,15 @@ namespace FallDetection.Streaming.Controllers
         {
             try
             {
-                _logger.LogDebug("State report received from {CameraId}: Recording={IsRecording}, RTMP={RtmpConnected}, Status={Status}",
-                    report.CameraId, report.IsRecording, report.RtmpConnected, report.Status);
+                // Validate camera ID
+                if (string.IsNullOrWhiteSpace(report.CameraId))
+                {
+                    _logger.LogWarning("State report received with empty camera_id, rejecting");
+                    return BadRequest(new { error = "camera_id is required" });
+                }
+
+                _logger.LogDebug("State report received from {CameraId}: Recording={IsRecording}, Status={Status}",
+                    report.CameraId, report.IsRecording, report.Status);
 
                 // Get or create camera state
                 var cameraState = _cameraService.GetCameraState(report.CameraId);
@@ -128,8 +135,7 @@ namespace FallDetection.Streaming.Controllers
                         LastSeen = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
                         LastReport = report.Timestamp,
                         CameraStatus = report.Status,
-                        IsRecording = report.IsRecording,
-                        RtmpConnected = report.RtmpConnected,
+                        IsRecording = report.IsRecording
                         // Note: Control flags and safe areas are NOT initialized from camera report
                         // They are managed by the server as the single source of truth
                     };
@@ -146,7 +152,6 @@ namespace FallDetection.Streaming.Controllers
                     cameraState.LastReport = report.Timestamp;
                     cameraState.CameraStatus = report.Status;
                     cameraState.IsRecording = report.IsRecording;
-                    cameraState.RtmpConnected = report.RtmpConnected;
 
                     _cameraService.UpdateCameraState(report.CameraId, cameraState);
                     _logger.LogDebug("Updated camera state for {CameraId} (timestamp/status only)", report.CameraId);
@@ -284,6 +289,18 @@ namespace FallDetection.Streaming.Controllers
                             cameraState.ControlFlags["show_floor_areas"] = SafeConvertToBool(command.Value);
                             _cameraService.UpdateCameraState(command.CameraId, cameraState);
                             break;
+                        case "toggle_couch_areas_display":
+                            cameraState.ControlFlags["show_couch_areas"] = SafeConvertToBool(command.Value);
+                            _cameraService.UpdateCameraState(command.CameraId, cameraState);
+                            break;
+                        case "toggle_bench_areas_display":
+                            cameraState.ControlFlags["show_bench_areas"] = SafeConvertToBool(command.Value);
+                            _cameraService.UpdateCameraState(command.CameraId, cameraState);
+                            break;
+                        case "toggle_chair_areas_display":
+                            cameraState.ControlFlags["show_chair_areas"] = SafeConvertToBool(command.Value);
+                            _cameraService.UpdateCameraState(command.CameraId, cameraState);
+                            break;
                         case "toggle_safety_check":
                             cameraState.ControlFlags["use_safety_check"] = SafeConvertToBool(command.Value);
                             _cameraService.UpdateCameraState(command.CameraId, cameraState);
@@ -310,7 +327,7 @@ namespace FallDetection.Streaming.Controllers
                                 _cameraService.UpdateCameraState(command.CameraId, cameraState);
                             }
                             break;
-                        case "update_safe_areas":
+                        case "update_editable_areas":
                             if (command.Value is JsonElement jsonElement)
                             {
                                 var editableAreas = JsonSerializer.Deserialize<List<AreaPolygon>>(jsonElement.GetRawText());
@@ -554,6 +571,78 @@ namespace FallDetection.Streaming.Controllers
             }
         }
 
+        [HttpGet("couch-areas")]
+        public IActionResult GetCouchAreas([FromQuery] string camera_id)
+        {
+            try
+            {
+                var state = _cameraService.GetCameraState(camera_id);
+                if (state != null)
+                {
+                    var couchAreas = state.EditableAreas
+                        .Where(a => a.AreaType == "couch")
+                        .Select(a => a.Coordinates)
+                        .ToList();
+                    return Ok(couchAreas);
+                }
+
+                return NotFound(new { error = "Camera not found" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Get couch areas error");
+                return StatusCode(500, new { status = "error", message = ex.Message });
+            }
+        }
+
+        [HttpGet("bench-areas")]
+        public IActionResult GetBenchAreas([FromQuery] string camera_id)
+        {
+            try
+            {
+                var state = _cameraService.GetCameraState(camera_id);
+                if (state != null)
+                {
+                    var benchAreas = state.EditableAreas
+                        .Where(a => a.AreaType == "bench")
+                        .Select(a => a.Coordinates)
+                        .ToList();
+                    return Ok(benchAreas);
+                }
+
+                return NotFound(new { error = "Camera not found" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Get bench areas error");
+                return StatusCode(500, new { status = "error", message = ex.Message });
+            }
+        }
+
+        [HttpGet("chair-areas")]
+        public IActionResult GetChairAreas([FromQuery] string camera_id)
+        {
+            try
+            {
+                var state = _cameraService.GetCameraState(camera_id);
+                if (state != null)
+                {
+                    var chairAreas = state.EditableAreas
+                        .Where(a => a.AreaType == "chair")
+                        .Select(a => a.Coordinates)
+                        .ToList();
+                    return Ok(chairAreas);
+                }
+
+                return NotFound(new { error = "Camera not found" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Get chair areas error");
+                return StatusCode(500, new { status = "error", message = ex.Message });
+            }
+        }
+
         #endregion
 
         #region Pose Tracking Endpoints
@@ -608,11 +697,11 @@ namespace FallDetection.Streaming.Controllers
                     }
                 }
 
-                // LOG: After validation
-                _logger.LogInformation("[POST /api/stream/tracks] CameraId={CameraId}: Validation complete - Valid={ValidCount}, Invalid={InvalidCount}",
-                    request.CameraId,
-                    validTracks.Count,
-                    errors.Count);
+                // LOG: After validation (commented out to reduce log verbosity)
+                // _logger.LogInformation("[POST /api/stream/tracks] CameraId={CameraId}: Validation complete - Valid={ValidCount}, Invalid={InvalidCount}",
+                //     request.CameraId,
+                //     validTracks.Count,
+                //     errors.Count);
 
                 // Store all tracks at once - this replaces all existing tracking data to prevent zombie tracks
                 // Empty list will clear all existing tracks
@@ -638,11 +727,11 @@ namespace FallDetection.Streaming.Controllers
                     timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
                 }, new JsonSerializerOptions { WriteIndented = true });
 
-                _logger.LogInformation("[POST /api/stream/tracks] CameraId={CameraId}: RESPONSE - Processed={ProcessedCount}, Total={TotalCount}\nFULL RESPONSE DATA:\n{FullResponse}",
-                    request.CameraId,
-                    processedTracks.Count,
-                    request.Tracks.Count,
-                    responseJson);
+                // _logger.LogInformation("[POST /api/stream/tracks] CameraId={CameraId}: RESPONSE - Processed={ProcessedCount}, Total={TotalCount}\nFULL RESPONSE DATA:\n{FullResponse}",
+                //     request.CameraId,
+                //     processedTracks.Count,
+                //     request.Tracks.Count,
+                //     responseJson);
 
                 return Ok(new
                 {
@@ -747,8 +836,8 @@ namespace FallDetection.Streaming.Controllers
 
         #region Safe Areas Endpoints
 
-        [HttpPost("safe-areas")]
-        public IActionResult UpdateSafeAreas([FromBody] SafeAreasRequest request)
+        [HttpPost("editable-areas")]
+        public IActionResult UpdateEditableAreas([FromBody] SafeAreasRequest request)
         {
             try
             {
@@ -757,19 +846,29 @@ namespace FallDetection.Streaming.Controllers
                 {
                     if (request.EditableAreas != null)
                     {
+                        _logger.LogInformation($"[SAVE] Camera {request.CameraId}: Received {request.EditableAreas.Count} areas");
+
+                        var areasByType = request.EditableAreas.GroupBy(a => a.AreaType);
+                        foreach (var group in areasByType)
+                        {
+                            _logger.LogInformation($"  [{group.Key}] {group.Count()} areas");
+                        }
+
                         state.EditableAreas = request.EditableAreas;
                     }
                     else
                     {
                         Console.WriteLine("EditableAreas is null");
                     }
-                    _cameraService.UpdateCameraState(request.CameraId, state);
+
+                    _cameraService.UpdateCameraState2(request.CameraId, state);
 
                     return Ok(new
                     {
                         status = "success",
                         camera_id = request.CameraId,
-                        areas_count = request.EditableAreas?.Count ?? 0
+                        areas_count = request.EditableAreas?.Count ?? 0,
+                        saved_to_disk = true
                     });
                 }
 
@@ -1011,6 +1110,7 @@ namespace FallDetection.Streaming.Controllers
 
     public class ForgetCameraRequest
     {
+        [JsonPropertyName("camera_id")]
         public string CameraId { get; set; } = string.Empty;
     }
 
@@ -1033,10 +1133,12 @@ namespace FallDetection.Streaming.Controllers
     {
         [JsonPropertyName("camera_id")]
         public string CameraId { get; set; } = string.Empty;
+        [JsonPropertyName("timestamp")]
         public long Timestamp { get; set; }
+        [JsonPropertyName("status")]
         public string Status { get; set; } = "online";
+        [JsonPropertyName("is_recording")]
         public bool IsRecording { get; set; }
-        public bool RtmpConnected { get; set; }
     }
 
     #endregion

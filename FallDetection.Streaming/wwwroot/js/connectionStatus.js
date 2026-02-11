@@ -36,12 +36,12 @@ const ConnectionStatus = {
 
     updateConnectionStatusDebounced(cameraId, connected, ageSeconds = null, silent = false) {
         // console.log('[ConnectionStatus] updateConnectionStatusDebounced: camera=' + cameraId + ', connected=' + connected + ', silent=' + silent + ', currentStable=' + AppState.isConnectionStable);
-        
+
         // If a status update is already in progress, queue this update
         if (this.statusUpdateInProgress) {
             // console.log('[ConnectionStatus] Status update in progress, queuing update');
             this.pendingConnectionState = { cameraId, connected, ageSeconds, silent };
-            
+
             // Set a timeout to process the pending update after a short delay
             setTimeout(() => {
                 const pending = this.pendingConnectionState;
@@ -52,16 +52,16 @@ const ConnectionStatus = {
             }, 100);
             return;
         }
-        
+
         // Mark that we're processing a status update
         this.statusUpdateInProgress = true;
-        
+
         // Clear any pending update since we're processing now
         this.pendingConnectionState = null;
-        
+
         // Apply the update immediately
         this.updateConnectionStatusImmediate(cameraId, connected, ageSeconds);
-        
+
         // Check if we need to start the stability timer:
         // Only start if: connected, not stable, and NOT already in stability check
         if (connected && !AppState.isConnectionStable && !AppState.connectionStabilityTimer) {
@@ -94,7 +94,7 @@ const ConnectionStatus = {
         } else {
             // console.log('[ConnectionStatus] No action taken: connected=' + connected + ', stable=' + AppState.isConnectionStable);
         }
-        
+
         // Release the lock
         this.statusUpdateInProgress = false;
     },
@@ -172,7 +172,7 @@ const ConnectionStatus = {
     startConnectionStabilityCheck(cameraId, shouldResetStability = true) {
         // console.log('[ConnectionStatus] startConnectionStabilityCheck: camera=' + cameraId + ', shouldResetStability=' + shouldResetStability);
         // console.log('[ConnectionStatus] Current stability timer: ' + (AppState.connectionStabilityTimer ? 'EXISTS' : 'null'));
-        
+
         // Clear any existing stability check
         if (AppState.connectionStabilityTimer) {
             // console.log('[ConnectionStatus] Clearing existing stability timer');
@@ -192,19 +192,19 @@ const ConnectionStatus = {
 
         // DON'T guard clause here - trust that the caller knows what they're doing
         // The guard clause was preventing recovery from disconnected state
-        
+
         // console.log('[ConnectionStatus] Setting new stability timer for ' + CONNECTION_STABILITY_DELAY + 'ms');
-        
+
         // Store camera ID for timer callback
         const timerCameraId = cameraId;
-        
+
         // Wait and verify connection is still stable
         AppState.connectionStabilityTimer = setTimeout(() => {
             // console.log('[ConnectionStatus] Stability timer fired for camera ' + timerCameraId);
-            
+
             // Clear the timer first
             AppState.connectionStabilityTimer = null;
-            
+
             // Double-check connection status before updating UI
             // This prevents the timer from overriding a "Disconnected" status
             const statusAtFiring = AppState.cameraConnectionStatus[timerCameraId];
@@ -212,37 +212,48 @@ const ConnectionStatus = {
                 // console.log('[ConnectionStatus] Timer ignored - camera disconnected while waiting');
                 return;
             }
-            
+
             // Check if we're still connected to the same camera
             // Get current connection status from AppState instead of relying on parameter
             const currentCameraConnected = AppState.cameraConnectionStatus[timerCameraId]?.connected;
             const isCurrentCamera = timerCameraId === AppState.currentCameraId;
-            
+
             // console.log('[ConnectionStatus] Timer check: timerCameraId=' + timerCameraId + ', currentCameraId=' + AppState.currentCameraId + ', isCurrentCamera=' + isCurrentCamera);
             // console.log('[ConnectionStatus] Timer check: currentCameraConnected=' + currentCameraConnected);
-            
+
             if (isCurrentCamera && currentCameraConnected) {
                 AppState.isConnectionStable = true;
                 // console.log('[ConnectionStatus] SUCCESS: Connection to ' + timerCameraId + ' is now stable');
-                
+
                 // If camera was disconnected, reinitialize WebRTC for better stream recovery
                 if (AppState.wasDisconnected) {
                     // console.log('[ConnectionStatus] Camera was disconnected, reinitializing WebRTC...');
                     AppState.wasDisconnected = false;
-                    
-                // Reinitialize stream for better recovery
+
+                    // Reinitialize stream for better recovery
                     if (typeof StreamController !== 'undefined' && StreamController.initializeStream) {
                         // console.log('[ConnectionStatus] Calling StreamController.initializeStream()');
                         StreamController.initializeStream();
                     }
                 }
-                
+
                 // Fetch camera state once when connection is stable
                 if (typeof CommandManager !== 'undefined' && CommandManager.fetchCameraState) {
                     // console.log('[ConnectionStatus] Fetching camera state for stable connection');
                     CommandManager.fetchCameraState(timerCameraId);
                 }
-                
+
+                // Fetch editable areas once when connection is stable
+                if (typeof EditableAreasManager !== 'undefined' && EditableAreasManager.fetchAllAreas) {
+                    console.log('[ConnectionStatus] Fetching editable areas for stable connection');
+                    EditableAreasManager.fetchAllAreas().then(() => {
+                        // Refresh overlay to show areas
+                        if (typeof StreamDisplay !== 'undefined' && StreamDisplay.refreshOverlay) {
+                            StreamDisplay.refreshOverlay();
+                        }
+                    });
+                }
+
                 // Update UI to show stable connection (green)
                 this.updateStreamStatusUI(true, true);
             } else if (isCurrentCamera && !currentCameraConnected) {
@@ -258,7 +269,7 @@ const ConnectionStatus = {
                 // console.log('[ConnectionStatus] UNKNOWN STATE: isCurrentCamera=' + isCurrentCamera + ', currentCameraConnected=' + currentCameraConnected);
             }
         }, shouldResetStability ? CONNECTION_STABILITY_DELAY : 0);
-        
+
         // console.log('[ConnectionStatus] New timer ID: ' + AppState.connectionStabilityTimer);
     },
 
@@ -297,10 +308,10 @@ const ConnectionStatus = {
             );
             const connectedCount = connectedCameras.length;
             const totalCount = AppState.availableCameras.length;
-            
+
             DOMElements.cameraInfoSpan.textContent = connectedCount + '/' + totalCount + ' camera(s) connected';
             DOMElements.cameraInfoSpan.style.color = connectedCount > 0 ? '#4CAF50' : '#ff4444';
-            
+
             // console.log('[ConnectionStatus] Camera info updated: ' + connectedCount + '/' + totalCount + ' connected');
         }
     },
@@ -310,15 +321,15 @@ const ConnectionStatus = {
             // console.log('[ConnectionStatus] WARNING: cameraSelect element not found!');
             return;
         }
-        
+
         // console.log('[ConnectionStatus] updateCameraDropdownStatus: camera=' + cameraId + ', connected=' + connected);
-        
+
         for (let option of DOMElements.cameraSelect.options) {
             if (option.value === cameraId) {
                 const timeAgo = Math.round(AppState.cameraConnectionStatus[cameraId]?.ageSeconds || 0);
                 const status = connected ? '✓' : '✗';
                 const statusText = connected ? 'Connected' : 'Disconnected';
-                
+
                 const optionText = option.textContent;
                 const baseName = optionText.replace(/ [✓✗⚠️]$/, '');
                 option.textContent = baseName + ' ' + status;
@@ -418,7 +429,7 @@ const ConnectionStatus = {
             console.log(`[ConnectionStatus] ${cameraId}: Tolerating failure ${this.statusFailures}/${this.MAX_FAILURES} - keeping current status`);
         }
     },
-    
+
     // New method: Force mark connection as stable (for manual override if needed)
     forceMarkStable(cameraId) {
         // console.log('[ConnectionStatus] forceMarkStable called for ' + cameraId);
@@ -426,14 +437,14 @@ const ConnectionStatus = {
             clearTimeout(AppState.connectionStabilityTimer);
             AppState.connectionStabilityTimer = null;
         }
-        
+
         if (cameraId === AppState.currentCameraId) {
             AppState.isConnectionStable = true;
             this.updateStreamStatusUI(true, true);
             // console.log('[ConnectionStatus] Connection manually marked as stable for ' + cameraId);
         }
     },
-    
+
     // New method: Cancel stability check
     cancelStabilityCheck() {
         if (AppState.connectionStabilityTimer) {
