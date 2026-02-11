@@ -8,6 +8,10 @@
     <link rel="stylesheet" href="~/css/style.css">
     <script src="~/lib/signalr/signalr.min.js"></script>
 
+    <!-- Tom Select -->
+    <link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
+
     <!-- Modular JavaScript files - loaded in dependency order -->
     <script src="~/js/config.js" defer></script>
     <script src="~/js/state.js" defer></script>
@@ -130,6 +134,13 @@
             </div>
             <!-- Sleep Settings Section -->
             <div class="control-group">
+                <h3>Sleep Configuration</h3>
+                <div style="margin-bottom: 12px;">
+                    <label style="display: block; margin-bottom: 5px;">Timezone:</label>
+                    <select id="timezoneSelect" placeholder="Type to search..." autocomplete="off">
+                        <option value="">Loading timezones...</option>
+                    </select>
+                </div>
                 <label>Max Sleep (min):
                     <input type="number" id="maxSleepDuration" min="0" max="1440" placeholder="0 = disabled"
                         style="width: 120px;">
@@ -149,6 +160,10 @@
         <!-- Status Indicator -->
         <div id="streamStatus" class="status-indicator disconnected">
             Disconnected
+        </div>
+        <div id="clockDisplay" class="clock-display"
+            style="display: none; margin-left: 10px; font-family: monospace; font-size: 1.2em; color: var(--theme-text);">
+            --:--
         </div>
 
         <!-- Log Panel -->
@@ -247,6 +262,16 @@
             </div>
             <div class="popup-buttons" style="margin-top: 20px;">
                 <button onclick="hideManagementPopup()" class="btn btn-secondary" style="width: 100%;">Close</button>
+            </div>
+        </div>
+
+        <!-- Generic Confirm Popup -->
+        <div id="confirmPopup" class="popup" style="width: min(400px, 90vw);">
+            <h3 id="confirmTitle" style="color: var(--theme-text);">Confirm Action</h3>
+            <p id="confirmMessage" style="color: var(--theme-text-secondary); margin: 15px 0; font-size: 1.1em;"></p>
+            <div class="popup-buttons" style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button id="confirmYesBtn" class="btn btn-primary" style="min-width: 80px;">Yes</button>
+                <button id="confirmNoBtn" class="btn btn-secondary" style="min-width: 80px;">No</button>
             </div>
         </div>
 

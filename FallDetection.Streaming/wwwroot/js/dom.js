@@ -29,6 +29,8 @@ const DOMElements = {
     manageCamerasBtn: document.getElementById('manageCamerasBtn'),
 
     // Sleep settings
+    timezoneSelect: document.getElementById('timezoneSelect'),
+    clockDisplay: document.getElementById('clockDisplay'),
     maxSleepDuration: document.getElementById('maxSleepDuration'),
     bedtime: document.getElementById('bedtime'),
     wakeupTime: document.getElementById('wakeupTime'),
@@ -47,6 +49,11 @@ const DOMElements = {
     editAreasPopup: document.getElementById('editAreasPopup'),
     registrationPopup: document.getElementById('registrationPopup'),
     managementPopup: document.getElementById('managementPopup'),
+    confirmPopup: document.getElementById('confirmPopup'),
+    confirmTitle: document.getElementById('confirmTitle'),
+    confirmMessage: document.getElementById('confirmMessage'),
+    confirmYesBtn: document.getElementById('confirmYesBtn'),
+    confirmNoBtn: document.getElementById('confirmNoBtn'),
 
     // Safe Area Editor Elements
     editableAreaCanvas: document.getElementById('editableAreaCanvas'),

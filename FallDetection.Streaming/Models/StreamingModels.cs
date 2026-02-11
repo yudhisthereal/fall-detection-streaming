@@ -42,6 +42,9 @@ namespace FallDetection.Streaming.Models
         [JsonPropertyName("wakeup_time")]
         public string WakeupTime { get; set; } = string.Empty;
 
+        [JsonPropertyName("timezone")]
+        public string Timezone { get; set; } = "UTC"; // Default to UTC
+
 
 
         // New property that stores areas with type information
@@ -59,6 +62,9 @@ namespace FallDetection.Streaming.Models
 
         // Registration state - true after camera is approved
         public bool IsRegistered { get; set; }
+
+        // Last time an alert was sent for this camera (Unix timestamp)
+        public long LastAlertTime { get; set; }
 
         // Background update tracking for set_background command
         // set_background=True stays true until camera sends background_updated
@@ -130,6 +136,9 @@ namespace FallDetection.Streaming.Models
 
         [JsonPropertyName("safety_status")]
         public string? SafetyStatus { get; set; }
+
+        [JsonPropertyName("safety_reason")]
+        public string? SafetyReason { get; set; }
 
         [JsonPropertyName("keypoints")]
         public List<float>? Keypoints { get; set; }
@@ -220,6 +229,9 @@ namespace FallDetection.Streaming.Models
 
         [JsonPropertyName("safety_status")]
         public string SafetyStatus { get; set; } = string.Empty;
+
+        [JsonPropertyName("safety_reason")]
+        public string SafetyReason { get; set; } = string.Empty;
     }
 
     #endregion

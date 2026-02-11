@@ -362,6 +362,26 @@ namespace FallDetection.Streaming.Controllers
                                 }
                             }
                             break;
+                        case "set_timezone":
+                            if (command.Value != null)
+                            {
+                                var timezone = command.Value.ToString();
+                                if (!string.IsNullOrEmpty(timezone))
+                                {
+                                    // Verify timezone validity
+                                    try
+                                    {
+                                        TimeZoneInfo.FindSystemTimeZoneById(timezone);
+                                        cameraState.Timezone = timezone;
+                                        _cameraService.UpdateCameraState(command.CameraId, cameraState);
+                                    }
+                                    catch (TimeZoneNotFoundException)
+                                    {
+                                        return BadRequest(new { status = "error", message = "Invalid timezone ID" });
+                                    }
+                                }
+                            }
+                            break;
                     }
                 }
 
@@ -518,6 +538,50 @@ namespace FallDetection.Streaming.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Get camera status error");
+                return StatusCode(500, new { status = "error", message = ex.Message });
+            }
+        }
+
+        [HttpGet("current-time")]
+        public IActionResult GetCurrentTime([FromQuery] string camera_id)
+        {
+            try
+            {
+                var state = _cameraService.GetCameraState(camera_id);
+                if (state != null)
+                {
+                    var timezoneId = string.IsNullOrEmpty(state.Timezone) ? "UTC" : state.Timezone;
+                    TimeZoneInfo timezone;
+                    try
+                    {
+                        timezone = TimeZoneInfo.FindSystemTimeZoneById(timezoneId);
+                    }
+                    catch (TimeZoneNotFoundException)
+                    {
+                        timezone = TimeZoneInfo.Utc;
+                    }
+                    catch (InvalidTimeZoneException)
+                    {
+                        timezone = TimeZoneInfo.Utc;
+                    }
+
+
+                    var now = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, timezone);
+
+                    return Ok(new
+                    {
+                        camera_id = camera_id,
+                        timezone = timezoneId,
+                        time = now.ToString("HH:mm"),
+                        timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+                    });
+                }
+
+                return NotFound(new { error = "Camera not found" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Get current time error");
                 return StatusCode(500, new { status = "error", message = ex.Message });
             }
         }
@@ -708,18 +772,30 @@ namespace FallDetection.Streaming.Controllers
                 // Empty list will clear all existing tracks
                 _cameraService.StoreTracks(request.CameraId, validTracks, request.Timestamp);
 
-                // Trigger Telegram alerts for fall/unsafe events
+                // Trigger Telegram alerts for non-normal events
                 foreach (var track in validTracks)
                 {
                     if (!string.IsNullOrEmpty(track.SafetyStatus))
                     {
                         var status = track.SafetyStatus.ToLower();
-                        if (status == "fall" || status == "potentially_unsafe")
+
+                        // Send notification for ANY non-normal status
+                        if (status != "normal")
                         {
-                            var severity = status == "fall" ? NotificationLevel.FallsOnly : NotificationLevel.PotentiallyUnsafeAndFalls;
-                            var message = status == "fall"
-                                ? $"⚠️ *FALL DETECTED*\nTrack ID: {track.TrackId}\nPose: {track.PoseLabel ?? "unknown"}"
-                                : $"⚠️ Potentially unsafe situation detected\nTrack ID: {track.TrackId}\nPose: {track.PoseLabel ?? "unknown"}";
+                            // Check throttling (10 seconds per camera)
+                            var state = _cameraService.GetCameraState(request.CameraId);
+                            if (state != null)
+                            {
+                                var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                                if ((now - state.LastAlertTime) < 10)
+                                {
+                                    continue; // Throttled
+                                }
+                                state.LastAlertTime = now;
+                            }
+
+                            var severity = DetermineSeverity(status);
+                            var message = FormatAlertMessage(request.CameraId, track);
 
                             // Fire and forget - don't await to avoid blocking
                             _ = _telegramBot.SendAlert(request.CameraId, message, severity);
@@ -732,7 +808,8 @@ namespace FallDetection.Streaming.Controllers
                     track_id = t.TrackId,
                     keypoints_count = t.Keypoints.Count,
                     pose_label = t.PoseLabel,
-                    safety_status = t.SafetyStatus
+                    safety_status = t.SafetyStatus,
+                    safety_reason = t.SafetyReason
                 }).ToList();
 
                 // LOG: Response data
@@ -1111,6 +1188,58 @@ namespace FallDetection.Streaming.Controllers
 
 
         #endregion
+
+        #region Telegram Notification Helpers
+
+        private NotificationLevel DetermineSeverity(string safetyStatus)
+        {
+            return safetyStatus switch
+            {
+                "fall" => NotificationLevel.FallsOnly,
+                "unsafe" => NotificationLevel.PotentiallyUnsafeAndFalls,
+                _ => NotificationLevel.All
+            };
+        }
+
+        private string FormatAlertMessage(string cameraId, TrackItem track)
+        {
+            var emoji = track.SafetyStatus.ToLower() switch
+            {
+                "fall" => "🚨",
+                "unsafe" => "⚠️",
+                _ => "ℹ️"
+            };
+
+            var title = track.SafetyStatus.ToLower() switch
+            {
+                "fall" => "FALL DETECTED",
+                "unsafe" => "UNSAFE SITUATION",
+                _ => "Alert"
+            };
+
+            var message = $"{emoji} *{title}*\n";
+            message += $"Camera: {cameraId}\n";
+            message += $"Track ID: {track.TrackId}\n";
+
+            if (!string.IsNullOrEmpty(track.PoseLabel))
+                message += $"Pose: {track.PoseLabel}\n";
+
+            if (!string.IsNullOrEmpty(track.SafetyReason))
+                message += $"Reason: {FormatReason(track.SafetyReason)}";
+
+            return message;
+        }
+
+        private string FormatReason(string reason)
+        {
+            if (string.IsNullOrEmpty(reason)) return "Unknown";
+            // Convert snake_case to readable format
+            var words = reason.Replace("_", " ").Split(' ');
+            return string.Join(" ", words.Select(word =>
+                word.Length > 0 ? char.ToUpper(word[0]) + word.Substring(1) : word));
+        }
+
+        #endregion
     }
 
     #region Request Models
@@ -1162,4 +1291,6 @@ namespace FallDetection.Streaming.Controllers
     }
 
     #endregion
+
+
 }

@@ -1,8 +1,109 @@
 // uiControls.js - UI Controls management
 
 const UIControls = {
+    setupTimezoneControl: function () {
+        if (DOMElements.timezoneSelect) {
+            // Populate common timezones if empty
+            if (DOMElements.timezoneSelect.options.length <= 1) {
+                const timezones = [
+                    "UTC", "Asia/Bangkok", "Asia/Jakarta", "America/New_York", "America/Los_Angeles", "Europe/London", "Europe/Paris", "Asia/Tokyo", "Australia/Sydney"
+                ];
+                try {
+                    const allTimezones = Intl.supportedValuesOf('timeZone');
+                    if (allTimezones && allTimezones.length > 0) {
+                        timezones.length = 0;
+                        timezones.push(...allTimezones);
+                    }
+                } catch (e) { console.warn("Intl.supportedValuesOf not supported, using defaults"); }
+
+                DOMElements.timezoneSelect.innerHTML = '<option value="">Select a timezone...</option>';
+                timezones.forEach(tz => {
+                    const option = document.createElement('option');
+                    option.value = tz;
+                    option.textContent = tz;
+                    DOMElements.timezoneSelect.appendChild(option);
+                });
+            }
+
+            // Initialize Tom Select
+            if (window.TomSelect && !this.tomSelect) {
+                this.tomSelect = new TomSelect(DOMElements.timezoneSelect, {
+                    create: false,
+                    sortField: {
+                        field: "text",
+                        direction: "asc"
+                    },
+                    onChange: (value) => {
+                        if (value && AppState.isConnected && AppState.currentCameraId) {
+                            CommandManager.sendCommand('set_timezone', value);
+                            this.updateClockDisplay();
+                        }
+                    }
+                });
+            } else if (!this.tomSelect) {
+                DOMElements.timezoneSelect.onchange = () => {
+                    const value = DOMElements.timezoneSelect.value;
+                    if (value && AppState.isConnected && AppState.currentCameraId) {
+                        CommandManager.sendCommand('set_timezone', value);
+                        this.updateClockDisplay();
+                    }
+                };
+            }
+        }
+        this.startClock();
+    },
+
+    startClock: function () {
+        if (this.clockInterval) clearInterval(this.clockInterval);
+        this.updateClockDisplay();
+        this.clockInterval = setInterval(() => this.updateClockDisplay(), 1000);
+    },
+
+    updateClockDisplay: function () {
+        if (!DOMElements.clockDisplay) return;
+
+        if (!AppState.isConnected || !AppState.currentCameraId) {
+            DOMElements.clockDisplay.style.display = 'none';
+            return;
+        }
+
+        DOMElements.clockDisplay.style.display = 'inline-block';
+
+        let timezone = 'UTC';
+        if (this.tomSelect) {
+            timezone = this.tomSelect.getValue();
+        } else if (DOMElements.timezoneSelect) {
+            timezone = DOMElements.timezoneSelect.value;
+        }
+        if (!timezone) timezone = 'UTC';
+
+        try {
+            const now = new Date();
+            const timeString = new Intl.DateTimeFormat('en-GB', {
+                timeZone: timezone,
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+            }).format(now);
+            DOMElements.clockDisplay.textContent = timeString;
+        } catch (e) {
+            DOMElements.clockDisplay.textContent = "--:--";
+        }
+    },
+
     updateFromFlags(flags) {
         if (!flags) return;
+
+        // Timezone
+        if (typeof flags.timezone === 'string') {
+            if (this.tomSelect) {
+                this.tomSelect.setValue(flags.timezone, true);
+            } else if (DOMElements.timezoneSelect) {
+                DOMElements.timezoneSelect.value = flags.timezone;
+            }
+            this.updateClockDisplay();
+        }
 
         if (typeof flags.record === 'boolean' && DOMElements.toggleRecord) {
             DOMElements.toggleRecord.checked = flags.record;
@@ -115,7 +216,38 @@ const UIControls = {
         }
     },
 
+    showConfirm(title, message, onConfirm, onCancel = null) {
+        if (!DOMElements.confirmPopup) {
+            if (confirm(message)) {
+                onConfirm();
+            } else if (onCancel) {
+                onCancel();
+            }
+            return;
+        }
+
+        if (DOMElements.confirmTitle) DOMElements.confirmTitle.textContent = title;
+        if (DOMElements.confirmMessage) DOMElements.confirmMessage.innerHTML = message; // Use innerHTML for flexibility
+
+        DOMHelpers.showPopup(DOMElements.confirmPopup);
+
+        if (DOMElements.confirmYesBtn) {
+            DOMElements.confirmYesBtn.onclick = () => {
+                DOMHelpers.hidePopup(DOMElements.confirmPopup);
+                onConfirm();
+            };
+        }
+
+        if (DOMElements.confirmNoBtn) {
+            DOMElements.confirmNoBtn.onclick = () => {
+                DOMHelpers.hidePopup(DOMElements.confirmPopup);
+                if (onCancel) onCancel();
+            };
+        }
+    },
+
     setupControlHandlers() {
+        this.setupTimezoneControl();
         // Toggle Record
         if (DOMElements.toggleRecord) {
             DOMElements.toggleRecord.onchange = () => {
@@ -320,7 +452,7 @@ const UIControls = {
                 if (!DOMElements.preview || !DOMElements.popup) return;
 
                 if (!AppState.currentCameraId) {
-                    alert('No camera selected');
+                    NotificationSystem.show('No camera selected', 'error');
                     return;
                 }
 
@@ -329,11 +461,7 @@ const UIControls = {
                     const showRaw = window.StreamDisplay && window.StreamDisplay.cameraState?.show_raw === true;
 
                     if (!showRaw) {
-                        if (window.NotificationSystem) {
-                            NotificationSystem.show("Please enable 'Show Raw' first", "warning");
-                        } else {
-                            alert("Please enable 'Show Raw' first");
-                        }
+                        NotificationSystem.show("Please enable 'Show Raw' first", "warning");
                         return; // EXIT EARLY - Do not show popup
                     }
 
@@ -355,14 +483,14 @@ const UIControls = {
 
                     tempImg.onerror = () => {
                         console.error('[Set Background] Failed to load frame from server');
-                        alert('Failed to load current frame. Please try again.');
+                        NotificationSystem.show('Failed to load current frame. Please try again.', 'error');
                     };
 
                     tempImg.src = streamUrl;
 
                 } catch (error) {
                     console.error('[Set Background] Error:', error);
-                    alert('Failed to load current frame: ' + error.message);
+                    NotificationSystem.show('Failed to load current frame: ' + error.message, 'error');
                 }
             };
         }
@@ -371,11 +499,7 @@ const UIControls = {
         if (DOMElements.applySleepSettings) {
             DOMElements.applySleepSettings.onclick = () => {
                 if (!AppState.currentCameraId) {
-                    if (window.NotificationSystem) {
-                        NotificationSystem.show('No camera selected', 'warning');
-                    } else {
-                        alert('No camera selected');
-                    }
+                    NotificationSystem.show('No camera selected', 'warning');
                     return;
                 }
 

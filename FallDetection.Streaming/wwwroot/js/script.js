@@ -29,7 +29,7 @@ async function initializeApplication() {
             const selectedOption = DOMElements.cameraSelect.options[DOMElements.cameraSelect.selectedIndex];
 
             if (selectedOption.disabled) {
-                alert('This camera is awaiting registration approval. Please approve it first.');
+                NotificationSystem.show('This camera is awaiting registration approval. Please approve it first.', 'warning');
                 const previousCamera = AppState.availableCameras.find(
                     cam => cam.camera_id === cameraId && cam.registered
                 );

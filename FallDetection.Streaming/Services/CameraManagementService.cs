@@ -865,6 +865,7 @@ namespace FallDetection.Streaming.Services
                         Bbox = track.Bbox,
                         PoseLabel = track.PoseLabel,
                         SafetyStatus = track.SafetyStatus,
+                        SafetyReason = track.SafetyReason,
                         Timestamp = (long)timestamp,
                         LastUpdated = currentTime
                     };

@@ -103,7 +103,7 @@ const EditableAreaEditor = {
 
     async show() {
         if (!AppState.isConnected) {
-            alert('Camera is disconnected. Cannot edit editable areas.');
+            NotificationSystem.show('Camera is disconnected. Cannot edit editable areas.', 'error');
             return;
         }
 
@@ -155,7 +155,7 @@ const EditableAreaEditor = {
                 }
             };
             backgroundImage.onerror = () => {
-                alert('Failed to load background image');
+                NotificationSystem.show('Failed to load background image', 'error');
                 // Restore show_raw on error
                 if (EditableAreaEditor.prevShowRaw) {
                     CommandManager.sendCommand("toggle_raw", true);
@@ -168,7 +168,7 @@ const EditableAreaEditor = {
 
         } catch (error) {
             console.error('Error showing editable area editor:', error);
-            alert('Failed to open editable area editor: ' + error.message);
+            NotificationSystem.show('Failed to open editable area editor: ' + error.message, 'error');
 
             // Restore show_raw on error
             if (EditableAreaEditor.prevShowRaw !== null && EditableAreaEditor.prevShowRaw !== undefined) {
@@ -295,10 +295,10 @@ const EditableAreaEditor = {
 
             if (clickedAreaIndex !== -1) {
                 const area = window.editableAreas[clickedAreaIndex];
-                if (confirm(`Remove ${area.name}?`)) {
+                UIControls.showConfirm('Remove Area', `Remove ${area.name}?`, () => {
                     window.editableAreas.splice(clickedAreaIndex, 1);
                     EditableAreaEditor.drawAreas();
-                }
+                });
             }
         }
     },
@@ -376,11 +376,11 @@ const EditableAreaEditor = {
     },
 
     clearAllPolygons() {
-        if (confirm("Clear all editable areas?")) {
+        UIControls.showConfirm('Clear All', "Clear all editable areas?", () => {
             window.editableAreas = [];
             currentPolygon = [];
             EditableAreaEditor.drawAreas();
-        }
+        });
     },
 
     drawAreas(tempPolygon = null, hoverPoint = null) {
@@ -483,14 +483,20 @@ const EditableAreaEditor = {
         }
     },
 
-    async saveAreas() {
-        // If there's an unfinished polygon, autofinish it if possible
+    saveAreas() {
         if (currentPolygon.length >= 3) {
-            if (confirm("You have an unfinished polygon. Do you want to include it?")) {
+            UIControls.showConfirm('Unfinished Polygon', "You have an unfinished polygon. Do you want to include it?", () => {
                 EditableAreaEditor.finishCurrentPolygon();
-            }
+                this._performSaveAreas();
+            }, () => {
+                this._performSaveAreas();
+            });
+        } else {
+            this._performSaveAreas();
         }
+    },
 
+    async _performSaveAreas() {
         // Show loading animation and hide toolbar
         const loadingDiv = document.getElementById('safeAreaLoading');
         const toolbar = document.getElementById('editableAreaToolbar');
@@ -598,13 +604,16 @@ const EditableAreaEditor = {
     hide() {
         // Unfinished polygon check
         if (currentPolygon.length > 0) {
-            if (confirm("You have an unfinished polygon. It will be lost if you close. Continue?")) {
+            UIControls.showConfirm('Unfinished Polygon', "You have an unfinished polygon. It will be lost if you close. Continue?", () => {
                 currentPolygon = []; // Clear it
-            } else {
-                return; // Cancel close
-            }
+                this._performHide();
+            }); // If cancelled/no, do nothing
+        } else {
+            this._performHide();
         }
+    },
 
+    _performHide() {
         DOMHelpers.hidePopup(DOMElements.editAreasPopup);
         isEditing = false;
 

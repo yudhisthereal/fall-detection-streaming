@@ -9,7 +9,7 @@ const VALID_COMMANDS = [
     'toggle_safe_areas_display', 'toggle_bed_areas_display', 'toggle_floor_areas_display',
     'toggle_couch_areas_display', 'toggle_bench_areas_display', 'toggle_chair_areas_display',
     'toggle_safety_check', 'set_fall_algorithm', 'toggle_hme',
-    'update_editable_areas', 'set_safety_check_method', 'set_sleep_config'
+    'update_editable_areas', 'set_safety_check_method', 'set_sleep_config', 'set_timezone'
 ];
 
 // Command value validators
