@@ -795,6 +795,13 @@ h1 {
     }
 }
 
+
+.popup-warning {
+    color: #FF9800;
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+
 /* Safe Area Editor Popup */
 #editAreasPopup {
     width: min(1200px, 95vw);
