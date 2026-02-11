@@ -308,9 +308,20 @@ const UIControls = {
                 }
 
                 try {
-                    // Fetch current frame directly from server
+                    // Check if Show Raw is enabled
                     const showRaw = window.StreamDisplay && window.StreamDisplay.cameraState?.show_raw === true;
-                    const endpoint = showRaw ? 'frame' : 'background';
+
+                    if (!showRaw) {
+                        if (window.NotificationSystem) {
+                            NotificationSystem.show("Please enable 'Show Raw' first", "warning");
+                        } else {
+                            alert("Please enable 'Show Raw' first");
+                        }
+                        return; // EXIT EARLY - Do not show popup
+                    }
+
+                    // Fetch current frame directly from server
+                    const endpoint = 'frame'; // Always 'frame' since we force showRaw=true check above
                     const timestamp = Date.now();
                     const streamUrl = `${STREAMING_HTTP_URL}/api/stream/${endpoint}?camera_id=${AppState.currentCameraId}&t=${timestamp}`;
 
