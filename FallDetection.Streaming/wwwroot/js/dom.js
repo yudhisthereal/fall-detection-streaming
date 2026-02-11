@@ -28,6 +28,12 @@ const DOMElements = {
     pendingRegCount: document.getElementById('pendingRegCount'),
     manageCamerasBtn: document.getElementById('manageCamerasBtn'),
 
+    // Sleep settings
+    maxSleepDuration: document.getElementById('maxSleepDuration'),
+    bedtime: document.getElementById('bedtime'),
+    wakeupTime: document.getElementById('wakeupTime'),
+    applySleepSettings: document.getElementById('applySleepSettings'),
+
     // Camera selection
     cameraSelect: document.getElementById('cameraSelect'),
     cameraInfoSpan: document.getElementById('cameraInfo'),

@@ -13,12 +13,18 @@ namespace FallDetection.Streaming.Controllers
         private readonly CameraManagementService _cameraService;
         private readonly StreamingService _streamingService;
         private readonly ILogger<StreamController> _logger;
+        private readonly ITelegramBotService _telegramBot;
 
-        public StreamController(CameraManagementService cameraService, StreamingService streamingService, ILogger<StreamController> logger)
+        public StreamController(
+            CameraManagementService cameraService,
+            StreamingService streamingService,
+            ILogger<StreamController> logger,
+            ITelegramBotService telegramBot)
         {
             _cameraService = cameraService;
             _streamingService = streamingService;
             _logger = logger;
+            _telegramBot = telegramBot;
         }
 
         #region Camera Management Endpoints (Moved from Analytics Server)
@@ -300,6 +306,24 @@ namespace FallDetection.Streaming.Controllers
                         case "toggle_chair_areas_display":
                             cameraState.ControlFlags["show_chair_areas"] = SafeConvertToBool(command.Value);
                             _cameraService.UpdateCameraState(command.CameraId, cameraState);
+                            break;
+                        case "set_sleep_config":
+                            if (command.Value is JsonElement sleepConfig && sleepConfig.ValueKind == JsonValueKind.Object)
+                            {
+                                if (sleepConfig.TryGetProperty("max_sleep_duration", out var durationProp) && durationProp.TryGetInt32(out var duration))
+                                {
+                                    cameraState.MaxSleepDuration = duration;
+                                }
+                                if (sleepConfig.TryGetProperty("bedtime", out var bedtimeProp))
+                                {
+                                    cameraState.Bedtime = bedtimeProp.GetString() ?? string.Empty;
+                                }
+                                if (sleepConfig.TryGetProperty("wakeup_time", out var wakeupProp))
+                                {
+                                    cameraState.WakeupTime = wakeupProp.GetString() ?? string.Empty;
+                                }
+                                _cameraService.UpdateCameraState(command.CameraId, cameraState);
+                            }
                             break;
                         case "toggle_safety_check":
                             cameraState.ControlFlags["use_safety_check"] = SafeConvertToBool(command.Value);
@@ -683,6 +707,25 @@ namespace FallDetection.Streaming.Controllers
                 // Store all tracks at once - this replaces all existing tracking data to prevent zombie tracks
                 // Empty list will clear all existing tracks
                 _cameraService.StoreTracks(request.CameraId, validTracks, request.Timestamp);
+
+                // Trigger Telegram alerts for fall/unsafe events
+                foreach (var track in validTracks)
+                {
+                    if (!string.IsNullOrEmpty(track.SafetyStatus))
+                    {
+                        var status = track.SafetyStatus.ToLower();
+                        if (status == "fall" || status == "potentially_unsafe")
+                        {
+                            var severity = status == "fall" ? NotificationLevel.FallsOnly : NotificationLevel.PotentiallyUnsafeAndFalls;
+                            var message = status == "fall"
+                                ? $"⚠️ *FALL DETECTED*\nTrack ID: {track.TrackId}\nPose: {track.PoseLabel ?? "unknown"}"
+                                : $"⚠️ Potentially unsafe situation detected\nTrack ID: {track.TrackId}\nPose: {track.PoseLabel ?? "unknown"}";
+
+                            // Fire and forget - don't await to avoid blocking
+                            _ = _telegramBot.SendAlert(request.CameraId, message, severity);
+                        }
+                    }
+                }
 
                 var processedTracks = validTracks.Select(t => new
                 {

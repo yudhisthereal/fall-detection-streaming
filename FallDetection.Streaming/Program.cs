@@ -26,6 +26,8 @@ builder.Services.AddCors(options =>
 // Register services
 builder.Services.AddSingleton<CameraManagementService>();
 builder.Services.AddSingleton<StreamingService>();
+builder.Services.AddSingleton<SubscriptionManager>();
+builder.Services.AddSingleton<ITelegramBotService, TelegramBotService>();
 
 // Configure Kestrel to listen on port 8000
 builder.WebHost.ConfigureKestrel(serverOptions =>
@@ -57,5 +59,9 @@ app.MapControllerRoute(
     pattern: "{controller=Home}/{action=Index}/{id?}");
 
 app.MapHub<StreamHub>("/streamHub");
+
+// Start Telegram Bot
+var telegramBot = app.Services.GetRequiredService<ITelegramBotService>();
+await telegramBot.Start();
 
 app.Run();

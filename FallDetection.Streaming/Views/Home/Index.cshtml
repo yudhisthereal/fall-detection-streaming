@@ -128,6 +128,20 @@
                 <input type="checkbox" id="showChairAreas">
                 <label for="showChairAreas" class="toggle-label">Chair Areas</label>
             </div>
+            <!-- Sleep Settings Section -->
+            <div class="control-group">
+                <label>Max Sleep (min):
+                    <input type="number" id="maxSleepDuration" min="0" max="1440" placeholder="0 = disabled"
+                        style="width: 120px;">
+                </label>
+                <label>Bedtime:
+                    <input type="time" id="bedtime" placeholder="HH:MM" style="width: 100px;">
+                </label>
+                <label>Wake Time:
+                    <input type="time" id="wakeupTime" placeholder="HH:MM" style="width: 100px;">
+                </label>
+                <button id="applySleepSettings" class="btn btn-primary">💤 Apply</button>
+            </div>
         </div>
 
 

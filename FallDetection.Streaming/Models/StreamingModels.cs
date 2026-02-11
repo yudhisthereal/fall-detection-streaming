@@ -33,6 +33,15 @@ namespace FallDetection.Streaming.Models
         public Dictionary<string, bool> ControlFlags { get; set; } = new();
         public Dictionary<string, int> ControlFlagsInt { get; set; } = new();
 
+        [JsonPropertyName("max_sleep_duration")]
+        public int MaxSleepDuration { get; set; }
+
+        [JsonPropertyName("bedtime")]
+        public string Bedtime { get; set; } = string.Empty;
+
+        [JsonPropertyName("wakeup_time")]
+        public string WakeupTime { get; set; } = string.Empty;
+
 
 
         // New property that stores areas with type information

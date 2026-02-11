@@ -58,6 +58,23 @@ const UIControls = {
             DOMElements.safetyCheckMethod.disabled = !AppState.isConnected;
         }
 
+        // Sleep settings
+        if (DOMElements.maxSleepDuration) {
+            DOMElements.maxSleepDuration.value = flags.max_sleep_duration || 0;
+            DOMElements.maxSleepDuration.disabled = !AppState.isConnected;
+        }
+        if (DOMElements.bedtime) {
+            DOMElements.bedtime.value = flags.bedtime || '';
+            DOMElements.bedtime.disabled = !AppState.isConnected;
+        }
+        if (DOMElements.wakeupTime) {
+            DOMElements.wakeupTime.value = flags.wakeup_time || '';
+            DOMElements.wakeupTime.disabled = !AppState.isConnected;
+        }
+        if (DOMElements.applySleepSettings) {
+            DOMElements.applySleepSettings.disabled = !AppState.isConnected;
+        }
+
 
 
         const elements = [
@@ -346,6 +363,44 @@ const UIControls = {
                 } catch (error) {
                     console.error('[Set Background] Error:', error);
                     alert('Failed to load current frame: ' + error.message);
+                }
+            };
+        }
+
+        // Apply Sleep Settings Button
+        if (DOMElements.applySleepSettings) {
+            DOMElements.applySleepSettings.onclick = () => {
+                if (!AppState.currentCameraId) {
+                    if (window.NotificationSystem) {
+                        NotificationSystem.show('No camera selected', 'warning');
+                    } else {
+                        alert('No camera selected');
+                    }
+                    return;
+                }
+
+                const maxSleepDuration = parseInt(DOMElements.maxSleepDuration.value) || 0;
+                const bedtime = DOMElements.bedtime.value || '';
+                const wakeupTime = DOMElements.wakeupTime.value || '';
+
+                const sleepConfig = {
+                    max_sleep_duration: maxSleepDuration,
+                    bedtime: bedtime,
+                    wakeup_time: wakeupTime
+                };
+
+                CommandManager.sendCommand('set_sleep_config', sleepConfig);
+
+                if (window.LogPanel) {
+                    LogPanel.add(
+                        `💤 Sleep settings updated: Max=${maxSleepDuration}min, Bedtime=${bedtime || 'not set'}, Wake=${wakeupTime || 'not set'}`,
+                        'info',
+                        'Flags'
+                    );
+                }
+
+                if (window.NotificationSystem) {
+                    NotificationSystem.show('Sleep settings applied', 'success');
                 }
             };
         }
