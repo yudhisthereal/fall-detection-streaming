@@ -246,7 +246,11 @@ const ConnectionStatus = {
                 // Fetch camera state once when connection is stable
                 if (typeof CommandManager !== 'undefined' && CommandManager.fetchCameraState) {
                     // console.log('[ConnectionStatus] Fetching camera state for stable connection');
-                    CommandManager.fetchCameraState(timerCameraId);
+                    CommandManager.fetchCameraState(timerCameraId).then(state => {
+                        if (state && typeof UIControls !== 'undefined' && UIControls.updateSleepDisplay) {
+                            UIControls.updateSleepDisplay(state);
+                        }
+                    }).catch(err => console.error('[ConnectionStatus] Error fetching state on reconnect:', err));
                 }
 
                 // Fetch editable areas once when connection is stable

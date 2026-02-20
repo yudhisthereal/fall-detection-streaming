@@ -184,30 +184,9 @@ const UIControls = {
             DOMElements.safetyCheckMethod.disabled = !AppState.isConnected;
         }
 
-        // Sleep settings (Display Only)
-        if (DOMElements.displayMaxSleep) {
-            const val = flags.max_sleep_duration || 0;
-            DOMElements.displayMaxSleep.textContent = val === 0 ? "Disabled" : `${val} min`;
-        }
-        if (DOMElements.displayBedtime) {
-            DOMElements.displayBedtime.textContent = flags.bedtime || "--:--";
-        }
-        if (DOMElements.displayWakeup) {
-            DOMElements.displayWakeup.textContent = flags.wakeup_time || "--:--";
-        }
-
-        // Also update popup inputs if it's NOT currently open (to keep them in sync)
-        if (DOMElements.sleepConfigPopup && DOMElements.sleepConfigPopup.style.display !== 'block') {
-            if (DOMElements.maxSleepDuration) DOMElements.maxSleepDuration.value = flags.max_sleep_duration || 0;
-            if (DOMElements.bedtime) DOMElements.bedtime.value = flags.bedtime || '';
-            if (DOMElements.wakeupTime) DOMElements.wakeupTime.value = flags.wakeup_time || '';
-        }
-
         if (DOMElements.editSleepBtn) {
             DOMElements.editSleepBtn.disabled = !AppState.isConnected;
         }
-
-
 
         const elements = [
             DOMElements.toggleRecord,
@@ -227,11 +206,36 @@ const UIControls = {
             DOMElements.editAreas
         ];
 
-        elements.forEach(element => {
-            if (element) {
-                DOMHelpers.styleDisabled(element, !AppState.isConnected);
-            }
-        });
+    },
+
+    updateSleepDisplay(state) {
+        if (!state) return;
+
+        if (DOMElements.displayMaxSleep) {
+            const val = state.max_sleep_duration || 0;
+            DOMElements.displayMaxSleep.textContent = val === 0 ? "Disabled" : `${val} min`;
+        }
+        if (DOMElements.displayBedtime) {
+            DOMElements.displayBedtime.textContent = state.bedtime || "--:--";
+        }
+        if (DOMElements.displayWakeup) {
+            DOMElements.displayWakeup.textContent = state.wakeup_time || "--:--";
+        }
+
+        // Update popup inputs
+        if (DOMElements.maxSleepDuration) {
+            DOMElements.maxSleepDuration.value = state.max_sleep_duration || 0;
+        }
+        if (DOMElements.bedtime) {
+            DOMElements.bedtime.value = state.bedtime || '';
+        }
+        if (DOMElements.wakeupTime) {
+            DOMElements.wakeupTime.value = state.wakeup_time || '';
+        }
+
+        if (DOMElements.editSleepBtn) {
+            DOMElements.editSleepBtn.disabled = !AppState.isConnected;
+        }
     },
 
     updateAlgorithmSelection(algorithmValue, updateCamera = true) {
@@ -566,6 +570,10 @@ const UIControls = {
                 };
 
                 CommandManager.sendCommand('set_sleep_config', sleepConfig);
+
+                // Instantly update the display so it reflects the new user setting 
+                // without waiting for the next explicit page load/camera fetch
+                UIControls.updateSleepDisplay(sleepConfig);
 
                 if (window.LogPanel) {
                     LogPanel.add(

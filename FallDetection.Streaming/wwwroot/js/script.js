@@ -102,6 +102,13 @@ async function initializeApplication() {
 // ============================================
 
 function startFlagSyncWorker() {
+    // Fire an initial explicit fetch to populate sleep settings and static state
+    if (AppState.currentCameraId && AppState.isConnected) {
+        CommandManager.fetchCameraState(AppState.currentCameraId).then(initialState => {
+            if (initialState) UIControls.updateSleepDisplay(initialState);
+        }).catch(err => console.error("Initial state fetch error:", err));
+    }
+
     // Use recursive setTimeout instead of setInterval to prevent stacking requests
     // This ensures each request completes before the next one starts
     async function flagSyncLoop() {
