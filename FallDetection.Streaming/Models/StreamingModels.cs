@@ -64,7 +64,12 @@ namespace FallDetection.Streaming.Models
         public bool IsRegistered { get; set; }
 
         // Last time an alert was sent for this camera (Unix timestamp)
+        [JsonPropertyName("last_alert_time")]
         public long LastAlertTime { get; set; }
+
+        // Content of the last alert sent to Telegram
+        [JsonPropertyName("last_alert_message")]
+        public string? LastAlertMessage { get; set; }
 
         // Background update tracking for set_background command
         // set_background=True stays true until camera sends background_updated

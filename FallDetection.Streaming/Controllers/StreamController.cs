@@ -322,6 +322,19 @@ namespace FallDetection.Streaming.Controllers
                                 {
                                     cameraState.WakeupTime = wakeupProp.GetString() ?? string.Empty;
                                 }
+
+                                // Infer sleep duration from bedtime and wakeup time (+3 hours)
+                                if (!string.IsNullOrEmpty(cameraState.Bedtime) && !string.IsNullOrEmpty(cameraState.WakeupTime))
+                                {
+                                    if (DateTime.TryParse(cameraState.Bedtime, out var bt) && DateTime.TryParse(cameraState.WakeupTime, out var wt))
+                                    {
+                                        var sleepDuration = wt >= bt ? (wt - bt) : (wt.AddDays(1) - bt);
+                                        cameraState.MaxSleepDuration = (int)sleepDuration.TotalMinutes + 180; // +3 hours
+                                        _logger.LogInformation("Inferred MaxSleepDuration: {Duration} min (base {Base} min + 180 min offset)",
+                                            cameraState.MaxSleepDuration, (int)sleepDuration.TotalMinutes);
+                                    }
+                                }
+
                                 _cameraService.UpdateCameraState(command.CameraId, cameraState);
                             }
                             break;
@@ -467,6 +480,12 @@ namespace FallDetection.Streaming.Controllers
                     response["_background_update_pending"] = state.BackgroundUpdatePending;
                     response["_background_update_acknowledged"] = state.BackgroundUpdateAcknowledged;
                     response["_is_registered"] = state.IsRegistered;
+
+                    // Sleep settings
+                    response["max_sleep_duration"] = state.MaxSleepDuration;
+                    response["bedtime"] = state.Bedtime;
+                    response["wakeup_time"] = state.WakeupTime;
+                    response["timezone"] = state.Timezone;
 
                     return Ok(response);
                 }
@@ -779,26 +798,43 @@ namespace FallDetection.Streaming.Controllers
                     {
                         var status = track.SafetyStatus.ToLower();
 
-                        // Send notification for ANY non-normal status
-                        if (status != "normal")
+                        // Send notification for critical statuses ONLY
+                        // Exclude normal/safe/tracking
+                        if (status != "normal" && status != "safe" && status != "tracking")
                         {
-                            // Check throttling (10 seconds per camera)
+                            // Check throttling
                             var state = _cameraService.GetCameraState(request.CameraId);
                             if (state != null)
                             {
                                 var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-                                if ((now - state.LastAlertTime) < 10)
+                                var lastTime = state.LastAlertTime;
+                                var lastMsg = state.LastAlertMessage;
+
+                                var severity = DetermineSeverity(status);
+                                var message = FormatAlertMessage(request.CameraId, track);
+
+                                bool throttled = false;
+                                if (message == lastMsg)
+                                {
+                                    if ((now - lastTime) < 10) throttled = true;
+                                }
+                                else
+                                {
+                                    if ((now - lastTime) < 3) throttled = true;
+                                }
+
+                                if (throttled)
                                 {
                                     continue; // Throttled
                                 }
+
                                 state.LastAlertTime = now;
+                                state.LastAlertMessage = message;
+                                _cameraService.UpdateCameraState(request.CameraId, state);
+
+                                // Fire and forget - don't await to avoid blocking
+                                _ = _telegramBot.SendAlert(request.CameraId, message, severity);
                             }
-
-                            var severity = DetermineSeverity(status);
-                            var message = FormatAlertMessage(request.CameraId, track);
-
-                            // Fire and forget - don't await to avoid blocking
-                            _ = _telegramBot.SendAlert(request.CameraId, message, severity);
                         }
                     }
                 }
@@ -1224,7 +1260,7 @@ namespace FallDetection.Streaming.Controllers
             if (!string.IsNullOrEmpty(track.PoseLabel))
                 message += $"Pose: {track.PoseLabel}\n";
 
-            if (!string.IsNullOrEmpty(track.SafetyReason))
+            if (track.SafetyStatus.ToLower() != "fall" && !string.IsNullOrEmpty(track.SafetyReason))
                 message += $"Reason: {FormatReason(track.SafetyReason)}";
 
             return message;

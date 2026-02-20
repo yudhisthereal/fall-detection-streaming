@@ -319,7 +319,7 @@ namespace FallDetection.Streaming.Services
             foreach (var subscription in subscriptions)
             {
                 // Filter based on notification level
-                if (severity > subscription.NotificationLevel)
+                if (severity < subscription.NotificationLevel)
                 {
                     continue; // Skip if severity is lower than user's preference
                 }

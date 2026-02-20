@@ -557,6 +557,12 @@ namespace FallDetection.Streaming.Services
                         IsRegistered = state.IsRegistered,
                         BackgroundUpdatePending = state.BackgroundUpdatePending,
                         BackgroundUpdateAcknowledged = state.BackgroundUpdateAcknowledged,
+                        MaxSleepDuration = state.MaxSleepDuration,
+                        Bedtime = state.Bedtime,
+                        WakeupTime = state.WakeupTime,
+                        Timezone = state.Timezone,
+                        LastAlertTime = state.LastAlertTime,
+                        LastAlertMessage = state.LastAlertMessage,
                         // Note: TrackingData is NOT copied here for performance - use GetAllTrackingData() for thread-safe access
                         TrackingData = new Dictionary<int, TrackingData>()
                     };
@@ -715,6 +721,12 @@ namespace FallDetection.Streaming.Services
                     IsRegistered = true,
                     BackgroundUpdatePending = false,
                     BackgroundUpdateAcknowledged = false,
+                    MaxSleepDuration = 0,
+                    Bedtime = string.Empty,
+                    WakeupTime = string.Empty,
+                    Timezone = "UTC",
+                    LastAlertTime = 0,
+                    LastAlertMessage = string.Empty,
                     LastSeen = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
                 };
 
