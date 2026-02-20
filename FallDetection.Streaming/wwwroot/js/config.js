@@ -5,7 +5,7 @@ const STREAMING_HTTP_HOST = "103.150.93.198";
 
 // Valid commands whitelist for security
 const VALID_COMMANDS = [
-    'toggle_record', 'toggle_raw', 'set_background', 'toggle_auto_update_bg',
+    'toggle_record', 'toggle_raw', 'set_background', 'auto_update_bg',
     'toggle_safe_areas_display', 'toggle_bed_areas_display', 'toggle_floor_areas_display',
     'toggle_couch_areas_display', 'toggle_bench_areas_display', 'toggle_chair_areas_display',
     'toggle_safety_check', 'set_fall_algorithm', 'toggle_hme',
