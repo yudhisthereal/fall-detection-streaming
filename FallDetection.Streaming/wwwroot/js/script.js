@@ -176,11 +176,6 @@ function cleanup() {
     // Stop HTTP stream
     StreamController.stopHTTPStream();
 
-    // Disconnect WebRTC
-    if (window.webrtcStreamer) {
-        window.webrtcStreamer.disconnect();
-    }
-
     // Disconnect SignalR
     SignalRManager.disconnect();
 }

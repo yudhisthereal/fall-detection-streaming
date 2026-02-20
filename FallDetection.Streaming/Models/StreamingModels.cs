@@ -42,6 +42,9 @@ namespace FallDetection.Streaming.Models
         [JsonPropertyName("wakeup_time")]
         public string WakeupTime { get; set; } = string.Empty;
 
+        [JsonPropertyName("tolerance")]
+        public int Tolerance { get; set; } = 30; // Minutes to pad on top of calculated sleep interval
+
         [JsonPropertyName("timezone")]
         public string Timezone { get; set; } = "UTC"; // Default to UTC
 

@@ -6,401 +6,414 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>MaixCAM Analytics Dashboard</title>
     <link rel="stylesheet" href="~/css/style.css">
-    <script src="~/lib/signalr/signalr.min.js"></script>
+        <script src="~/lib/signalr/signalr.min.js"></script>
 
-    <!-- Tom Select -->
-    <link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
+        <!-- Tom Select -->
+        <link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.css" rel="stylesheet">
+        <script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
 
-    <!-- Modular JavaScript files - loaded in dependency order -->
-    <script src="~/js/config.js" defer></script>
-    <script src="~/js/state.js" defer></script>
-    <script src="~/js/dom.js" defer></script>
-    <script src="~/js/logPanel.js" defer></script>
-    <script src="~/js/connectionStatus.js" defer></script>
-    <script src="~/js/signalr.js" defer></script>
-    <script src="~/js/cameraManager.js" defer></script>
-    <script src="~/js/streamController.js" defer></script>
-    <script src="~/js/commandManager.js" defer></script>
-    <script src="~/js/notification.js" defer></script>
-    <script src="~/js/uiControls.js" defer></script>
-    <script src="~/js/editableAreasManager.js" defer></script>
-    <script src="~/js/editableAreaEditor.js" defer></script>
-    <script src="~/js/cameraRegistration.js" defer></script>
-    <script src="~/js/cameraManagement.js" defer></script>
-    <script src="~/js/streamDisplay.js" defer></script>
-    <script src="~/js/algorithmInfo.js" defer></script>
-    @* <script src="~/js/webrtc.js" defer></script> *@
-</head>
+        <!-- Modular JavaScript files - loaded in dependency order -->
+        <script src="~/js/config.js" defer></script>
+        <script src="~/js/state.js" defer></script>
+        <script src="~/js/dom.js" defer></script>
+        <script src="~/js/logPanel.js" defer></script>
+        <script src="~/js/connectionStatus.js" defer></script>
+        <script src="~/js/signalr.js" defer></script>
+        <script src="~/js/cameraManager.js" defer></script>
+        <script src="~/js/streamController.js" defer></script>
+        <script src="~/js/commandManager.js" defer></script>
+        <script src="~/js/notification.js" defer></script>
+        <script src="~/js/uiControls.js" defer></script>
+        <script src="~/js/editableAreasManager.js" defer></script>
+        <script src="~/js/editableAreaEditor.js" defer></script>
+        <script src="~/js/cameraRegistration.js" defer></script>
+        <script src="~/js/cameraManagement.js" defer></script>
+        <script src="~/js/streamDisplay.js" defer></script>
+        <script src="~/js/algorithmInfo.js" defer></script>
+        @* <script src="~/js/webrtc.js" defer></script> *@
+    </head>
 
-<body>
-    <h1>Patient Monitoring Dashboard</h1>
+    <body>
+        <h1>Patient Monitoring Dashboard</h1>
 
-    <!-- Main container for layout reordering -->
-    <div class="main-container">
+        <!-- Main container for layout reordering -->
+        <div class="main-container">
 
-        <!-- Stream comes first after title -->
-        <div
-            style="position: relative; display: inline-block; width: 100%; max-width: 1200px; margin: 20px auto; display: block;">
-            <!-- Two-pass rendering: Background img (static) + Overlay canvas (skeletons & safe areas) -->
-            <div style="position: relative; width: 100%; aspect-ratio: 16/9;">
-                <img id="streamBackgroundImg" alt="Background"
-                    style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border-radius:12px; border:2px solid var(--theme-border); background:#000; z-index: 1; object-fit: cover;" />
-                <canvas id="overlayCanvas"
-                    style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2;"></canvas>
-            </div>
-            <!-- Hidden img element for loading video frames (not displayed directly) -->
-            <img id="streamImg" alt="Live Stream" style="display: none;" />
-        </div>
-
-        <!-- Camera Controls -->
-        <div id="cameraControls" class="camera-controls">
-            <!-- Camera selection row -->
-            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;">
-                <label class="camera-label">📷 Camera:</label>
-                <select id="cameraSelect">
-                    <option value="camera_000">Camera 0</option>
-                </select>
-                <button id="refreshCamerasBtn" class="btn btn-primary">🔄 Refresh</button>
-            </div>
-
-
-            <!-- Registration and Management buttons -->
-            <div class="camera-control-row">
-                <button id="pendingRegistrationsBtn" class="btn btn-warning" style="display: none;">
-                    ⏳ Pending Registrations (<span id="pendingRegCount">0</span>)
-                </button>
-                <button id="manageCamerasBtn" class="btn btn-secondary">
-                    📷 Manage Cameras
-                </button>
-            </div>
-
-            <span id="cameraInfo" class="cameraInfo">Loading...</span>
-        </div>
-
-        <!-- Control Panel -->
-        <div class="control-panel">
-            <div class="control-group">
-                <input type="checkbox" id="toggleRecord">
-                <label for="toggleRecord" class="toggle-label">Record</label>
-
-                <input type="checkbox" id="toggleRaw">
-                <label for="toggleRaw" class="toggle-label">Show Raw</label>
-
-                <input type="checkbox" id="autoUpdateBg">
-                <label for="autoUpdateBg" class="toggle-label">Auto-update BG</label>
-            </div>
-            <div class="control-group">
-                <label>Safety Check Method:
-                    <select id="safetyCheckMethod">
-                        <option value="1">Hip</option>
-                        <option value="2">Torso</option>
-                        <option value="3" selected>Torso + Head</option>
-                        <option value="4">Torso + Head + Knees</option>
-                        <option value="5">Full Body</option>
-                    </select>
-                </label>
-                <input type="checkbox" id="useSafetyCheck">
-                <label for="useSafetyCheck" class="toggle-label">Use Safety
-                    Check</label>
-            </div>
-            <div class="control-group">
-                <label>Fall Algorithm:
-                    <select id="fallAlgorithmSelect">
-                        <option value="1">BBox Only</option>
-                        <option value="2" selected>BBox + Pose</option>
-                    </select>
-                </label>
-                <button id="setBackgroundBtn" class="btn btn-primary" title="Set current frame as background">📸 Set
-                    BG</button>
-                <button id="editAreas" class="btn btn-secondary" title="Edit zones">🛡️ Edit Areas</button>
-            </div>
-            <!-- Area Display Section -->
-            <div class="control-group">
-                <input type="checkbox" id="showBedAreas">
-                <label for="showBedAreas" class="toggle-label">Bed Areas</label>
-
-                <input type="checkbox" id="showFloorAreas">
-                <label for="showFloorAreas" class="toggle-label">Floor Areas</label>
-
-                <input type="checkbox" id="showCouchAreas">
-                <label for="showCouchAreas" class="toggle-label">Couch Areas</label>
-
-                <input type="checkbox" id="showBenchAreas">
-                <label for="showBenchAreas" class="toggle-label">Bench Areas</label>
-
-                <input type="checkbox" id="showChairAreas">
-                <label for="showChairAreas" class="toggle-label">Chair Areas</label>
-            </div>
-            <!-- Sleep Settings Section -->
-            <div class="control-group">
-                <div style="margin-bottom: 12px;">
-                    <label style="display: block; margin-bottom: 5px;">Timezone:</label>
-                    <select id="timezoneSelect" placeholder="Type to search..." autocomplete="off">
-                        <option value="">Loading timezones...</option>
-                    </select>
+            <!-- Stream comes first after title -->
+            <div
+                style="position: relative; display: inline-block; width: 100%; max-width: 1200px; margin: 20px auto; display: block;">
+                <!-- Two-pass rendering: Background img (static) + Overlay canvas (skeletons & safe areas) -->
+                <div style="position: relative; width: 100%; aspect-ratio: 16/9;">
+                    <img id="streamBackgroundImg" alt="Background"
+                         style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border-radius:12px; border:2px solid var(--theme-border); background:#000; z-index: 1; object-fit: cover;" />
+                    <canvas id="overlayCanvas"
+                            style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2;"></canvas>
                 </div>
-                <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
-                    <div class="info-tag">
-                        <span class="info-label">Max Sleep:</span>
-                        <span id="displayMaxSleep" class="info-value">-- min</span>
-                    </div>
-                    <div class="info-tag">
-                        <span class="info-label">Bedtime:</span>
-                        <span id="displayBedtime" class="info-value">--:--</span>
-                    </div>
-                    <div class="info-tag">
-                        <span class="info-label">Wake:</span>
-                        <span id="displayWakeup" class="info-value">--:--</span>
-                    </div>
-                    <button id="editSleepBtn" class="btn btn-secondary" title="Edit Schedule">📅 Edit Schedule</button>
-                </div>
+                <!-- Hidden img element for loading video frames (not displayed directly) -->
+                <img id="streamImg" alt="Live Stream" style="display: none;" />
             </div>
-        </div>
 
-
-
-        <!-- Status Indicator -->
-        <div id="streamStatus" class="status-indicator disconnected">
-            Disconnected
-        </div>
-        <div id="clockDisplay" class="clock-display"
-            style="display: none; margin-left: 10px; font-family: monospace; font-size: 1.2em; color: var(--theme-text);">
-            --:--
-        </div>
-
-        <!-- Log Panel -->
-        <div id="log-panel" class="log-panel minimized">
-            <div class="log-header">
-                <span>📋 Logs</span>
-                <div class="log-controls">
-                    <select id="logCategoryFilter" class="log-filter-select" onchange="filterLog()">
-                        <option value="all">All Categories</option>
-                        <option value="Connection">Connection</option>
-                        <option value="BackgroundImg">BackgroundImg</option>
-                        <option value="StreamImg">StreamImg</option>
-                        <option value="Flags">Flags</option>
-                        <option value="EditableAreas">EditableAreas</option>
+            <!-- Camera Controls -->
+            <div id="cameraControls" class="camera-controls">
+                <!-- Camera selection row -->
+                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;">
+                    <label class="camera-label">📷 Camera:</label>
+                    <select id="cameraSelect">
+                        <option value="camera_000">Camera 0</option>
                     </select>
-                    <button id="minimizeLogBtn" class="btn-minimize" onclick="toggleLogPanel()"
-                        title="Maximize">□</button>
-                    <button id="clearLogBtn" class="btn-clear" onclick="clearLog()">Clear</button>
+                    <button id="refreshCamerasBtn" class="btn btn-primary">🔄 Refresh</button>
                 </div>
-            </div>
-            <div id="log-content" class="log-content"></div>
-        </div>
 
-        <!-- Background Confirmation Popup -->
-        <div id="popup" class="popup">
-            <h3 id="popupTitle">Set this frame as background?</h3>
-            <p class="popup-warning">⚠️ Ensure no people are in-frame while this process is running</p>
-            <img id="preview" src="">
-            <br />
-            <div id="popupLoading" class="popup-loading" style="display: none;">
-                <div class="spinner"></div>
-                <span id="popupStatus">Setting background...</span>
-            </div>
-            <div id="popupButtons">
-                <button onclick="confirmBackground()" class="btn btn-primary">Yes</button>
-                <button onclick="hidePopup()" class="btn btn-secondary">Cancel</button>
-            </div>
-        </div>
 
-        <!-- Safe Area Editor Popup -->
-        <div id="editAreasPopup" class="popup">
-            <h3>🛡️ Edit Editable Areas</h3>
-            <div class="instructions">
-                <p><strong>Instructions:</strong></p>
-                <ul>
-                    <li>Select a tool from the toolbar</li>
-                    <li><strong>Pen Tool:</strong> Click to add points, close polygon to finish</li>
-                    <li><strong>Remove Tool:</strong> Click on a polygon to delete it</li>
-                    <li>Right-click to remove the last point (Pen tool)</li>
-                </ul>
-            </div>
-
-            <div class="toolbar" id="editableAreaToolbar"
-                style="margin-bottom: 10px; display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px;">
-                <!-- Area Type Selector -->
-                <label
-                    style="display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.05); padding: 5px; border-radius: 6px;">
-                    <span style="margin-right: 8px; font-size: 0.9em;">Type:</span>
-                    <select id="areaTypeSelector"
-                        style="padding: 5px; border-radius: 4px; border: 1px solid var(--theme-border); background: var(--theme-surface); color: white;">
-                        <option value="bed">🛏️ Bed Area</option>
-                        <option value="floor">🏠 Floor Area</option>
-                        <option value="couch">🛋️ Couch Area</option>
-                        <option value="bench">🪑 Bench Area</option>
-                        <option value="chair">💺 Chair Area</option>
-                    </select>
-                </label>
-
-                <!-- Tools -->
-                <button id="toolPenBtn" class="btn btn-primary" title="Draw Polygons">+</button>
-                <button id="toolRemoveBtn" class="btn btn-secondary" title="Remove Polygons">-</button>
-                <button id="toolClearBtn" class="btn btn-warning" title="Clear All Polygons">Clear</button>
-            </div>
-
-            <div class="canvas-container">
-                <canvas id="editableAreaCanvas"></canvas>
-            </div>
-
-            <div id="safeAreaLoading" class="popup-loading" style="display: none;">
-                <div class="spinner"></div>
-                <span id="safeAreaLoadingStatus">Saving...</span>
-            </div>
-            <div class="toolbar" id="editableAreaAction">
-                <button id="saveAreasBtn" class="btn btn-success">💾 Save</button>
-                <button onclick="if(window.EditableAreaEditor) window.EditableAreaEditor.hide()"
-                    class="btn btn-secondary">Cancel</button>
-            </div>
-
-            <div id="saveStatus" class="status"></div>
-        </div>
-
-        <!-- Camera Management Popup -->
-        <div id="managementPopup" class="popup" style="width: min(600px, 95vw);">
-            <div id="managementList" class="management-list">
-                <!-- List of registered cameras will be inserted here -->
-            </div>
-            <div class="popup-buttons" style="margin-top: 20px;">
-                <button onclick="hideManagementPopup()" class="btn btn-secondary" style="width: 100%;">Close</button>
-            </div>
-        </div>
-
-        <!-- Generic Confirm Popup -->
-        <div id="confirmPopup" class="popup" style="width: min(400px, 90vw);">
-            <h3 id="confirmTitle" style="color: var(--theme-text);">Confirm Action</h3>
-            <p id="confirmMessage" style="color: var(--theme-text-secondary); margin: 15px 0; font-size: 1.1em;"></p>
-            <div class="popup-buttons" style="display: flex; gap: 10px; justify-content: flex-end;">
-                <button id="confirmYesBtn" class="btn btn-primary" style="min-width: 80px;">Yes</button>
-                <button id="confirmNoBtn" class="btn btn-secondary" style="min-width: 80px;">No</button>
-            </div>
-        </div>
-
-        <!-- Pending Registrations Popup -->
-        <div id="registrationPopup" class="popup" style="width: min(500px, 95vw);">
-            <div id="registrationList">
-                <!-- List of pending registrations will be inserted here -->
-            </div>
-            <!-- Static Close button for registration popup -->
-            <div id="registrationCloseBtn" class="popup-buttons" style="margin-top: 15px;">
-                <button onclick="hideRegistrationPopup()" class="btn btn-secondary" style="width: 100%;">Close</button>
-            </div>
-            <div id="registrationForm" style="display: none;">
-                <h3>Approve Camera Registration</h3>
-                <div class="cameraInfo-card"
-                    style="background: var(--theme-surface-light); padding: 15px; border-radius: 10px; margin-bottom: 20px;">
-                    <p><strong>📡 Camera ID:</strong> <span id="regCameraID"
-                            style="color: var(--theme-primary); font-family: monospace; font-size: 1.1em;"></span></p>
-                    <p><strong>📍 IP Address:</strong> <span id="regCameraIP" style="color: #4CAF50;"></span></p>
-                    <p><strong>⏰ Status:</strong> <span style="color: #FF9800;">Pending Approval</span></p>
+                <!-- Registration and Management buttons -->
+                <div class="camera-control-row">
+                    <button id="pendingRegistrationsBtn" class="btn btn-warning" style="display: none;">
+                        ⏳ Pending Registrations (<span id="pendingRegCount">0</span>)
+                    </button>
+                    <button id="manageCamerasBtn" class="btn btn-secondary">
+                        📷 Manage Cameras
+                    </button>
                 </div>
-                <label for="cameraNameInput" style="display: block; margin: 15px 0 5px 0;">Camera Name:</label>
-                <input type="text" id="cameraNameInput" placeholder="Enter camera name (e.g., Living Room Camera)"
-                    style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid var(--theme-primary); background: var(--theme-surface); color: white; font-size: 1em;">
-                <div class="popup-buttons" style="display: flex; gap: 10px; margin-top: 20px;">
-                    <button onclick="approveRegistration()" class="btn btn-success" style="flex: 2;">Register</button>
-                    <button onclick="backToRegistrationList()" class="btn btn-secondary" style="flex: 1;">←
-                        Back</button>
-                    <button onclick="hideRegistrationPopup()" class="btn btn-danger" style="flex: 1;">Cancel</button>
-                </div>
-            </div>
-        </div>
 
-        <!-- Sleep Configuration Popup -->
-        <div id="sleepConfigPopup" class="popup" style="width: min(400px, 90vw);">
-            <h3>💤 Sleep Schedule</h3>
-            <div style="display: flex; flex-direction: column; gap: 15px; margin: 20px 0;">
-                <label>
-                    Max Sleep Duration (minutes):
-                    <input type="number" id="maxSleepDuration" min="0" max="1440" placeholder="0 = disabled"
-                        style="width: 100%; padding: 8px; margin-top: 5px; background: var(--theme-bg); border: 1px solid var(--theme-border); color: var(--theme-text); border-radius: 4px;">
-                    <small style="color: var(--theme-text-secondary); display: block; margin-top: 2px;">Set to 0 to
-                        disable
-                        monitoring</small>
-                </label>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                    <label>
-                        Bedtime:
-                        <input type="time" id="bedtime"
-                            style="width: 100%; padding: 8px; margin-top: 5px; background: var(--theme-bg); border: 1px solid var(--theme-border); color: var(--theme-text); border-radius: 4px;">
+                <span id="cameraInfo" class="cameraInfo">Loading...</span>
+            </div>
+
+            <!-- Control Panel -->
+            <div class="control-panel">
+                <div class="control-group">
+                    <input type="checkbox" id="toggleRecord">
+                    <label for="toggleRecord" class="toggle-label">Record</label>
+
+                    <input type="checkbox" id="toggleRaw">
+                    <label for="toggleRaw" class="toggle-label">Show Raw</label>
+
+                    <input type="checkbox" id="autoUpdateBg">
+                    <label for="autoUpdateBg" class="toggle-label">Auto-update BG</label>
+                </div>
+                <div class="control-group">
+                    <label>Safety Check Method:
+                        <select id="safetyCheckMethod">
+                            <option value="1">Hip</option>
+                            <option value="2">Torso</option>
+                            <option value="3" selected>Torso + Head</option>
+                            <option value="4">Torso + Head + Knees</option>
+                            <option value="5">Full Body</option>
+                        </select>
                     </label>
-                    <label>
-                        Wake Up Time:
-                        <input type="time" id="wakeupTime"
-                            style="width: 100%; padding: 8px; margin-top: 5px; background: var(--theme-bg); border: 1px solid var(--theme-border); color: var(--theme-text); border-radius: 4px;">
-                    </label>
+                    <input type="checkbox" id="useSafetyCheck">
+                    <label for="useSafetyCheck" class="toggle-label">Use Safety
+                        Check</label>
+                    </div>
+                    <div class="control-group">
+                        <label>Fall Algorithm:
+                            <select id="fallAlgorithmSelect">
+                                <option value="1">BBox Only</option>
+                                <option value="2" selected>BBox + Pose</option>
+                            </select>
+                        </label>
+                        <button id="setBackgroundBtn" class="btn btn-primary" title="Set current frame as background">📸 Set
+                            BG</button>
+                            <button id="editAreas" class="btn btn-secondary" title="Edit zones">🛡️ Edit Areas</button>
+                        </div>
+                        <!-- Area Display Section -->
+                        <div class="control-group">
+                            <input type="checkbox" id="showBedAreas">
+                            <label for="showBedAreas" class="toggle-label">Bed Areas</label>
+
+                            <input type="checkbox" id="showFloorAreas">
+                            <label for="showFloorAreas" class="toggle-label">Floor Areas</label>
+
+                            <input type="checkbox" id="showCouchAreas">
+                            <label for="showCouchAreas" class="toggle-label">Couch Areas</label>
+
+                            <input type="checkbox" id="showBenchAreas">
+                            <label for="showBenchAreas" class="toggle-label">Bench Areas</label>
+
+                            <input type="checkbox" id="showChairAreas">
+                            <label for="showChairAreas" class="toggle-label">Chair Areas</label>
+                        </div>
+                        <!-- Sleep Settings Section -->
+                        <div class="control-group">
+                            <div style="margin-bottom: 12px;">
+                                <label style="display: block; margin-bottom: 5px;">Timezone:</label>
+                                <select id="timezoneSelect" placeholder="Type to search..." autocomplete="off">
+                                    <option value="">Loading timezones...</option>
+                                </select>
+                            </div>
+                            <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+                                <div class="info-tag">
+                                    <span class="info-label">Max Sleep:</span>
+                                    <span id="displayMaxSleep" class="info-value">-- min</span>
+                                </div>
+                                <div class="info-tag" style="display: flex; flex-direction: column;">
+                                    <div>
+                                        <span class="info-label">Bedtime:</span>
+                                        <span id="displayBedtime" class="info-value">--:--</span>
+                                    </div>
+                                    <div id="displayBedtimeTolerance" style="font-size: 0.8em; opacity: 0.8; margin-top: 2px;">
+                                    </div>
+                                </div>
+                                <div class="info-tag" style="display: flex; flex-direction: column;">
+                                    <div>
+                                        <span class="info-label">Wake:</span>
+                                        <span id="displayWakeup" class="info-value">--:--</span>
+                                    </div>
+                                    <div id="displayWakeupTolerance" style="font-size: 0.8em; opacity: 0.8; margin-top: 2px;"></div>
+                                </div>
+                            </div>
+                            <button id="editSleepBtn" class="btn btn-secondary" title="Edit Schedule">📅 Edit Schedule</button>
+                        </div>
+                    </div>
                 </div>
-            </div>
-            <div class="popup-buttons">
-                <button id="saveSleepBtn" class="btn btn-primary">Save Changes</button>
-                <button id="cancelSleepBtn" class="btn btn-secondary">Cancel</button>
-            </div>
-        </div>
 
-        <script src="~/js/script.js" defer></script>
-        <script>
-            // Initialize SignalR connection
-            const connection = new signalR.HubConnectionBuilder()
-                .withUrl("/streamHub")
-                .configureLogging(signalR.LogLevel.Information)
-                .build();
 
-            // Use global camera state from script.js - DO NOT redefine locally
-            // The currentCameraId is initialized as "camera_000" in script.js
-            // and will be updated when cameras are loaded
 
-            // Stream URL - will be updated by switchCamera function in script.js
-            let streamUrl = `rtmp://103.150.93.198:1935/live/${window.currentCameraId}`;
+                <!-- Status Indicator -->
+                <div id="streamStatus" class="status-indicator disconnected">
+                    Disconnected
+                </div>
+                <div id="clockDisplay" class="clock-display"
+                     style="display: none; margin-left: 10px; font-family: monospace; font-size: 1.2em; color: var(--theme-text);">
+                    --:--
+                </div>
 
-            // Global variables for UI
-            let ANALYTICS_HTTP_URL = window.location.origin;
+                <!-- Log Panel -->
+                <div id="log-panel" class="log-panel minimized">
+                    <div class="log-header">
+                        <span>📋 Logs</span>
+                        <div class="log-controls">
+                            <select id="logCategoryFilter" class="log-filter-select" onchange="filterLog()">
+                                <option value="all">All Categories</option>
+                                <option value="Connection">Connection</option>
+                                <option value="BackgroundImg">BackgroundImg</option>
+                                <option value="StreamImg">StreamImg</option>
+                                <option value="Flags">Flags</option>
+                                <option value="EditableAreas">EditableAreas</option>
+                            </select>
+                            <button id="minimizeLogBtn" class="btn-minimize" onclick="toggleLogPanel()" title="Maximize">□</button>
+                            <button id="clearLogBtn" class="btn-clear" onclick="clearLog()">Clear</button>
+                        </div>
+                    </div>
+                    <div id="log-content" class="log-content"></div>
+                </div>
 
-            // Initialize on page load
-            document.addEventListener('DOMContentLoaded', function () {
-                const algorithmSelect = document.getElementById('fallAlgorithmSelect');
+                <!-- Background Confirmation Popup -->
+                <div id="popup" class="popup">
+                    <h3 id="popupTitle">Set this frame as background?</h3>
+                    <p class="popup-warning">⚠️ Ensure no people are in-frame while this process is running</p>
+                    <img id="preview" src="">
+                    <br />
+                    <div id="popupLoading" class="popup-loading" style="display: none;">
+                        <div class="spinner"></div>
+                        <span id="popupStatus">Setting background...</span>
+                    </div>
+                    <div id="popupButtons">
+                        <button onclick="confirmBackground()" class="btn btn-primary">Yes</button>
+                        <button onclick="hidePopup()" class="btn btn-secondary">Cancel</button>
+                    </div>
+                </div>
 
-                // Update active card when dropdown changes
-                if (algorithmSelect) {
-                    // This listener is now handled in uiControls.js primarily, but we can keep the basic command sending if needed,
-                    // OR better, remove this block if uiControls.js handles it.
-                    // Checking uiControls.js: it binds onchange to CommandManager.sendCommand.
-                    // It ALSO calls updateAlgorithmSelection which updates cards.
-                    // Since cards are gone, we don't need to update them.
-                    // uiControls.js handles the command.
-                    // checking if this listener does anything else...
-                    // It calls window.updateAlgorithmSelection(val, true).
-                    // So it's redundant if uiControls also does it (or conflicting).
-                    // Safe to remove if uiControls handles it.
-                }
+                <!-- Safe Area Editor Popup -->
+                <div id="editAreasPopup" class="popup">
+                    <h3>🛡️ Edit Editable Areas</h3>
+                    <div class="instructions">
+                        <p><strong>Instructions:</strong></p>
+                        <ul>
+                            <li>Select a tool from the toolbar</li>
+                            <li><strong>Pen Tool:</strong> Click to add points, close polygon to finish</li>
+                            <li><strong>Remove Tool:</strong> Click on a polygon to delete it</li>
+                            <li>Right-click to remove the last point (Pen tool)</li>
+                        </ul>
+                    </div>
 
-                // Click on card to select algorithm
-                algorithmCards.forEach(function (card) {
-                    card.addEventListener('click', function (e) {
-                        const algorithm = card.dataset.algorithm;
-                        if (window.updateAlgorithmSelection) {
+                    <div class="toolbar" id="editableAreaToolbar"
+                         style="margin-bottom: 10px; display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px;">
+                        <!-- Area Type Selector -->
+                        <label
+                            style="display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.05); padding: 5px; border-radius: 6px;">
+                            <span style="margin-right: 8px; font-size: 0.9em;">Type:</span>
+                            <select id="areaTypeSelector"
+                                    style="padding: 5px; border-radius: 4px; border: 1px solid var(--theme-border); background: var(--theme-surface); color: white;">
+                                <option value="bed">🛏️ Bed Area</option>
+                                <option value="floor">🏠 Floor Area</option>
+                                <option value="couch">🛋️ Couch Area</option>
+                                <option value="bench">🪑 Bench Area</option>
+                                <option value="chair">💺 Chair Area</option>
+                            </select>
+                        </label>
+
+                        <!-- Tools -->
+                        <button id="toolPenBtn" class="btn btn-primary" title="Draw Polygons">+</button>
+                        <button id="toolRemoveBtn" class="btn btn-secondary" title="Remove Polygons">-</button>
+                        <button id="toolClearBtn" class="btn btn-warning" title="Clear All Polygons">Clear</button>
+                    </div>
+
+                    <div class="canvas-container">
+                        <canvas id="editableAreaCanvas"></canvas>
+                    </div>
+
+                    <div id="safeAreaLoading" class="popup-loading" style="display: none;">
+                        <div class="spinner"></div>
+                        <span id="safeAreaLoadingStatus">Saving...</span>
+                    </div>
+                    <div class="toolbar" id="editableAreaAction">
+                        <button id="saveAreasBtn" class="btn btn-success">💾 Save</button>
+                        <button onclick="if(window.EditableAreaEditor) window.EditableAreaEditor.hide()"
+                                class="btn btn-secondary">Cancel</button>
+                    </div>
+
+                    <div id="saveStatus" class="status"></div>
+                </div>
+
+                <!-- Camera Management Popup -->
+                <div id="managementPopup" class="popup" style="width: min(600px, 95vw);">
+                    <div id="managementList" class="management-list">
+                        <!-- List of registered cameras will be inserted here -->
+                    </div>
+                    <div class="popup-buttons" style="margin-top: 20px;">
+                        <button onclick="hideManagementPopup()" class="btn btn-secondary" style="width: 100%;">Close</button>
+                    </div>
+                </div>
+
+                <!-- Generic Confirm Popup -->
+                <div id="confirmPopup" class="popup" style="width: min(400px, 90vw);">
+                    <h3 id="confirmTitle" style="color: var(--theme-text);">Confirm Action</h3>
+                    <p id="confirmMessage" style="color: var(--theme-text-secondary); margin: 15px 0; font-size: 1.1em;"></p>
+                    <div class="popup-buttons" style="display: flex; gap: 10px; justify-content: flex-end;">
+                        <button id="confirmYesBtn" class="btn btn-primary" style="min-width: 80px;">Yes</button>
+                        <button id="confirmNoBtn" class="btn btn-secondary" style="min-width: 80px;">No</button>
+                    </div>
+                </div>
+
+                <!-- Pending Registrations Popup -->
+                <div id="registrationPopup" class="popup" style="width: min(500px, 95vw);">
+                    <div id="registrationList">
+                        <!-- List of pending registrations will be inserted here -->
+                    </div>
+                    <!-- Static Close button for registration popup -->
+                    <div id="registrationCloseBtn" class="popup-buttons" style="margin-top: 15px;">
+                        <button onclick="hideRegistrationPopup()" class="btn btn-secondary" style="width: 100%;">Close</button>
+                    </div>
+                    <div id="registrationForm" style="display: none;">
+                        <h3>Approve Camera Registration</h3>
+                        <div class="cameraInfo-card"
+                             style="background: var(--theme-surface-light); padding: 15px; border-radius: 10px; margin-bottom: 20px;">
+                            <p><strong>📡 Camera ID:</strong> <span id="regCameraID"
+                                                                        style="color: var(--theme-primary); font-family: monospace; font-size: 1.1em;"></span></p>
+                                <p><strong>📍 IP Address:</strong> <span id="regCameraIP" style="color: #4CAF50;"></span></p>
+                                <p><strong>⏰ Status:</strong> <span style="color: #FF9800;">Pending Approval</span></p>
+                            </div>
+                            <label for="cameraNameInput" style="display: block; margin: 15px 0 5px 0;">Camera Name:</label>
+                            <input type="text" id="cameraNameInput" placeholder="Enter camera name (e.g., Living Room Camera)"
+                                   style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid var(--theme-primary); background: var(--theme-surface); color: white; font-size: 1em;">
+                            <div class="popup-buttons" style="display: flex; gap: 10px; margin-top: 20px;">
+                                <button onclick="approveRegistration()" class="btn btn-success" style="flex: 2;">Register</button>
+                                <button onclick="backToRegistrationList()" class="btn btn-secondary" style="flex: 1;">←
+                                    Back</button>
+                                    <button onclick="hideRegistrationPopup()" class="btn btn-danger" style="flex: 1;">Cancel</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Sleep Configuration Popup -->
+                        <div id="sleepConfigPopup" class="popup" style="width: min(400px, 90vw);">
+                            <h3>💤 Sleep Schedule</h3>
+                            <div style="display: flex; flex-direction: column; gap: 15px; margin: 20px 0;">
+                                <label>
+                                    Tolerance (added to Wake Up Time):
+                                    <select id="sleepTolerance"
+                                            style="width: 100%; padding: 8px; margin-top: 5px; background: var(--theme-surface); border: 1px solid var(--theme-border); color: var(--theme-text); border-radius: 4px;">
+                                        <option value="30">30 minutes</option>
+                                        <option value="60">1 hour</option>
+                                        <option value="90">1.5 hours</option>
+                                        <option value="120">2 hours</option>
+                                        <option value="180">3 hours</option>
+                                        <option value="custom">Custom...</option>
+                                    </select>
+                                    <input type="number" id="customSleepTolerance" min="0" max="1440" placeholder="Custom minutes..."
+                                           style="display: none; width: 100%; padding: 8px; margin-top: 5px; background: var(--theme-surface); border: 1px solid var(--theme-border); color: var(--theme-text); border-radius: 4px;">
+                                </label>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                                    <label>
+                                        Bedtime:
+                                        <input type="time" id="bedtime"
+                                               style="width: 100%; padding: 8px; margin-top: 5px; background: var(--theme-surface); border: 1px solid var(--theme-border); color: var(--theme-text); border-radius: 4px;">
+                                    </label>
+                                    <label>
+                                        Wake Up Time:
+                                        <input type="time" id="wakeupTime"
+                                               style="width: 100%; padding: 8px; margin-top: 5px; background: var(--theme-surface); border: 1px solid var(--theme-border); color: var(--theme-text); border-radius: 4px;">
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="popup-buttons">
+                                <button id="saveSleepBtn" class="btn btn-primary">Save Changes</button>
+                                <button id="cancelSleepBtn" class="btn btn-secondary">Cancel</button>
+                            </div>
+                        </div>
+
+                        <script src="~/js/script.js" defer></script>
+                        <script>
+                            // Initialize SignalR connection
+                            const connection = new signalR.HubConnectionBuilder()
+                            .withUrl("/streamHub")
+                            .configureLogging(signalR.LogLevel.Information)
+                            .build();
+
+                            // Use global camera state from script.js - DO NOT redefine locally
+                            // The currentCameraId is initialized as "camera_000" in script.js
+                            // and will be updated when cameras are loaded
+
+                            // Stream URL - will be updated by switchCamera function in script.js
+                            let streamUrl = `rtmp://103.150.93.198:1935/live/${window.currentCameraId}`;
+
+                            // Global variables for UI
+                            let ANALYTICS_HTTP_URL = window.location.origin;
+
+                            // Initialize on page load
+                            document.addEventListener('DOMContentLoaded', function () {
+                            const algorithmSelect = document.getElementById('fallAlgorithmSelect');
+
+                            // Update active card when dropdown changes
+                            if (algorithmSelect) {
+                            // This listener is now handled in uiControls.js primarily, but we can keep the basic command sending if needed,
+                            // OR better, remove this block if uiControls.js handles it.
+                            // Checking uiControls.js: it binds onchange to CommandManager.sendCommand.
+                            // It ALSO calls updateAlgorithmSelection which updates cards.
+                            // Since cards are gone, we don't need to update them.
+                            // uiControls.js handles the command.
+                            // checking if this listener does anything else...
+                            // It calls window.updateAlgorithmSelection(val, true).
+                            // So it's redundant if uiControls also does it (or conflicting).
+                            // Safe to remove if uiControls handles it.
+                            }
+
+                            // Click on card to select algorithm
+                            algorithmCards.forEach(function (card) {
+                            card.addEventListener('click', function (e) {
+                            const algorithm = card.dataset.algorithm;
+                            if (window.updateAlgorithmSelection) {
                             window.updateAlgorithmSelection(algorithm, true);
-                        }
-                    });
-                });
+                            }
+                            });
+                            });
 
-                // Initialize from current camera state using global currentCameraId
-                setTimeout(function () {
-                    if (window.fetchCameraState && window.currentCameraId) {
-                        fetch(ANALYTICS_HTTP_URL + '/api/stream/camera-state?camera_id=' + window.currentCameraId)
+                            // Initialize from current camera state using global currentCameraId
+                            setTimeout(function () {
+                            if (window.fetchCameraState && window.currentCameraId) {
+                            fetch(ANALYTICS_HTTP_URL + '/api/stream/camera-state?camera_id=' + window.currentCameraId)
                             .then(function (response) { return response.json(); })
                             .then(function (flags) {
-                                if (flags && flags.fall_algorithm !== undefined) {
-                                    if (window.updateAlgorithmSelection) {
-                                        window.updateAlgorithmSelection(flags.fall_algorithm, false);
-                                    }
-                                }
+                            if (flags && flags.fall_algorithm !== undefined) {
+                            if (window.updateAlgorithmSelection) {
+                            window.updateAlgorithmSelection(flags.fall_algorithm, false);
+                            }
+                            }
                             });
-                    }
-                }, 1000);
-            });
-        </script>
-</body>
+                            }
+                            }, 1000);
+                            });
+                        </script>
+                    </body>
 
-</html>
+                </html>

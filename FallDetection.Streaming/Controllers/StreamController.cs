@@ -322,16 +322,20 @@ namespace FallDetection.Streaming.Controllers
                                 {
                                     cameraState.WakeupTime = wakeupProp.GetString() ?? string.Empty;
                                 }
+                                if (sleepConfig.TryGetProperty("tolerance", out var toleranceProp) && toleranceProp.TryGetInt32(out var tol))
+                                {
+                                    cameraState.Tolerance = tol;
+                                }
 
-                                // Infer sleep duration from bedtime and wakeup time (+3 hours)
+                                // Infer sleep duration from bedtime and wakeup time (+ tolerance)
                                 if (!string.IsNullOrEmpty(cameraState.Bedtime) && !string.IsNullOrEmpty(cameraState.WakeupTime))
                                 {
                                     if (DateTime.TryParse(cameraState.Bedtime, out var bt) && DateTime.TryParse(cameraState.WakeupTime, out var wt))
                                     {
                                         var sleepDuration = wt >= bt ? (wt - bt) : (wt.AddDays(1) - bt);
-                                        cameraState.MaxSleepDuration = (int)sleepDuration.TotalMinutes + 180; // +3 hours
-                                        _logger.LogInformation("Inferred MaxSleepDuration: {Duration} min (base {Base} min + 180 min offset)",
-                                            cameraState.MaxSleepDuration, (int)sleepDuration.TotalMinutes);
+                                        cameraState.MaxSleepDuration = (int)sleepDuration.TotalMinutes + cameraState.Tolerance;
+                                        _logger.LogInformation("Inferred MaxSleepDuration: {Duration} min (base {Base} min + {Tol} min offset)",
+                                            cameraState.MaxSleepDuration, (int)sleepDuration.TotalMinutes, cameraState.Tolerance);
                                     }
                                 }
 

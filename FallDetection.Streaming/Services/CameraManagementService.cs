@@ -560,6 +560,7 @@ namespace FallDetection.Streaming.Services
                         MaxSleepDuration = state.MaxSleepDuration,
                         Bedtime = state.Bedtime,
                         WakeupTime = state.WakeupTime,
+                        Tolerance = state.Tolerance,
                         Timezone = state.Timezone,
                         LastAlertTime = state.LastAlertTime,
                         LastAlertMessage = state.LastAlertMessage,

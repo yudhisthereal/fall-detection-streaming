@@ -208,24 +208,71 @@ const UIControls = {
 
     },
 
+    getCurrentTimezone() {
+        if (this.tomSelect) return this.tomSelect.getValue() || 'UTC';
+        if (DOMElements.timezoneSelect) return DOMElements.timezoneSelect.value || 'UTC';
+        return 'UTC';
+    },
+
     updateSleepDisplay(state) {
         if (!state) return;
 
+        const tz = this.getCurrentTimezone();
+        const shortTz = tz.split('/').pop().replace(/_/g, ' '); // simple readable fallback
+
         if (DOMElements.displayMaxSleep) {
             const val = state.max_sleep_duration || 0;
-            DOMElements.displayMaxSleep.textContent = val === 0 ? "Disabled" : `${val} min`;
+            if (val === 0) {
+                DOMElements.displayMaxSleep.textContent = "Disabled";
+            } else {
+                const hours = Math.floor(val / 60);
+                const mins = val % 60;
+                let timeStr = "";
+                if (hours > 0) timeStr += `${hours}hr `;
+                if (mins > 0 || hours === 0) timeStr += `${mins}min`;
+                DOMElements.displayMaxSleep.textContent = timeStr.trim();
+            }
         }
+
         if (DOMElements.displayBedtime) {
-            DOMElements.displayBedtime.textContent = state.bedtime || "--:--";
+            DOMElements.displayBedtime.textContent = state.bedtime ? `${state.bedtime} ${shortTz}` : "--:--";
         }
+
         if (DOMElements.displayWakeup) {
-            DOMElements.displayWakeup.textContent = state.wakeup_time || "--:--";
+            DOMElements.displayWakeup.textContent = state.wakeup_time ? `${state.wakeup_time} ${shortTz}` : "--:--";
+        }
+
+        const tolerance = state.tolerance || 30;
+        let tolStr = "";
+        if (tolerance >= 60) {
+            const hrs = tolerance / 60;
+            tolStr = `(± ${Number.isInteger(hrs) ? hrs : hrs.toFixed(1)}hr)`;
+        } else {
+            tolStr = `(± ${tolerance}m)`;
+        }
+
+        if (DOMElements.displayBedtimeTolerance) {
+            DOMElements.displayBedtimeTolerance.textContent = state.bedtime ? tolStr : "";
+        }
+        if (DOMElements.displayWakeupTolerance) {
+            DOMElements.displayWakeupTolerance.textContent = state.wakeup_time ? tolStr : "";
         }
 
         // Update popup inputs
-        if (DOMElements.maxSleepDuration) {
-            DOMElements.maxSleepDuration.value = state.max_sleep_duration || 0;
+        if (DOMElements.sleepTolerance) {
+            const standardOptions = ["30", "60", "90", "120", "180"];
+            if (standardOptions.includes(tolerance.toString())) {
+                DOMElements.sleepTolerance.value = tolerance.toString();
+                if (DOMElements.customSleepTolerance) DOMElements.customSleepTolerance.style.display = 'none';
+            } else {
+                DOMElements.sleepTolerance.value = "custom";
+                if (DOMElements.customSleepTolerance) {
+                    DOMElements.customSleepTolerance.style.display = 'block';
+                    DOMElements.customSleepTolerance.value = tolerance;
+                }
+            }
         }
+
         if (DOMElements.bedtime) {
             DOMElements.bedtime.value = state.bedtime || '';
         }
@@ -550,6 +597,16 @@ const UIControls = {
                 DOMHelpers.hidePopup(DOMElements.sleepConfigPopup);
             };
         }
+        // Toggle Custom Tolerance Input
+        if (DOMElements.sleepTolerance && DOMElements.customSleepTolerance) {
+            DOMElements.sleepTolerance.onchange = (e) => {
+                if (e.target.value === "custom") {
+                    DOMElements.customSleepTolerance.style.display = 'block';
+                } else {
+                    DOMElements.customSleepTolerance.style.display = 'none';
+                }
+            };
+        }
 
         // Save Sleep Settings Button
         if (DOMElements.saveSleepBtn) {
@@ -559,11 +616,36 @@ const UIControls = {
                     return;
                 }
 
-                const maxSleepDuration = parseInt(DOMElements.maxSleepDuration.value) || 0;
                 const bedtime = DOMElements.bedtime.value || '';
                 const wakeupTime = DOMElements.wakeupTime.value || '';
 
+                let tolerance = 30;
+                if (DOMElements.sleepTolerance) {
+                    if (DOMElements.sleepTolerance.value === "custom") {
+                        tolerance = parseInt(DOMElements.customSleepTolerance.value) || 0;
+                    } else {
+                        tolerance = parseInt(DOMElements.sleepTolerance.value) || 30;
+                    }
+                }
+
+                // Compute local max sleep for instant UI update
+                let maxSleepDuration = 0;
+                if (bedtime && wakeupTime) {
+                    try {
+                        let bt = new Date(`1970-01-01T${bedtime}Z`);
+                        let wt = new Date(`1970-01-01T${wakeupTime}Z`);
+                        if (wt < bt) {
+                            wt.setDate(wt.getDate() + 1);
+                        }
+                        const durationMins = (wt - bt) / 60000;
+                        maxSleepDuration = durationMins + tolerance;
+                    } catch (e) {
+                        console.warn("Could not calculate local max sleep duration", e);
+                    }
+                }
+
                 const sleepConfig = {
+                    tolerance: tolerance,
                     max_sleep_duration: maxSleepDuration,
                     bedtime: bedtime,
                     wakeup_time: wakeupTime
@@ -577,7 +659,7 @@ const UIControls = {
 
                 if (window.LogPanel) {
                     LogPanel.add(
-                        `💤 Sleep settings updated: Max=${maxSleepDuration}min, Bedtime=${bedtime || 'not set'}, Wake=${wakeupTime || 'not set'}`,
+                        `💤 Sleep settings updated: Tolerance=${tolerance}min, Bedtime=${bedtime || 'not set'}, Wake=${wakeupTime || 'not set'}`,
                         'info',
                         'Flags'
                     );

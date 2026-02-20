@@ -36,10 +36,14 @@ const DOMElements = {
     displayMaxSleep: document.getElementById('displayMaxSleep'),
     displayBedtime: document.getElementById('displayBedtime'),
     displayWakeup: document.getElementById('displayWakeup'),
+    displayBedtimeTolerance: document.getElementById('displayBedtimeTolerance'),
+    displayWakeupTolerance: document.getElementById('displayWakeupTolerance'),
     editSleepBtn: document.getElementById('editSleepBtn'),
 
     // Sleep Settings Popup Inputs
     maxSleepDuration: document.getElementById('maxSleepDuration'),
+    sleepTolerance: document.getElementById('sleepTolerance'),
+    customSleepTolerance: document.getElementById('customSleepTolerance'),
     bedtime: document.getElementById('bedtime'),
     wakeupTime: document.getElementById('wakeupTime'),
 
