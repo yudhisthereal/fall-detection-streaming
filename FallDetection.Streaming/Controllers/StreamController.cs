@@ -810,31 +810,14 @@ namespace FallDetection.Streaming.Controllers
                             var state = _cameraService.GetCameraState(request.CameraId);
                             if (state != null)
                             {
-                                var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-                                var lastTime = state.LastAlertTime;
-                                var lastMsg = state.LastAlertMessage;
-
                                 var severity = DetermineSeverity(status);
                                 var message = FormatAlertMessage(request.CameraId, track);
 
-                                bool throttled = false;
-                                if (message == lastMsg)
+                                bool shouldSend = _cameraService.ShouldThrottleAndSetAlert(request.CameraId, message);
+                                if (!shouldSend)
                                 {
-                                    if ((now - lastTime) < 10) throttled = true;
+                                    continue;
                                 }
-                                else
-                                {
-                                    if ((now - lastTime) < 3) throttled = true;
-                                }
-
-                                if (throttled)
-                                {
-                                    continue; // Throttled
-                                }
-
-                                state.LastAlertTime = now;
-                                state.LastAlertMessage = message;
-                                _cameraService.UpdateCameraState(request.CameraId, state);
 
                                 // Fire and forget - don't await to avoid blocking
                                 _ = _telegramBot.SendAlert(request.CameraId, message, severity);

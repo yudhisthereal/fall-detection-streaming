@@ -608,6 +608,43 @@ namespace FallDetection.Streaming.Services
             }
         }
 
+        public bool ShouldThrottleAndSetAlert(string cameraId, string message)
+        {
+            if (string.IsNullOrWhiteSpace(cameraId)) return false;
+
+            lock (_cameraStatesLock)
+            {
+                if (_cameraStates.TryGetValue(cameraId, out var state))
+                {
+                    var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                    var lastTime = state.LastAlertTime;
+                    var lastMsg = state.LastAlertMessage;
+
+                    bool throttled = false;
+                    if (message == lastMsg)
+                    {
+                        if ((now - lastTime) < 10) throttled = true;
+                    }
+                    else
+                    {
+                        if ((now - lastTime) < 3) throttled = true;
+                    }
+
+                    if (throttled)
+                    {
+                        return false; // Do not send
+                    }
+
+                    // Update state atomically
+                    state.LastAlertTime = now;
+                    state.LastAlertMessage = message;
+                    _cameraStates[cameraId] = state; // Since it's a class and we modified the ref, this is just to be explicit
+                    return true; // Should send
+                }
+                return false;
+            }
+        }
+
         #endregion
 
         #region Camera States Persistence
