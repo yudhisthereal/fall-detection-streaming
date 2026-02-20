@@ -134,24 +134,27 @@
             </div>
             <!-- Sleep Settings Section -->
             <div class="control-group">
-                <h3>Sleep Configuration</h3>
                 <div style="margin-bottom: 12px;">
                     <label style="display: block; margin-bottom: 5px;">Timezone:</label>
                     <select id="timezoneSelect" placeholder="Type to search..." autocomplete="off">
                         <option value="">Loading timezones...</option>
                     </select>
                 </div>
-                <label>Max Sleep (min):
-                    <input type="number" id="maxSleepDuration" min="0" max="1440" placeholder="0 = disabled"
-                        style="width: 120px;">
-                </label>
-                <label>Bedtime:
-                    <input type="time" id="bedtime" placeholder="HH:MM" style="width: 100px;">
-                </label>
-                <label>Wake Time:
-                    <input type="time" id="wakeupTime" placeholder="HH:MM" style="width: 100px;">
-                </label>
-                <button id="applySleepSettings" class="btn btn-primary">💤 Apply</button>
+                <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+                    <div class="info-tag">
+                        <span class="info-label">Max Sleep:</span>
+                        <span id="displayMaxSleep" class="info-value">-- min</span>
+                    </div>
+                    <div class="info-tag">
+                        <span class="info-label">Bedtime:</span>
+                        <span id="displayBedtime" class="info-value">--:--</span>
+                    </div>
+                    <div class="info-tag">
+                        <span class="info-label">Wake:</span>
+                        <span id="displayWakeup" class="info-value">--:--</span>
+                    </div>
+                    <button id="editSleepBtn" class="btn btn-secondary" title="Edit Schedule">📅 Edit Schedule</button>
+                </div>
             </div>
         </div>
 
@@ -302,6 +305,37 @@
                         Back</button>
                     <button onclick="hideRegistrationPopup()" class="btn btn-danger" style="flex: 1;">Cancel</button>
                 </div>
+            </div>
+        </div>
+
+        <!-- Sleep Configuration Popup -->
+        <div id="sleepConfigPopup" class="popup" style="width: min(400px, 90vw);">
+            <h3>💤 Sleep Schedule</h3>
+            <div style="display: flex; flex-direction: column; gap: 15px; margin: 20px 0;">
+                <label>
+                    Max Sleep Duration (minutes):
+                    <input type="number" id="maxSleepDuration" min="0" max="1440" placeholder="0 = disabled"
+                        style="width: 100%; padding: 8px; margin-top: 5px; background: var(--theme-bg); border: 1px solid var(--theme-border); color: var(--theme-text); border-radius: 4px;">
+                    <small style="color: var(--theme-text-secondary); display: block; margin-top: 2px;">Set to 0 to
+                        disable
+                        monitoring</small>
+                </label>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <label>
+                        Bedtime:
+                        <input type="time" id="bedtime"
+                            style="width: 100%; padding: 8px; margin-top: 5px; background: var(--theme-bg); border: 1px solid var(--theme-border); color: var(--theme-text); border-radius: 4px;">
+                    </label>
+                    <label>
+                        Wake Up Time:
+                        <input type="time" id="wakeupTime"
+                            style="width: 100%; padding: 8px; margin-top: 5px; background: var(--theme-bg); border: 1px solid var(--theme-border); color: var(--theme-text); border-radius: 4px;">
+                    </label>
+                </div>
+            </div>
+            <div class="popup-buttons">
+                <button id="saveSleepBtn" class="btn btn-primary">Save Changes</button>
+                <button id="cancelSleepBtn" class="btn btn-secondary">Cancel</button>
             </div>
         </div>
 

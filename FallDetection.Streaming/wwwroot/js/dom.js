@@ -31,10 +31,22 @@ const DOMElements = {
     // Sleep settings
     timezoneSelect: document.getElementById('timezoneSelect'),
     clockDisplay: document.getElementById('clockDisplay'),
+
+    // Sleep Settings Display (Read-Only)
+    displayMaxSleep: document.getElementById('displayMaxSleep'),
+    displayBedtime: document.getElementById('displayBedtime'),
+    displayWakeup: document.getElementById('displayWakeup'),
+    editSleepBtn: document.getElementById('editSleepBtn'),
+
+    // Sleep Settings Popup Inputs
     maxSleepDuration: document.getElementById('maxSleepDuration'),
     bedtime: document.getElementById('bedtime'),
     wakeupTime: document.getElementById('wakeupTime'),
-    applySleepSettings: document.getElementById('applySleepSettings'),
+
+    // Sleep Popup Controls
+    sleepConfigPopup: document.getElementById('sleepConfigPopup'),
+    saveSleepBtn: document.getElementById('saveSleepBtn'),
+    cancelSleepBtn: document.getElementById('cancelSleepBtn'),
 
     // Camera selection
     cameraSelect: document.getElementById('cameraSelect'),

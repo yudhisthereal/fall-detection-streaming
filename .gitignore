@@ -400,6 +400,7 @@ Thumbs.db
 .env.*.local
 
 # App-specific files
+appsettings.Secrets.json
 appsettings.*.json
 !appsettings.json
 !appsettings.*.sample.json

@@ -3,6 +3,10 @@ using FallDetection.Streaming.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Configuration
+    .AddJsonFile("appsettings.Secrets.json", optional: true, reloadOnChange: true);
+
+
 // Add services
 builder.Services.AddControllersWithViews();
 builder.Services.AddSignalR();

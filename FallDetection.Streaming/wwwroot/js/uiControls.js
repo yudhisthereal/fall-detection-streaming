@@ -37,9 +37,34 @@ const UIControls = {
                         if (value && AppState.isConnected && AppState.currentCameraId) {
                             CommandManager.sendCommand('set_timezone', value);
                             this.updateClockDisplay();
+                            // Fix: Blur the input after selection to release focus
+                            if (this.tomSelect && this.tomSelect.control_input) {
+                                this.tomSelect.blur();
+                            }
+                        }
+                    },
+                    // Fix: ensure blur on onItemAdd as well to be safe
+                    onItemAdd: () => {
+                        if (this.tomSelect) {
+                            this.tomSelect.blur();
                         }
                     }
                 });
+
+                // Add keydown listener to the TomSelect control input for Enter key
+                if (this.tomSelect.control_input) {
+                    this.tomSelect.control_input.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter') {
+                            e.preventDefault(); // Prevent "new line"
+                            if (this.tomSelect.dropdown_content.querySelector('.active')) {
+                                // Provide time for selection to register
+                                setTimeout(() => {
+                                    this.tomSelect.blur();
+                                }, 10);
+                            }
+                        }
+                    });
+                }
             } else if (!this.tomSelect) {
                 DOMElements.timezoneSelect.onchange = () => {
                     const value = DOMElements.timezoneSelect.value;
@@ -159,21 +184,27 @@ const UIControls = {
             DOMElements.safetyCheckMethod.disabled = !AppState.isConnected;
         }
 
-        // Sleep settings
-        if (DOMElements.maxSleepDuration) {
-            DOMElements.maxSleepDuration.value = flags.max_sleep_duration || 0;
-            DOMElements.maxSleepDuration.disabled = !AppState.isConnected;
+        // Sleep settings (Display Only)
+        if (DOMElements.displayMaxSleep) {
+            const val = flags.max_sleep_duration || 0;
+            DOMElements.displayMaxSleep.textContent = val === 0 ? "Disabled" : `${val} min`;
         }
-        if (DOMElements.bedtime) {
-            DOMElements.bedtime.value = flags.bedtime || '';
-            DOMElements.bedtime.disabled = !AppState.isConnected;
+        if (DOMElements.displayBedtime) {
+            DOMElements.displayBedtime.textContent = flags.bedtime || "--:--";
         }
-        if (DOMElements.wakeupTime) {
-            DOMElements.wakeupTime.value = flags.wakeup_time || '';
-            DOMElements.wakeupTime.disabled = !AppState.isConnected;
+        if (DOMElements.displayWakeup) {
+            DOMElements.displayWakeup.textContent = flags.wakeup_time || "--:--";
         }
-        if (DOMElements.applySleepSettings) {
-            DOMElements.applySleepSettings.disabled = !AppState.isConnected;
+
+        // Also update popup inputs if it's NOT currently open (to keep them in sync)
+        if (DOMElements.sleepConfigPopup && DOMElements.sleepConfigPopup.style.display !== 'block') {
+            if (DOMElements.maxSleepDuration) DOMElements.maxSleepDuration.value = flags.max_sleep_duration || 0;
+            if (DOMElements.bedtime) DOMElements.bedtime.value = flags.bedtime || '';
+            if (DOMElements.wakeupTime) DOMElements.wakeupTime.value = flags.wakeup_time || '';
+        }
+
+        if (DOMElements.editSleepBtn) {
+            DOMElements.editSleepBtn.disabled = !AppState.isConnected;
         }
 
 
@@ -495,9 +526,30 @@ const UIControls = {
             };
         }
 
-        // Apply Sleep Settings Button
-        if (DOMElements.applySleepSettings) {
-            DOMElements.applySleepSettings.onclick = () => {
+        // Edit Sleep Schedule Button
+        if (DOMElements.editSleepBtn) {
+            DOMElements.editSleepBtn.onclick = () => {
+                if (!AppState.currentCameraId) {
+                    NotificationSystem.show('No camera selected', 'warning');
+                    return;
+                }
+
+                // Populate inputs with current displayed values (or from internal state if we had it directly)
+                // Best to trust the inputs which we update when popup is closed
+                DOMHelpers.showPopup(DOMElements.sleepConfigPopup);
+            };
+        }
+
+        // Cancel Sleep Button
+        if (DOMElements.cancelSleepBtn) {
+            DOMElements.cancelSleepBtn.onclick = () => {
+                DOMHelpers.hidePopup(DOMElements.sleepConfigPopup);
+            };
+        }
+
+        // Save Sleep Settings Button
+        if (DOMElements.saveSleepBtn) {
+            DOMElements.saveSleepBtn.onclick = () => {
                 if (!AppState.currentCameraId) {
                     NotificationSystem.show('No camera selected', 'warning');
                     return;
@@ -526,6 +578,8 @@ const UIControls = {
                 if (window.NotificationSystem) {
                     NotificationSystem.show('Sleep settings applied', 'success');
                 }
+
+                DOMHelpers.hidePopup(DOMElements.sleepConfigPopup);
             };
         }
 
