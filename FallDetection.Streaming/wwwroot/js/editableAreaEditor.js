@@ -23,45 +23,55 @@ const EditableAreaEditor = {
 
             // Convert to editable area format
 
-            bedAreas.forEach((coords, index) => {
-                editableAreas.push({
-                    area_type: 'bed',
-                    coordinates: coords,
-                    name: `Bed Area ${index + 1}`
+            if (bedAreas) {
+                bedAreas.forEach((coords, index) => {
+                    editableAreas.push({
+                        area_type: 'bed',
+                        coordinates: coords,
+                        name: `Bed Area ${index + 1}`
+                    });
                 });
-            });
+            }
 
-            floorAreas.forEach((coords, index) => {
-                editableAreas.push({
-                    area_type: 'floor',
-                    coordinates: coords,
-                    name: `Floor Area ${index + 1}`
+            if (floorAreas) {
+                floorAreas.forEach((coords, index) => {
+                    editableAreas.push({
+                        area_type: 'floor',
+                        coordinates: coords,
+                        name: `Floor Area ${index + 1}`
+                    });
                 });
-            });
+            }
 
-            couchAreas.forEach((coords, index) => {
-                editableAreas.push({
-                    area_type: 'couch',
-                    coordinates: coords,
-                    name: `Couch Area ${index + 1}`
+            if (couchAreas) {
+                couchAreas.forEach((coords, index) => {
+                    editableAreas.push({
+                        area_type: 'couch',
+                        coordinates: coords,
+                        name: `Couch Area ${index + 1}`
+                    });
                 });
-            });
+            }
 
-            benchAreas.forEach((coords, index) => {
-                editableAreas.push({
-                    area_type: 'bench',
-                    coordinates: coords,
-                    name: `Bench Area ${index + 1}`
+            if (benchAreas) {
+                benchAreas.forEach((coords, index) => {
+                    editableAreas.push({
+                        area_type: 'bench',
+                        coordinates: coords,
+                        name: `Bench Area ${index + 1}`
+                    });
                 });
-            });
+            }
 
-            chairAreas.forEach((coords, index) => {
-                editableAreas.push({
-                    area_type: 'chair',
-                    coordinates: coords,
-                    name: `Chair Area ${index + 1}`
+            if (chairAreas) {
+                chairAreas.forEach((coords, index) => {
+                    editableAreas.push({
+                        area_type: 'chair',
+                        coordinates: coords,
+                        name: `Chair Area ${index + 1}`
+                    });
                 });
-            });
+            }
 
             console.log(`Loaded ${editableAreas.length} editable areas for ${cameraId}`);
             return editableAreas;

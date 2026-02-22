@@ -32,6 +32,7 @@ builder.Services.AddSingleton<CameraManagementService>();
 builder.Services.AddSingleton<StreamingService>();
 builder.Services.AddSingleton<SubscriptionManager>();
 builder.Services.AddSingleton<ITelegramBotService, TelegramBotService>();
+builder.Services.AddHttpClient<HmeCaregiverService>();
 
 // Configure Kestrel to listen on port 8000
 builder.WebHost.ConfigureKestrel(serverOptions =>

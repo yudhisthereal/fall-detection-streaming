@@ -240,6 +240,9 @@ namespace FallDetection.Streaming.Models
 
         [JsonPropertyName("safety_reason")]
         public string SafetyReason { get; set; } = string.Empty;
+
+        [JsonPropertyName("int_features")]
+        public List<double>? IntFeatures { get; set; }
     }
 
     #endregion

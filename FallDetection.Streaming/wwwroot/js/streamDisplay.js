@@ -269,7 +269,7 @@ const StreamDisplay = {
     clearForDisconnect() {
         if (!this.overlayCtx || !this.overlayCanvas) return;
 
-        console.log('[StreamDisplay] Clearing overlay due to disconnection');
+        // console.log('[StreamDisplay] Clearing overlay due to disconnection');
         this.cachedTrackingData = null;
         this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
     },

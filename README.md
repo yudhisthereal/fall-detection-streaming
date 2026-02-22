@@ -84,6 +84,47 @@ To prevent "flicker" (blank frames between updates), the system uses a **Double 
     *   **Video**: Recursive `onload` trigger ensures max possible frame rate.
     *   **Data**: Periodic polling allows the UI to remain responsive even if video lags.
 
+### 3. Homomorphic Encryption (HME) Synchronization Pipeline
+
+The system ensures absolute privacy by performing complex pose classification on an external Analytics server using Homomorphic Encryption. The Streaming Server acts as the **Caregiver Node** in this flow. 
+
+Because the Analytics computations require multiple round-trips to evaluate, the Streaming Server implements a synchronous blocking architecture. When a camera submits tracking data, the server pauses the entire frame's state commitment until the Analytics evaluation completes.
+
+**The HME Flow:**
+
+```mermaid
+sequenceDiagram
+    participant Camera as Camera (Edge)
+    participant Caregiver as Streaming Server<br>(Caregiver Node)
+    participant Analytics as Analytics Server
+    
+    Note over Camera,Caregiver: 1. Feature Extraction
+    Camera->>Caregiver: POST 6 integer limb/torso features
+    
+    Note over Caregiver: 2. Local Encryption
+    Caregiver->>Caregiver: Truncate & encrypt features<br>with local multi-prime keys
+    
+    Note over Caregiver,Analytics: 3. Forward Pass 1
+    Caregiver->>Analytics: Send encrypted features
+    
+    Note over Analytics: 4. Interactive Protocol
+    Analytics->>Analytics: Compute Encrypted Intermediate<br>Comparison Result (EICR)
+    Analytics-->>Caregiver: Return EICR
+    Caregiver->>Caregiver: Partially decrypt & re-encrypt<br>for boolean comparisons
+    
+    Note over Caregiver,Analytics: 5. Forward Pass 2
+    Caregiver->>Analytics: Send new ciphertexts
+    
+    Note over Analytics: 6. Final Classification
+    Analytics->>Analytics: Polynomial Evaluation<br>(MSB/LSB)
+    Analytics-->>Caregiver: Return final encrypted result
+    
+    Note over Caregiver: Final Decryption
+    Caregiver->>Caregiver: Decrypt to pose-state<br>Attach label to track
+```
+
+This ensures the user dashboard always sees the correct pose label perfectly synced to the exact video frame and skeleton keypoints that generated it, completely eliminating timeline desyncs.
+
 ## 📡 API Reference
 
 The server exposes a RESTful API for camera management, state reporting, and data streaming. All endpoints are prefixed with `/api/Stream`.

@@ -747,8 +747,7 @@ namespace FallDetection.Streaming.Services
                         ["show_bench_areas"] = false,
                         ["show_chair_areas"] = false,
                         ["use_safety_check"] = false,
-                        ["analytics_mode"] = true,
-                        ["hme"] = false
+                        ["analytics_mode"] = true
                     },
                     ControlFlagsInt = new Dictionary<string, int>
                     {

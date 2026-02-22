@@ -29,8 +29,6 @@
         <script src="~/js/cameraRegistration.js" defer></script>
         <script src="~/js/cameraManagement.js" defer></script>
         <script src="~/js/streamDisplay.js" defer></script>
-        <script src="~/js/algorithmInfo.js" defer></script>
-        @* <script src="~/js/webrtc.js" defer></script> *@
     </head>
 
     <body>
@@ -369,50 +367,6 @@
 
                             // Global variables for UI
                             let ANALYTICS_HTTP_URL = window.location.origin;
-
-                            // Initialize on page load
-                            document.addEventListener('DOMContentLoaded', function () {
-                            const algorithmSelect = document.getElementById('fallAlgorithmSelect');
-
-                            // Update active card when dropdown changes
-                            if (algorithmSelect) {
-                            // This listener is now handled in uiControls.js primarily, but we can keep the basic command sending if needed,
-                            // OR better, remove this block if uiControls.js handles it.
-                            // Checking uiControls.js: it binds onchange to CommandManager.sendCommand.
-                            // It ALSO calls updateAlgorithmSelection which updates cards.
-                            // Since cards are gone, we don't need to update them.
-                            // uiControls.js handles the command.
-                            // checking if this listener does anything else...
-                            // It calls window.updateAlgorithmSelection(val, true).
-                            // So it's redundant if uiControls also does it (or conflicting).
-                            // Safe to remove if uiControls handles it.
-                            }
-
-                            // Click on card to select algorithm
-                            algorithmCards.forEach(function (card) {
-                            card.addEventListener('click', function (e) {
-                            const algorithm = card.dataset.algorithm;
-                            if (window.updateAlgorithmSelection) {
-                            window.updateAlgorithmSelection(algorithm, true);
-                            }
-                            });
-                            });
-
-                            // Initialize from current camera state using global currentCameraId
-                            setTimeout(function () {
-                            if (window.fetchCameraState && window.currentCameraId) {
-                            fetch(ANALYTICS_HTTP_URL + '/api/stream/camera-state?camera_id=' + window.currentCameraId)
-                            .then(function (response) { return response.json(); })
-                            .then(function (flags) {
-                            if (flags && flags.fall_algorithm !== undefined) {
-                            if (window.updateAlgorithmSelection) {
-                            window.updateAlgorithmSelection(flags.fall_algorithm, false);
-                            }
-                            }
-                            });
-                            }
-                            }, 1000);
-                            });
                         </script>
                     </body>
 

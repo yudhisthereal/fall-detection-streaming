@@ -153,7 +153,7 @@ const ConnectionStatus = {
 
                 // IMMEDIATELY clear overlay on disconnect
                 if (typeof StreamDisplay !== 'undefined' && StreamDisplay.clearForDisconnect) {
-                    console.log('[ConnectionStatus] Disconnected - clearing overlay immediately');
+                    // console.log('[ConnectionStatus] Disconnected - clearing overlay immediately');
                     StreamDisplay.clearForDisconnect();
                 }
             } else if (connected) {

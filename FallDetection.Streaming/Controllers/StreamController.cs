@@ -14,17 +14,20 @@ namespace FallDetection.Streaming.Controllers
         private readonly StreamingService _streamingService;
         private readonly ILogger<StreamController> _logger;
         private readonly ITelegramBotService _telegramBot;
+        private readonly HmeCaregiverService _hmeService;
 
         public StreamController(
             CameraManagementService cameraService,
             StreamingService streamingService,
             ILogger<StreamController> logger,
-            ITelegramBotService telegramBot)
+            ITelegramBotService telegramBot,
+            HmeCaregiverService hmeService)
         {
             _cameraService = cameraService;
             _streamingService = streamingService;
             _logger = logger;
             _telegramBot = telegramBot;
+            _hmeService = hmeService;
         }
 
         #region Camera Management Endpoints (Moved from Analytics Server)
@@ -98,14 +101,13 @@ namespace FallDetection.Streaming.Controllers
 
                 _cameraService.UpdateCameraPing(camera_id);
 
-                _logger.LogDebug("Ping received from {CameraId}", camera_id);
+                _logger.LogInformation("Ping received from {CameraId}", camera_id);
 
                 return Ok(new
                 {
                     status = "success",
                     message = "Ping received",
                     timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-                    camera_id = camera_id
                 });
             }
             catch (Exception ex)
@@ -344,10 +346,6 @@ namespace FallDetection.Streaming.Controllers
                             break;
                         case "toggle_safety_check":
                             cameraState.ControlFlags["use_safety_check"] = SafeConvertToBool(command.Value);
-                            _cameraService.UpdateCameraState(command.CameraId, cameraState);
-                            break;
-                        case "toggle_hme":
-                            cameraState.ControlFlags["hme"] = SafeConvertToBool(command.Value);
                             _cameraService.UpdateCameraState(command.CameraId, cameraState);
                             break;
                         case "set_fall_algorithm":
@@ -736,7 +734,7 @@ namespace FallDetection.Streaming.Controllers
         #region Pose Tracking Endpoints
 
         [HttpPost("tracks")]
-        public IActionResult StoreTracks([FromBody] TracksRequest request)
+        public async Task<IActionResult> StoreTracks([FromBody] TracksRequest request)
         {
             try
             {
@@ -793,6 +791,43 @@ namespace FallDetection.Streaming.Controllers
 
                 // Store all tracks at once - this replaces all existing tracking data to prevent zombie tracks
                 // Empty list will clear all existing tracks
+
+                var cameraState = _cameraService.GetCameraState(request.CameraId);
+                bool hmeEnabled = true;
+
+                if (hmeEnabled)
+                {
+                    foreach (var track in validTracks)
+                    {
+                        if (track.IntFeatures != null && track.IntFeatures.Count >= 6)
+                        {
+                            double torsoAngle = track.IntFeatures[0];
+                            double thighUprightness = track.IntFeatures[1];
+                            double thighLength = track.IntFeatures[2];
+                            double calfLength = track.IntFeatures[3];
+                            double torsoHeight = track.IntFeatures[4];
+                            double legLength = track.IntFeatures[5];
+
+                            var reqFeatures = new EncryptedPoseFeatures
+                            {
+                                Tra = _hmeService.Enc1Truncated(torsoAngle),
+                                Tha = _hmeService.Enc1Truncated(thighUprightness),
+                                Thl = _hmeService.Enc1Truncated(thighLength),
+                                Cl = _hmeService.Enc1Truncated(calfLength),
+                                Trl = _hmeService.Enc1Truncated(torsoHeight),
+                                Ll = _hmeService.Enc1Truncated(legLength)
+                            };
+
+                            string hmePoseResult = await _hmeService.ProcessPoseDataAsync(reqFeatures);
+                            if (hmePoseResult != "None")
+                            {
+                                track.PoseLabel = hmePoseResult;
+                            }
+                        }
+                    }
+                }
+
+                // Store updated tracks
                 _cameraService.StoreTracks(request.CameraId, validTracks, request.Timestamp);
 
                 // Trigger Telegram alerts for non-normal events
