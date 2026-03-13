@@ -38,8 +38,7 @@
         <div class="main-container">
 
             <!-- Stream comes first after title -->
-            <div
-                style="position: relative; display: inline-block; width: 100%; max-width: 1200px; margin: 20px auto; display: block;">
+            <div class="stream-section">
                 <!-- Two-pass rendering: Background img (static) + Overlay canvas (skeletons & safe areas) -->
                 <div style="position: relative; width: 100%; aspect-ratio: 16/9;">
                     <img id="streamBackgroundImg" alt="Background"
@@ -49,6 +48,10 @@
                 </div>
                 <!-- Hidden img element for loading video frames (not displayed directly) -->
                 <img id="streamImg" alt="Live Stream" style="display: none;" />
+
+                <div id="clockDisplay" class="clock-display">
+                    --:--
+                </div>
             </div>
 
             <!-- Camera Controls -->
@@ -169,10 +172,6 @@
                 <!-- Status Indicator -->
                 <div id="streamStatus" class="status-indicator disconnected">
                     Disconnected
-                </div>
-                <div id="clockDisplay" class="clock-display"
-                     style="display: none; margin-left: 10px; font-family: monospace; font-size: 1.2em; color: var(--theme-text);">
-                    --:--
                 </div>
 
                 <!-- Log Panel -->

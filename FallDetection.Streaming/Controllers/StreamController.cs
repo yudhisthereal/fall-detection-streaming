@@ -795,37 +795,31 @@ namespace FallDetection.Streaming.Controllers
                 // Store all tracks at once - this replaces all existing tracking data to prevent zombie tracks
                 // Empty list will clear all existing tracks
 
-                var cameraState = _cameraService.GetCameraState(request.CameraId);
-                bool hmeEnabled = true;
-
-                if (hmeEnabled)
+                foreach (var track in validTracks)
                 {
-                    foreach (var track in validTracks)
+                    if (track.IntFeatures != null && track.IntFeatures.Count >= 6)
                     {
-                        if (track.IntFeatures != null && track.IntFeatures.Count >= 6)
+                        double torsoAngle = track.IntFeatures[0];
+                        double thighUprightness = track.IntFeatures[1];
+                        double thighLength = track.IntFeatures[2];
+                        double calfLength = track.IntFeatures[3];
+                        double torsoHeight = track.IntFeatures[4];
+                        double legLength = track.IntFeatures[5];
+
+                        var reqFeatures = new EncryptedPoseFeatures
                         {
-                            double torsoAngle = track.IntFeatures[0];
-                            double thighUprightness = track.IntFeatures[1];
-                            double thighLength = track.IntFeatures[2];
-                            double calfLength = track.IntFeatures[3];
-                            double torsoHeight = track.IntFeatures[4];
-                            double legLength = track.IntFeatures[5];
+                            Tra = _hmeService.Enc1Truncated(torsoAngle),
+                            Tha = _hmeService.Enc1Truncated(thighUprightness),
+                            Thl = _hmeService.Enc1Truncated(thighLength),
+                            Cl = _hmeService.Enc1Truncated(calfLength),
+                            Trl = _hmeService.Enc1Truncated(torsoHeight),
+                            Ll = _hmeService.Enc1Truncated(legLength)
+                        };
 
-                            var reqFeatures = new EncryptedPoseFeatures
-                            {
-                                Tra = _hmeService.Enc1Truncated(torsoAngle),
-                                Tha = _hmeService.Enc1Truncated(thighUprightness),
-                                Thl = _hmeService.Enc1Truncated(thighLength),
-                                Cl = _hmeService.Enc1Truncated(calfLength),
-                                Trl = _hmeService.Enc1Truncated(torsoHeight),
-                                Ll = _hmeService.Enc1Truncated(legLength)
-                            };
-
-                            string hmePoseResult = await _hmeService.ProcessPoseDataAsync(reqFeatures);
-                            if (hmePoseResult != "None")
-                            {
-                                track.PoseLabel = hmePoseResult;
-                            }
+                        string hmePoseResult = await _hmeService.ProcessPoseDataAsync(reqFeatures);
+                        if (hmePoseResult != "None")
+                        {
+                            track.PoseLabel = hmePoseResult;
                         }
                     }
                 }
