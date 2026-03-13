@@ -14,7 +14,8 @@ const StreamDisplay = {
     // State
     isInitialized: false,
     isRunning: false,
-    overlayRefreshInterval: null,
+    trackingRefreshInterval: null,
+    cameraStateRefreshInterval: null,
     backgroundAutoRefreshInterval: null,
 
     // Cached overlay data (only updated when new data arrives)
@@ -847,23 +848,32 @@ const StreamDisplay = {
             }
         });
 
-        // Overlay pass: Fetch and check for updates every 100ms (10 FPS)
-        // BUT only redraw overlay if data actually changed
-        this.overlayRefreshInterval = setInterval(() => {
+        // Tracking data: fetch frequently (10 FPS)
+        // Overlay redraw still happens only when data actually changed
+        this.trackingRefreshInterval = setInterval(() => {
             this.fetchTrackingData();
-            this.fetchCameraState();
         }, 100);
 
+        // Camera state: fetch at a lower rate to reduce control-plane load
+        this.cameraStateRefreshInterval = setInterval(() => {
+            this.fetchCameraState();
+        }, 1000);
+
         this.isRunning = true;
-        console.log('[StreamDisplay] Static background img + overlay canvas rendering started - Overlay: 10 FPS (only on data change)');
+        console.log('[StreamDisplay] Static background img + overlay canvas rendering started - tracking: 10 FPS, camera-state: 1 FPS (overlay redraw only on data change)');
     },
 
     stop() {
         if (!this.isRunning) return;
 
-        if (this.overlayRefreshInterval) {
-            clearInterval(this.overlayRefreshInterval);
-            this.overlayRefreshInterval = null;
+        if (this.trackingRefreshInterval) {
+            clearInterval(this.trackingRefreshInterval);
+            this.trackingRefreshInterval = null;
+        }
+
+        if (this.cameraStateRefreshInterval) {
+            clearInterval(this.cameraStateRefreshInterval);
+            this.cameraStateRefreshInterval = null;
         }
 
         // Clear overlay canvas only (NOT the background img)

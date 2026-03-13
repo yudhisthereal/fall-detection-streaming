@@ -138,15 +138,17 @@ function startFlagSyncWorker() {
 // ============================================
 
 function startPeriodicSync() {
+    const CONNECTION_POLL_INTERVAL_MS = 1000;
+
     // Log that connection monitoring is starting
     if (window.LogPanel) {
         LogPanel.add(
-            `🔄 Starting connection monitoring - Polling every 400ms (Max ${ConnectionStatus.MAX_FAILURES} tolerated failures)`,
+            `🔄 Starting connection monitoring - Polling every ${CONNECTION_POLL_INTERVAL_MS}ms (disconnect grace: ${Math.round(ConnectionStatus.DISCONNECT_GRACE_MS / 1000)}s continuous no ping)`,
             'info',
             'Connection'
         );
     } else {
-        console.log(`🔄 Starting connection monitoring - Polling every 400ms (Max ${ConnectionStatus.MAX_FAILURES} tolerated failures)`)
+        console.log(`🔄 Starting connection monitoring - Polling every ${CONNECTION_POLL_INTERVAL_MS}ms (disconnect grace: ${Math.round(ConnectionStatus.DISCONNECT_GRACE_MS / 1000)}s continuous no ping)`)
     }
 
     // Sync camera list every 5 seconds
@@ -154,7 +156,7 @@ function startPeriodicSync() {
         CameraManager.loadCameraList();
     }, 5000);
 
-    // Check camera connections every 400ms (within 300-500ms range per requirements)
+    // Check camera connections at a moderate rate to tolerate slower networks
     AppState.cameraStatusTimer = setInterval(() => {
         AppState.availableCameras.forEach(camera => {
             ConnectionStatus.checkCameraConnection(camera.camera_id);
@@ -162,7 +164,7 @@ function startPeriodicSync() {
         if (AppState.currentCameraId) {
             ConnectionStatus.checkCameraConnection(AppState.currentCameraId);
         }
-    }, 400);
+    }, CONNECTION_POLL_INTERVAL_MS);
 }
 
 // ============================================

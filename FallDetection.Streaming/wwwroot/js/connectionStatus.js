@@ -5,7 +5,7 @@
 // ============================================
 
 // Fetch timeout helper using AbortController
-async function fetchWithTimeout(url, ms = 2000) {
+async function fetchWithTimeout(url, ms = 3500) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), ms);
 
@@ -27,12 +27,23 @@ const ConnectionStatus = {
     statusUpdateInProgress: false,
     pendingConnectionState: null,
 
-    // Failure tolerance for transient network issues
-    statusFailures: 0,
-    MAX_FAILURES: 10,
+    // Failure/no-ping tolerance for transient network issues
+    DISCONNECT_GRACE_MS: 5000,
+    statusFailuresByCamera: {},
+    failureWindowStartByCamera: {},
+    lastPingSeenAtByCamera: {},
 
     // Track previous connection state for detecting transitions
     previousConnectionState: null,
+
+    getFailureCount(cameraId) {
+        return this.statusFailuresByCamera[cameraId] || 0;
+    },
+
+    resetFailureState(cameraId) {
+        delete this.statusFailuresByCamera[cameraId];
+        delete this.failureWindowStartByCamera[cameraId];
+    },
 
     updateConnectionStatusDebounced(cameraId, connected, ageSeconds = null, silent = false) {
         // console.log('[ConnectionStatus] updateConnectionStatusDebounced: camera=' + cameraId + ', connected=' + connected + ', silent=' + silent + ', currentStable=' + AppState.isConnectionStable);
@@ -117,14 +128,16 @@ const ConnectionStatus = {
             const previousState = this.previousConnectionState;
             if (previousState !== null && previousState !== connected) {
                 if (previousState === true && connected === false) {
+                    const failureCount = this.getFailureCount(cameraId);
                     LogPanel.add(
-                        `❌ DISCONNECTED: Camera ${cameraId} - ${this.statusFailures} consecutive polling failures (age: ${ageSeconds}s since last ping)`,
+                        `❌ DISCONNECTED: Camera ${cameraId} - ${failureCount} polling failures (age: ${ageSeconds}s since last ping)`,
                         'disconnect',
                         'Connection'
                     );
                 } else if (previousState === false && connected === true) {
+                    const failureCount = this.getFailureCount(cameraId);
                     LogPanel.add(
-                        `✅ RECONNECTED: Camera ${cameraId} - Connection restored after ${this.statusFailures} failures`,
+                        `✅ RECONNECTED: Camera ${cameraId} - Connection restored after ${failureCount} failures`,
                         'reconnect',
                         'Connection'
                     );
@@ -355,11 +368,11 @@ const ConnectionStatus = {
         // LogPanel.add('[ConnectionStatus] checkCameraConnection called for ' + cameraId, 'info', 'Connection');
         try {
             // Request to Streaming Server for camera status with timeout
-            const statusResponse = await fetchWithTimeout(STREAMING_HTTP_URL + '/api/stream/camera-status?camera_id=' + cameraId, 2000);
+            const statusResponse = await fetchWithTimeout(STREAMING_HTTP_URL + '/api/stream/camera-status?camera_id=' + cameraId, 3500);
             // console.log('[ConnectionStatus] Status response for ' + cameraId + ': ' + statusResponse.status + ' ' + statusResponse.statusText);
 
             // Also sync pending registrations periodically
-            const pendingResponse = await fetchWithTimeout(STREAMING_HTTP_URL + '/api/stream/pending', 2000);
+            const pendingResponse = await fetchWithTimeout(STREAMING_HTTP_URL + '/api/stream/pending', 3500);
             // console.log('[ConnectionStatus] Pending response: ' + pendingResponse.status + ' ' + pendingResponse.statusText);
 
             // SUCCESS: Reset failure counter and process normally
@@ -370,16 +383,37 @@ const ConnectionStatus = {
             //         'Connection'
             //     );
             // }
-            this.statusFailures = 0;
+            this.resetFailureState(cameraId);
 
             if (statusResponse.ok) {
                 const data = await statusResponse.json();
                 // console.log('[ConnectionStatus] Camera ' + cameraId + ' status data:', data);
 
-                // If camera is already stable, update silently to avoid restarting timer
-                const silentUpdate = AppState.isConnectionStable && data.connected;
+                const now = Date.now();
+                const currentlyConnected = AppState.cameraConnectionStatus[cameraId]?.connected === true;
+                const reportedConnected = data.connected === true;
 
-                this.updateConnectionStatusDebounced(cameraId, data.connected, data.age_seconds, silentUpdate);
+                // Immediate reconnect on any successful ping signal
+                if (reportedConnected) {
+                    this.lastPingSeenAtByCamera[cameraId] = now;
+                    const silentUpdate = AppState.isConnectionStable;
+                    this.updateConnectionStatusDebounced(cameraId, true, data.age_seconds, silentUpdate);
+                } else {
+                    // Tolerate temporary no-ping periods while currently connected
+                    const noPingMsFromServer = typeof data.age_seconds === 'number' && data.age_seconds >= 0
+                        ? data.age_seconds * 1000
+                        : null;
+                    const lastPingSeenAt = this.lastPingSeenAtByCamera[cameraId] || 0;
+                    const noPingMsFromLocal = lastPingSeenAt > 0 ? now - lastPingSeenAt : null;
+                    const effectiveNoPingMs = noPingMsFromServer ?? noPingMsFromLocal ?? Number.POSITIVE_INFINITY;
+                    const shouldRemainConnected = currentlyConnected && effectiveNoPingMs < this.DISCONNECT_GRACE_MS;
+
+                    if (shouldRemainConnected) {
+                        this.updateConnectionStatusDebounced(cameraId, true, data.age_seconds, true);
+                    } else {
+                        this.updateConnectionStatusDebounced(cameraId, false, data.age_seconds, true);
+                    }
+                }
 
                 // Update pending registrations if available
                 if (pendingResponse.ok) {
@@ -390,8 +424,7 @@ const ConnectionStatus = {
                     }
                     // console.log('[ConnectionStatus] Pending registrations: ' + AppState.pendingRegistrations.length);
                 }
-
-                return data.connected;
+                return AppState.cameraConnectionStatus[cameraId]?.connected === true;
             }
 
             // Non-OK response: treat as failure
@@ -406,25 +439,32 @@ const ConnectionStatus = {
     },
 
     handleFetchFailure(cameraId, httpStatus = null, errorMessage = null) {
-        this.statusFailures++;
+        this.statusFailuresByCamera[cameraId] = (this.statusFailuresByCamera[cameraId] || 0) + 1;
+        if (!this.failureWindowStartByCamera[cameraId]) {
+            this.failureWindowStartByCamera[cameraId] = Date.now();
+        }
+        const failureCount = this.statusFailuresByCamera[cameraId];
+        const failureWindowMs = Date.now() - this.failureWindowStartByCamera[cameraId];
 
         const failureReason = httpStatus ? `HTTP ${httpStatus}` : errorMessage || 'Network/Timeout';
-        console.warn(`[ConnectionStatus] Fetch failure ${this.statusFailures}/${this.MAX_FAILURES} for ${cameraId}: ${failureReason}`);
+        console.warn(`[ConnectionStatus] Fetch failure ${failureCount} for ${cameraId}: ${failureReason} (${failureWindowMs}ms in failure window)`);
 
         // Log each failure with details
         LogPanel.add(
-            `⚠️ Poll failure ${this.statusFailures}/${this.MAX_FAILURES}: ${cameraId} - ${failureReason}`,
+            `⚠️ Poll failure ${failureCount}: ${cameraId} - ${failureReason}`,
             'warning',
             'Connection'
         );
 
-        // Only mark as disconnected after MAX_FAILURES consecutive failures
-        if (this.statusFailures >= this.MAX_FAILURES) {
+        const currentlyConnected = AppState.cameraConnectionStatus[cameraId]?.connected === true;
+
+        // Only mark as disconnected after continuous failures exceed grace duration
+        if (currentlyConnected && failureWindowMs >= this.DISCONNECT_GRACE_MS) {
             const disconnectReason = httpStatus
-                ? `Server returned HTTP ${httpStatus} for ${this.statusFailures} consecutive polls`
+                ? `Server returned HTTP ${httpStatus} for ${failureCount} consecutive polls`
                 : errorMessage?.includes('timeout')
-                    ? `Server timed out for ${this.statusFailures} consecutive polls`
-                    : `Network errors for ${this.statusFailures} consecutive polls`;
+                    ? `Server timed out for ${failureCount} consecutive polls`
+                    : `Network errors for ${failureCount} consecutive polls`;
 
             LogPanel.add(
                 `❌ DISCONNECTED: ${cameraId} - ${disconnectReason}`,
@@ -432,11 +472,11 @@ const ConnectionStatus = {
                 'Connection'
             );
 
-            console.error(`[ConnectionStatus] ${cameraId}: ${this.statusFailures} consecutive failures - marking DISCONNECTED`);
+            console.error(`[ConnectionStatus] ${cameraId}: ${failureCount} consecutive failures over ${failureWindowMs}ms - marking DISCONNECTED`);
             this.updateConnectionStatusDebounced(cameraId, false, null, true);
         } else {
             // Keep last known status, don't update UI
-            console.log(`[ConnectionStatus] ${cameraId}: Tolerating failure ${this.statusFailures}/${this.MAX_FAILURES} - keeping current status`);
+            console.log(`[ConnectionStatus] ${cameraId}: Tolerating failure ${failureCount} (window ${failureWindowMs}ms/${this.DISCONNECT_GRACE_MS}ms) - keeping current status`);
         }
     },
 

@@ -15,19 +15,22 @@ namespace FallDetection.Streaming.Controllers
         private readonly ILogger<StreamController> _logger;
         private readonly ITelegramBotService _telegramBot;
         private readonly HmeCaregiverService _hmeService;
+        private readonly SubscriptionManager _subscriptionManager;
 
         public StreamController(
             CameraManagementService cameraService,
             StreamingService streamingService,
             ILogger<StreamController> logger,
             ITelegramBotService telegramBot,
-            HmeCaregiverService hmeService)
+            HmeCaregiverService hmeService,
+            SubscriptionManager subscriptionManager)
         {
             _cameraService = cameraService;
             _streamingService = streamingService;
             _logger = logger;
             _telegramBot = telegramBot;
             _hmeService = hmeService;
+            _subscriptionManager = subscriptionManager;
         }
 
         #region Camera Management Endpoints (Moved from Analytics Server)
@@ -101,7 +104,7 @@ namespace FallDetection.Streaming.Controllers
 
                 _cameraService.UpdateCameraPing(camera_id);
 
-                _logger.LogInformation("Ping received from {CameraId}", camera_id);
+                // _logger.LogInformation("Ping received from {CameraId}", camera_id);
 
                 return Ok(new
                 {
@@ -841,22 +844,46 @@ namespace FallDetection.Streaming.Controllers
                         // Exclude normal/safe/tracking
                         if (status != "normal" && status != "safe" && status != "tracking")
                         {
+                            var severity = DetermineSeverity(status);
+                            var message = FormatAlertMessage(request.CameraId, track);
+                            var subscriptions = _subscriptionManager.GetSubscriptionsForCamera(request.CameraId);
+                            var totalSubscribers = subscriptions.Count;
+                            var eligibleSubscribers = subscriptions.Count(s => severity >= s.NotificationLevel);
+
                             // Check throttling
                             var state = _cameraService.GetCameraState(request.CameraId);
-                            if (state != null)
+                            if (state == null)
                             {
-                                var severity = DetermineSeverity(status);
-                                var message = FormatAlertMessage(request.CameraId, track);
-
-                                bool shouldSend = _cameraService.ShouldThrottleAndSetAlert(request.CameraId, message);
-                                if (!shouldSend)
-                                {
-                                    continue;
-                                }
-
-                                // Fire and forget - don't await to avoid blocking
-                                _ = _telegramBot.SendAlert(request.CameraId, message, severity);
+                                _logger.LogWarning(
+                                    "{Emoji} {Status} | camera={CameraId} track={TrackId} subs={SubscriberCount} eligible={EligibleSubscriberCount} telegram=skip reason=no_camera_state",
+                                    GetAlertEmoji(status),
+                                    status,
+                                    request.CameraId,
+                                    track.TrackId,
+                                    totalSubscribers,
+                                    eligibleSubscribers);
+                                continue;
                             }
+
+                            bool shouldSend = _cameraService.ShouldThrottleAndSetAlert(request.CameraId, message);
+
+                            _logger.LogInformation(
+                                "{Emoji} {Status} | camera={CameraId} track={TrackId} subs={SubscriberCount} eligible={EligibleSubscriberCount} telegram={TelegramAction}",
+                                GetAlertEmoji(status),
+                                status,
+                                request.CameraId,
+                                track.TrackId,
+                                totalSubscribers,
+                                eligibleSubscribers,
+                                shouldSend ? "send" : "skip");
+
+                            if (!shouldSend)
+                            {
+                                continue;
+                            }
+
+                            // Fire and forget - don't await to avoid blocking
+                            _ = _telegramBot.SendAlert(request.CameraId, message, severity);
                         }
                     }
                 }
@@ -1275,17 +1302,58 @@ namespace FallDetection.Streaming.Controllers
                 _ => "Alert"
             };
 
-            var message = $"{emoji} *{title}*\n";
-            message += $"Camera: {cameraId}\n";
-            message += $"Track ID: {track.TrackId}\n";
+            var cameraName = GetCameraNameForAlert(cameraId);
 
-            if (!string.IsNullOrEmpty(track.PoseLabel))
-                message += $"Pose: {track.PoseLabel}\n";
+            var message = $"{emoji} *{title}*\n";
+            message += $"Camera: {EscapeTelegramMarkdownV2(cameraId)}\n";
+            message += $"Camera Name: {EscapeTelegramMarkdownV2(cameraName)}\n";
 
             if (track.SafetyStatus.ToLower() != "fall" && !string.IsNullOrEmpty(track.SafetyReason))
-                message += $"Reason: {FormatReason(track.SafetyReason)}";
+                message += $"Reason: {EscapeTelegramMarkdownV2(FormatReason(track.SafetyReason))}";
 
             return message;
+        }
+
+        private string GetCameraNameForAlert(string cameraId)
+        {
+            var camera = _cameraService
+                .GetCameraListAsync()
+                .GetAwaiter()
+                .GetResult()
+                .FirstOrDefault(c => c.CameraId == cameraId);
+
+            if (!string.IsNullOrWhiteSpace(camera?.CameraName))
+            {
+                return camera.CameraName;
+            }
+
+            return $"Camera {cameraId.Split('_').LastOrDefault() ?? cameraId}";
+        }
+
+        private string EscapeTelegramMarkdownV2(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+            {
+                return string.Empty;
+            }
+
+            var escaped = value;
+            foreach (var character in new[] { "\\", "_", "*", "[", "]", "(", ")", "~", "`", ">", "#", "+", "-", "=", "|", "{", "}", ".", "!" })
+            {
+                escaped = escaped.Replace(character, $"\\{character}");
+            }
+
+            return escaped;
+        }
+
+        private string GetAlertEmoji(string safetyStatus)
+        {
+            return safetyStatus.ToLower() switch
+            {
+                "fall" => "🚨",
+                "unsafe" => "⚠️",
+                _ => "ℹ️"
+            };
         }
 
         private string FormatReason(string reason)

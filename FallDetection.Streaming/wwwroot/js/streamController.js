@@ -9,7 +9,7 @@ const StreamController = {
     isRefreshing: false,
     consecutiveErrors: 0,
     baseRefreshInterval: REFRESH_INTERVAL_MS,
-    backgroundRefreshInterval: 100,  // 100ms for background mode (show_raw = false)
+    backgroundRefreshInterval: 5000,  // 5000ms = 0.2Hz for background mode (show_raw = false)
     maxBackoffInterval: 5000,
     currentBackoffInterval: REFRESH_INTERVAL_MS,
 
@@ -217,7 +217,7 @@ const StreamController = {
             AppState.streamRefreshInterval = setInterval(() => {
                 this.scheduledRefresh();
             }, this.currentBackoffInterval);
-            console.log(`[StreamController] Refresh interval changed to ${this.currentBackoffInterval}ms (show_raw=${showRaw})`);
+            console.log(`[StreamController] Refresh interval changed to ${this.currentBackoffInterval}ms (${showRaw ? 'raw mode' : 'background mode @ 0.2Hz'})`);
         }
     },
 

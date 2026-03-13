@@ -20,15 +20,17 @@ namespace FallDetection.Streaming.Services
     {
         private readonly TelegramBotClient _botClient;
         private readonly SubscriptionManager _subscriptionManager;
+        private readonly ILogger<TelegramBotService> _logger;
         private readonly CancellationTokenSource _cts = new();
         private readonly Dictionary<long, UserConversationState> _conversationStates = new();
         private readonly object _stateLock = new();
 
-        public TelegramBotService(IConfiguration configuration, SubscriptionManager subscriptionManager)
+        public TelegramBotService(IConfiguration configuration, SubscriptionManager subscriptionManager, ILogger<TelegramBotService> logger)
         {
             var botToken = configuration["Telegram:BotToken"] ?? throw new ArgumentNullException("Telegram:BotToken not configured");
             _botClient = new TelegramBotClient(botToken);
             _subscriptionManager = subscriptionManager;
+            _logger = logger;
         }
 
         public async Task Start()
@@ -315,29 +317,76 @@ namespace FallDetection.Streaming.Services
         public async Task SendAlert(string cameraId, string message, NotificationLevel severity)
         {
             var subscriptions = _subscriptionManager.GetSubscriptionsForCamera(cameraId);
+            var eligibleSubscriptions = subscriptions
+                .Where(subscription => severity >= subscription.NotificationLevel)
+                .ToList();
 
-            foreach (var subscription in subscriptions)
+            var alertEmoji = severity == NotificationLevel.FallsOnly ? "🚨" : "⚠️";
+
+            _logger.LogInformation(
+                "{Emoji} telegram | camera={CameraId} subs={SubscriberCount} eligible={EligibleSubscriberCount}",
+                alertEmoji,
+                cameraId,
+                subscriptions.Count,
+                eligibleSubscriptions.Count);
+
+            if (eligibleSubscriptions.Count == 0)
             {
-                // Filter based on notification level
-                if (severity < subscription.NotificationLevel)
-                {
-                    continue; // Skip if severity is lower than user's preference
-                }
+                _logger.LogInformation(
+                    "{Emoji} telegram | camera={CameraId} delivered=no reason=no_eligible_subscribers",
+                    alertEmoji,
+                    cameraId);
+                return;
+            }
 
+            var deliveredCount = 0;
+
+            foreach (var subscription in eligibleSubscriptions)
+            {
                 try
                 {
                     await _botClient.SendTextMessageAsync(
                         subscription.ChatId,
-                        $"🚨 *Alert from {cameraId}*\n\n{message}",
-                        parseMode: ParseMode.Markdown,
+                        $"{alertEmoji} *Alert from {EscapeTelegramMarkdownV2(cameraId)}*\n\n{message}",
+                        parseMode: ParseMode.MarkdownV2,
                         cancellationToken: _cts.Token
                     );
+
+                    deliveredCount++;
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[TelegramBot] Failed to send alert to {subscription.ChatId}: {ex.Message}");
+                    _logger.LogError(
+                        ex,
+                        "{Emoji} telegram | camera={CameraId} chat={ChatId} delivered=no",
+                        alertEmoji,
+                        cameraId,
+                        subscription.ChatId);
                 }
             }
+
+            _logger.LogInformation(
+                "{Emoji} telegram | camera={CameraId} delivered={DeliveredCount}/{EligibleSubscriberCount}",
+                alertEmoji,
+                cameraId,
+                deliveredCount,
+                eligibleSubscriptions.Count);
+        }
+
+        private static string EscapeTelegramMarkdownV2(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+            {
+                return string.Empty;
+            }
+
+            var escaped = value;
+            foreach (var character in new[] { "\\", "_", "*", "[", "]", "(", ")", "~", "`", ">", "#", "+", "-", "=", "|", "{", "}", ".", "!" })
+            {
+                escaped = escaped.Replace(character, $"\\{character}");
+            }
+
+            return escaped;
         }
     }
 }
