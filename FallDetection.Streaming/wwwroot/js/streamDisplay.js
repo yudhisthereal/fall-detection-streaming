@@ -372,12 +372,23 @@ const StreamDisplay = {
             }
         }
 
-        // Draw pose label
-        if (data.pose_label) {
-            this.drawPoseLabel(data.pose_label, keypoints, trackId, scaleX, scaleY, data.safety_status);
-        } else {
-            this.drawPoseLabel("...", keypoints, trackId, scaleX, scaleY, data.safety_status);
+        // Draw pose labels from camera + HME (kept separate)
+        const cameraPoseLabel = (data.pose_label || '').trim();
+        const hmePoseLabel = (data.hme_pose_label || '').trim();
+        const safetyStatus = (data.safety_status || '').toLowerCase();
+        let displayPoseLabel = '...';
+
+        if (safetyStatus === 'fall') {
+            displayPoseLabel = 'FALL';
+        } else if (cameraPoseLabel && hmePoseLabel) {
+            displayPoseLabel = `Cam: ${cameraPoseLabel} | HME: ${hmePoseLabel}`;
+        } else if (cameraPoseLabel) {
+            displayPoseLabel = `Cam: ${cameraPoseLabel}`;
+        } else if (hmePoseLabel) {
+            displayPoseLabel = `HME: ${hmePoseLabel}`;
         }
+
+        this.drawPoseLabel(displayPoseLabel, keypoints, trackId, scaleX, scaleY, data.safety_status);
     },
 
     // Draw pose label above the skeleton

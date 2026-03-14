@@ -1,5 +1,6 @@
 using System.Text.Json;
 using FallDetection.Streaming.Models;
+using Microsoft.Extensions.Configuration;
 
 namespace FallDetection.Streaming.Services
 {
@@ -31,15 +32,18 @@ namespace FallDetection.Streaming.Services
         private readonly string _pendingRegistryFilePath;
         private readonly string _cameraStatesFilePath;
 
-        // Analytics server URL for forwarding analytics data
-        private readonly string _analyticsServerUrl = "http://103.127.136.213:5000";
+        // Analytics server root URL for forwarding analytics data
+        private readonly string _analyticsServerUrl;
 
-        public CameraManagementService()
+        public CameraManagementService(IConfiguration config)
         {
             _httpClient = new HttpClient
             {
                 Timeout = TimeSpan.FromSeconds(2)
             };
+
+            var analyticsBaseUrl = config["Analytics:BaseUrl"];
+            _analyticsServerUrl = ResolveAnalyticsServerUrl(analyticsBaseUrl);
 
             // Setup file paths for persistent storage
             var dataDir = Path.Combine(Directory.GetCurrentDirectory(), "Data");
@@ -61,6 +65,23 @@ namespace FallDetection.Streaming.Services
             // Initialize periodic save timer (15 minutes interval)
             _stateSaveTimer = new Timer(PeriodicSaveCallback, null, TimeSpan.FromMinutes(15), TimeSpan.FromMinutes(15));
             Console.WriteLine("Authorized periodic camera state saving (every 15 minutes)");
+        }
+
+        private static string ResolveAnalyticsServerUrl(string? analyticsBaseUrl)
+        {
+            const string fallbackServerRoot = "http://102.127.136.213:5000";
+
+            if (string.IsNullOrWhiteSpace(analyticsBaseUrl))
+            {
+                return fallbackServerRoot;
+            }
+
+            if (Uri.TryCreate(analyticsBaseUrl, UriKind.Absolute, out var absoluteUri))
+            {
+                return $"{absoluteUri.Scheme}://{absoluteUri.Authority}";
+            }
+
+            return fallbackServerRoot;
         }
 
         #region Camera Registry Management
@@ -564,6 +585,10 @@ namespace FallDetection.Streaming.Services
                         Timezone = state.Timezone,
                         LastAlertTime = state.LastAlertTime,
                         LastAlertMessage = state.LastAlertMessage,
+                        LastUnsafeAlertTime = state.LastUnsafeAlertTime,
+                        UnsafeStreakStartTime = state.UnsafeStreakStartTime,
+                        LastUnsafeReason = state.LastUnsafeReason,
+                        LastFallAlertTime = state.LastFallAlertTime,
                         // Note: TrackingData is NOT copied here for performance - use GetAllTrackingData() for thread-safe access
                         TrackingData = new Dictionary<int, TrackingData>()
                     };
@@ -643,6 +668,155 @@ namespace FallDetection.Streaming.Services
                 }
                 return false;
             }
+        }
+
+        public (bool ShouldSend, string Message, string ThrottleReason) EvaluateAlertNotification(
+            string cameraId,
+            string safetyStatus,
+            string? safetyReason,
+            string baseMessage)
+        {
+            if (string.IsNullOrWhiteSpace(cameraId) || string.IsNullOrWhiteSpace(safetyStatus))
+            {
+                return (false, baseMessage, "invalid_input");
+            }
+
+            lock (_cameraStatesLock)
+            {
+                if (!_cameraStates.TryGetValue(cameraId, out var state))
+                {
+                    return (false, baseMessage, "no_camera_state");
+                }
+
+                var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                var status = safetyStatus.Trim().ToLowerInvariant();
+
+                if (status == "fall")
+                {
+                    var elapsed = now - state.LastFallAlertTime;
+                    if (state.LastFallAlertTime > 0 && elapsed < 30)
+                    {
+                        return (false, baseMessage, $"fall_wait (elapsed={elapsed}s, limit=30s)");
+                    }
+
+                    state.LastFallAlertTime = now;
+                    state.LastAlertTime = now;
+                    state.LastAlertMessage = baseMessage;
+                    _cameraStates[cameraId] = state;
+                    return (true, baseMessage, "none");
+                }
+
+                if (status == "unsafe")
+                {
+                    var normalizedReason = NormalizeUnsafeReason(safetyReason);
+
+                    if (state.LastUnsafeAlertTime <= 0)
+                    {
+                        state.LastUnsafeAlertTime = now;
+                        state.UnsafeStreakStartTime = now;
+                        state.LastUnsafeReason = normalizedReason;
+                        state.LastAlertTime = now;
+                        state.LastAlertMessage = baseMessage;
+                        _cameraStates[cameraId] = state;
+                        return (true, baseMessage, "none");
+                    }
+
+                    var elapsed = now - state.LastUnsafeAlertTime;
+                    if (elapsed < 60)
+                    {
+                        return (false, baseMessage, $"unsafe_wait (elapsed={elapsed}s, limit=60s)");
+                    }
+
+                    string messageToSend;
+                    if (string.Equals(state.LastUnsafeReason, normalizedReason, StringComparison.Ordinal))
+                    {
+                        var sinceStart = now - state.UnsafeStreakStartTime;
+                        var duration = FormatUnsafeDuration(sinceStart);
+                        messageToSend = $"{baseMessage}\n\\(since {duration} ago\\)";
+                    }
+                    else
+                    {
+                        state.UnsafeStreakStartTime = now;
+                        state.LastUnsafeReason = normalizedReason;
+                        messageToSend = baseMessage;
+                    }
+
+                    state.LastUnsafeAlertTime = now;
+                    state.LastAlertTime = now;
+                    state.LastAlertMessage = messageToSend;
+                    _cameraStates[cameraId] = state;
+                    return (true, messageToSend, "none");
+                }
+
+                // Fallback to existing generic behavior for non-critical custom statuses.
+                var fallbackLastTime = state.LastAlertTime;
+                var fallbackLastMsg = state.LastAlertMessage;
+                if (fallbackLastTime > 0)
+                {
+                    var elapsed = now - fallbackLastTime;
+                    if (baseMessage == fallbackLastMsg && elapsed < 10)
+                    {
+                        return (false, baseMessage, $"same_message (elapsed={elapsed}s, limit=10s)");
+                    }
+
+                    if (baseMessage != fallbackLastMsg && elapsed < 3)
+                    {
+                        return (false, baseMessage, $"rate_limit (elapsed={elapsed}s, limit=3s)");
+                    }
+                }
+
+                state.LastAlertTime = now;
+                state.LastAlertMessage = baseMessage;
+                _cameraStates[cameraId] = state;
+                return (true, baseMessage, "none");
+            }
+        }
+
+        public void ResetUnsafeAlertState(string cameraId)
+        {
+            if (string.IsNullOrWhiteSpace(cameraId)) return;
+
+            lock (_cameraStatesLock)
+            {
+                if (_cameraStates.TryGetValue(cameraId, out var state))
+                {
+                    state.LastUnsafeAlertTime = 0;
+                    state.UnsafeStreakStartTime = 0;
+                    state.LastUnsafeReason = string.Empty;
+                    _cameraStates[cameraId] = state;
+                }
+            }
+        }
+
+        private static string NormalizeUnsafeReason(string? reason)
+        {
+            return string.IsNullOrWhiteSpace(reason)
+                ? "unknown"
+                : reason.Trim().ToLowerInvariant();
+        }
+
+        private static string FormatUnsafeDuration(long totalSeconds)
+        {
+            var safeSeconds = Math.Max(0, totalSeconds);
+            var totalMinutes = safeSeconds / 60;
+
+            if (totalMinutes < 60)
+            {
+                return $"{totalMinutes} mins";
+            }
+
+            if (totalMinutes < 24 * 60)
+            {
+                var hours = totalMinutes / 60;
+                var minutes = totalMinutes % 60;
+                return $"{hours} hr & {minutes} mins";
+            }
+
+            var days = totalMinutes / (24 * 60);
+            var remainingAfterDays = totalMinutes % (24 * 60);
+            var remHours = remainingAfterDays / 60;
+            var remMinutes = remainingAfterDays % 60;
+            return $"{days} days & {remHours} hr & {remMinutes} mins";
         }
 
         #endregion
@@ -764,6 +938,10 @@ namespace FallDetection.Streaming.Services
                     Timezone = "UTC",
                     LastAlertTime = 0,
                     LastAlertMessage = string.Empty,
+                    LastUnsafeAlertTime = 0,
+                    UnsafeStreakStartTime = 0,
+                    LastUnsafeReason = string.Empty,
+                    LastFallAlertTime = 0,
                     LastSeen = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
                 };
 
@@ -873,7 +1051,7 @@ namespace FallDetection.Streaming.Services
                 UpdateCameraState(cameraId, state);
                 UpdateCameraState(cameraId, state);
                 // SaveCameraStates(); // Defer to periodic timer
-                Console.WriteLine($"Stored pose label for camera {cameraId}, track {trackId}: {poseLabel}");
+                // Console.WriteLine($"Stored pose label for camera {cameraId}, track {trackId}: {poseLabel}");
             }
         }
 
@@ -913,6 +1091,7 @@ namespace FallDetection.Streaming.Services
                         Keypoints = track.Keypoints,
                         Bbox = track.Bbox,
                         PoseLabel = track.PoseLabel,
+                        HmePoseLabel = track.HmePoseLabel,
                         SafetyStatus = track.SafetyStatus,
                         SafetyReason = track.SafetyReason,
                         Timestamp = (long)timestamp,
@@ -952,20 +1131,22 @@ namespace FallDetection.Streaming.Services
                         Keypoints = trackingData.Keypoints != null ? new List<float>(trackingData.Keypoints) : null,
                         Bbox = trackingData.Bbox != null ? new List<double>(trackingData.Bbox) : null,
                         PoseLabel = trackingData.PoseLabel,
+                        HmePoseLabel = trackingData.HmePoseLabel,
                         SafetyStatus = trackingData.SafetyStatus,
+                        SafetyReason = trackingData.SafetyReason,
                         Timestamp = trackingData.Timestamp,
                         LastUpdated = trackingData.LastUpdated
                     };
 
                     // LOG: Full data being returned
-                    var trackingDataJson = JsonSerializer.Serialize(trackingDataCopy, new JsonSerializerOptions { WriteIndented = true });
-                    Console.WriteLine($"[GetTrackingData] Camera {cameraId}, TrackId {trackId}: FOUND - returning 1 track");
-                    Console.WriteLine($"[GetTrackingData] FULL DATA BEING RETURNED:\n{trackingDataJson}");
+                    // var trackingDataJson = JsonSerializer.Serialize(trackingDataCopy, new JsonSerializerOptions { WriteIndented = true });
+                    // Console.WriteLine($"[GetTrackingData] Camera {cameraId}, TrackId {trackId}: FOUND - returning 1 track");
+                    // Console.WriteLine($"[GetTrackingData] FULL DATA BEING RETURNED:\n{trackingDataJson}");
 
                     return trackingDataCopy;
                 }
 
-                Console.WriteLine($"[GetTrackingData] Camera {cameraId}, TrackId {trackId}: NOT FOUND");
+                // Console.WriteLine($"[GetTrackingData] Camera {cameraId}, TrackId {trackId}: NOT FOUND");
                 return null;
             }
         }

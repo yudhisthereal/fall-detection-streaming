@@ -799,6 +799,7 @@ namespace FallDetection.Streaming.Controllers
                 {
                     if (track.IntFeatures != null && track.IntFeatures.Count >= 6)
                     {
+                        var hmeStopwatch = System.Diagnostics.Stopwatch.StartNew();
                         double torsoAngle = track.IntFeatures[0];
                         double thighUprightness = track.IntFeatures[1];
                         double thighLength = track.IntFeatures[2];
@@ -806,26 +807,77 @@ namespace FallDetection.Streaming.Controllers
                         double torsoHeight = track.IntFeatures[4];
                         double legLength = track.IntFeatures[5];
 
+                        _logger.LogInformation(
+                            "[HME] START camera={CameraId} track={TrackId} int_features=[{TorsoAngle}, {ThighUprightness}, {ThighLength}, {CalfLength}, {TorsoHeight}, {LegLength}]",
+                            request.CameraId,
+                            track.TrackId,
+                            torsoAngle,
+                            thighUprightness,
+                            thighLength,
+                            calfLength,
+                            torsoHeight,
+                            legLength);
+
                         var reqFeatures = new EncryptedPoseFeatures
                         {
-                            Tra = _hmeService.Enc1Truncated(torsoAngle),
-                            Tha = _hmeService.Enc1Truncated(thighUprightness),
-                            Thl = _hmeService.Enc1Truncated(thighLength),
-                            Cl = _hmeService.Enc1Truncated(calfLength),
-                            Trl = _hmeService.Enc1Truncated(torsoHeight),
-                            Ll = _hmeService.Enc1Truncated(legLength)
+                            // Camera int_features are already fixed-point scaled by 100.
+                            // Encrypt directly to match Python flow (no second truncation).
+                            Tra = _hmeService.Enc1ScaledInt(torsoAngle),
+                            Tha = _hmeService.Enc1ScaledInt(thighUprightness),
+                            Thl = _hmeService.Enc1ScaledInt(thighLength),
+                            Cl = _hmeService.Enc1ScaledInt(calfLength),
+                            Trl = _hmeService.Enc1ScaledInt(torsoHeight),
+                            Ll = _hmeService.Enc1ScaledInt(legLength)
                         };
 
+                        _logger.LogInformation(
+                            "[HME] ENCRYPTED camera={CameraId} track={TrackId} tra=({Tra0},{Tra1}) tha=({Tha0},{Tha1}) thl=({Thl0},{Thl1}) cl=({Cl0},{Cl1}) trl=({Trl0},{Trl1}) ll=({Ll0},{Ll1})",
+                            request.CameraId,
+                            track.TrackId,
+                            reqFeatures.Tra[0], reqFeatures.Tra[1],
+                            reqFeatures.Tha[0], reqFeatures.Tha[1],
+                            reqFeatures.Thl[0], reqFeatures.Thl[1],
+                            reqFeatures.Cl[0], reqFeatures.Cl[1],
+                            reqFeatures.Trl[0], reqFeatures.Trl[1],
+                            reqFeatures.Ll[0], reqFeatures.Ll[1]);
+
                         string hmePoseResult = await _hmeService.ProcessPoseDataAsync(reqFeatures);
+                        hmeStopwatch.Stop();
+
+                        _logger.LogInformation(
+                            "[HME] RESULT camera={CameraId} track={TrackId} hme_pose_label={HmePoseLabel} elapsed_ms={ElapsedMs} camera_pose_label={CameraPoseLabel}",
+                            request.CameraId,
+                            track.TrackId,
+                            hmePoseResult,
+                            hmeStopwatch.ElapsedMilliseconds,
+                            track.PoseLabel);
+
                         if (hmePoseResult != "None")
                         {
-                            track.PoseLabel = hmePoseResult;
+                            track.HmePoseLabel = hmePoseResult;
                         }
+                    }
+                    else
+                    {
+                        _logger.LogWarning(
+                            "[HME] SKIP camera={CameraId} track={TrackId} reason=missing_or_short_int_features count={IntFeatureCount}",
+                            request.CameraId,
+                            track.TrackId,
+                            track.IntFeatures?.Count ?? 0);
                     }
                 }
 
                 // Store updated tracks
                 _cameraService.StoreTracks(request.CameraId, validTracks, request.Timestamp);
+
+                // Reset unsafe streak if current batch has no unsafe tracks.
+                var hasUnsafeInCurrentBatch = validTracks.Any(t =>
+                    !string.IsNullOrWhiteSpace(t.SafetyStatus) &&
+                    string.Equals(t.SafetyStatus, "unsafe", StringComparison.OrdinalIgnoreCase));
+                if (!hasUnsafeInCurrentBatch)
+                {
+                    _cameraService.ResetUnsafeAlertState(request.CameraId);
+                }
 
                 // Trigger Telegram alerts for non-normal events
                 foreach (var track in validTracks)
@@ -848,69 +900,59 @@ namespace FallDetection.Streaming.Controllers
                             // excluded from Telegram messages for falls, so log it here explicitly)
                             if (status == "fall")
                             {
-                                _logger.LogWarning(
-                                    "🚨 FALL DETECTED | camera={CameraId} track={TrackId} safetyReason={SafetyReason} subs={TotalSubs} eligible={EligibleSubs}",
-                                    request.CameraId,
-                                    track.TrackId,
-                                    string.IsNullOrEmpty(track.SafetyReason) ? "(none)" : track.SafetyReason,
-                                    totalSubscribers,
-                                    eligibleSubscribers);
+                                // _logger.LogWarning(
+                                //     "🚨 FALL DETECTED | camera={CameraId} track={TrackId} safetyReason={SafetyReason} subs={TotalSubs} eligible={EligibleSubs}",
+                                //     request.CameraId,
+                                //     track.TrackId,
+                                //     string.IsNullOrEmpty(track.SafetyReason) ? "(none)" : track.SafetyReason,
+                                //     totalSubscribers,
+                                //     eligibleSubscribers);
                             }
 
                             // Check throttling
                             var state = _cameraService.GetCameraState(request.CameraId);
                             if (state == null)
                             {
-                                _logger.LogWarning(
-                                    "{Emoji} {Status} | camera={CameraId} track={TrackId} subs={SubscriberCount} eligible={EligibleSubscriberCount} telegram=skip reason=no_camera_state",
-                                    GetAlertEmoji(status),
-                                    status,
-                                    request.CameraId,
-                                    track.TrackId,
-                                    totalSubscribers,
-                                    eligibleSubscribers);
+                                // _logger.LogWarning(
+                                //     "{Emoji} {Status} | camera={CameraId} track={TrackId} subs={SubscriberCount} eligible={EligibleSubscriberCount} telegram=skip reason=no_camera_state",
+                                //     GetAlertEmoji(status),
+                                //     status,
+                                //     request.CameraId,
+                                //     track.TrackId,
+                                //     totalSubscribers,
+                                //     eligibleSubscribers);
                                 continue;
                             }
 
-                            // Pre-compute throttle reason before ShouldThrottleAndSetAlert consumes it,
-                            // so we can log the exact reason if the notification is suppressed
-                            string throttleReason = "none";
-                            if (state.LastAlertTime > 0)
-                            {
-                                var nowTs = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-                                var elapsed = nowTs - state.LastAlertTime;
-                                if (message == state.LastAlertMessage)
-                                {
-                                    if (elapsed < 10) throttleReason = $"same_message (elapsed={elapsed}s, limit=10s)";
-                                }
-                                else
-                                {
-                                    if (elapsed < 3) throttleReason = $"rate_limit (elapsed={elapsed}s, limit=3s)";
-                                }
-                            }
+                            var alertDecision = _cameraService.EvaluateAlertNotification(
+                                request.CameraId,
+                                status,
+                                track.SafetyReason,
+                                message);
 
-                            bool shouldSend = _cameraService.ShouldThrottleAndSetAlert(request.CameraId, message);
+                            bool shouldSend = alertDecision.ShouldSend;
 
                             if (status == "fall")
                             {
-                                _logger.LogWarning(
-                                    "🚨 FALL | camera={CameraId} track={TrackId} telegram={TelegramAction} throttleReason={ThrottleReason}",
-                                    request.CameraId,
-                                    track.TrackId,
-                                    shouldSend ? "send" : "skip",
-                                    shouldSend ? "n/a" : throttleReason);
+                                // _logger.LogWarning(
+                                //     "🚨 FALL | camera={CameraId} track={TrackId} telegram={TelegramAction} throttleReason={ThrottleReason}",
+                                //     request.CameraId,
+                                //     track.TrackId,
+                                //     shouldSend ? "send" : "skip",
+                                //     shouldSend ? "n/a" : alertDecision.ThrottleReason);
                             }
                             else
                             {
-                                _logger.LogInformation(
-                                    "{Emoji} {Status} | camera={CameraId} track={TrackId} subs={SubscriberCount} eligible={EligibleSubscriberCount} telegram={TelegramAction}",
-                                    GetAlertEmoji(status),
-                                    status,
-                                    request.CameraId,
-                                    track.TrackId,
-                                    totalSubscribers,
-                                    eligibleSubscribers,
-                                    shouldSend ? "send" : "skip");
+                                // _logger.LogInformation(
+                                //     "{Emoji} {Status} | camera={CameraId} track={TrackId} subs={SubscriberCount} eligible={EligibleSubscriberCount} telegram={TelegramAction} throttleReason={ThrottleReason}",
+                                //     GetAlertEmoji(status),
+                                //     status,
+                                //     request.CameraId,
+                                //     track.TrackId,
+                                //     totalSubscribers,
+                                //     eligibleSubscribers,
+                                //     shouldSend ? "send" : "skip",
+                                //     shouldSend ? "n/a" : alertDecision.ThrottleReason);
                             }
 
                             if (!shouldSend)
@@ -919,7 +961,7 @@ namespace FallDetection.Streaming.Controllers
                             }
 
                             // Fire and forget - don't await to avoid blocking
-                            _ = _telegramBot.SendAlert(request.CameraId, message, severity);
+                            _ = _telegramBot.SendAlert(request.CameraId, alertDecision.Message, severity);
                         }
                     }
                 }
@@ -928,22 +970,24 @@ namespace FallDetection.Streaming.Controllers
                 {
                     track_id = t.TrackId,
                     keypoints_count = t.Keypoints.Count,
+                    camera_pose_label = t.PoseLabel,
+                    hme_pose_label = t.HmePoseLabel,
                     pose_label = t.PoseLabel,
                     safety_status = t.SafetyStatus,
                     safety_reason = t.SafetyReason
                 }).ToList();
 
                 // LOG: Response data
-                var responseJson = JsonSerializer.Serialize(new
-                {
-                    status = "success",
-                    message = "Tracks stored",
-                    camera_id = request.CameraId,
-                    tracks_processed = processedTracks.Count,
-                    total_tracks = request.Tracks.Count,
-                    errors = errors.Count > 0 ? errors : null,
-                    timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
-                }, new JsonSerializerOptions { WriteIndented = true });
+                // var responseJson = JsonSerializer.Serialize(new
+                // {
+                //     status = "success",
+                //     message = "Tracks stored",
+                //     camera_id = request.CameraId,
+                //     tracks_processed = processedTracks.Count,
+                //     total_tracks = request.Tracks.Count,
+                //     errors = errors.Count > 0 ? errors : null,
+                //     timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+                // }, new JsonSerializerOptions { WriteIndented = true });
 
                 // _logger.LogInformation("[POST /api/stream/tracks] CameraId={CameraId}: RESPONSE - Processed={ProcessedCount}, Total={TotalCount}\nFULL RESPONSE DATA:\n{FullResponse}",
                 //     request.CameraId,
@@ -981,7 +1025,7 @@ namespace FallDetection.Streaming.Controllers
 
                 if (string.IsNullOrWhiteSpace(camera_id))
                 {
-                    _logger.LogWarning("[GET /api/stream/tracks] Request with empty camera_id");
+                    // _logger.LogWarning("[GET /api/stream/tracks] Request with empty camera_id");
                     return BadRequest(new { status = "error", message = "CameraId is required" });
                 }
 
@@ -1011,9 +1055,9 @@ namespace FallDetection.Streaming.Controllers
                         });
                     }
 
-                    _logger.LogWarning("[GET /api/stream/tracks] CameraId={CameraId}, TrackId={TrackId}: Tracking data not found",
-                        camera_id,
-                        track_id.Value);
+                    // _logger.LogWarning("[GET /api/stream/tracks] CameraId={CameraId}, TrackId={TrackId}: Tracking data not found",
+                    //     camera_id,
+                    //     track_id.Value);
                     return NotFound(new { error = "Tracking data not found for specified camera and track" });
                 }
                 else

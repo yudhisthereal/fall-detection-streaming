@@ -74,6 +74,22 @@ namespace FallDetection.Streaming.Models
         [JsonPropertyName("last_alert_message")]
         public string? LastAlertMessage { get; set; }
 
+        // Last time an unsafe alert was sent for this camera (Unix timestamp)
+        [JsonPropertyName("last_unsafe_alert_time")]
+        public long LastUnsafeAlertTime { get; set; }
+
+        // Start time of current continuous unsafe streak (Unix timestamp)
+        [JsonPropertyName("unsafe_streak_start_time")]
+        public long UnsafeStreakStartTime { get; set; }
+
+        // Last unsafe reason used for unsafe streak comparison
+        [JsonPropertyName("last_unsafe_reason")]
+        public string? LastUnsafeReason { get; set; }
+
+        // Last time a fall alert was sent for this camera (Unix timestamp)
+        [JsonPropertyName("last_fall_alert_time")]
+        public long LastFallAlertTime { get; set; }
+
         // Background update tracking for set_background command
         // set_background=True stays true until camera sends background_updated
         public bool BackgroundUpdatePending { get; set; }
@@ -141,6 +157,9 @@ namespace FallDetection.Streaming.Models
 
         [JsonPropertyName("pose_label")]
         public string? PoseLabel { get; set; }
+
+        [JsonPropertyName("hme_pose_label")]
+        public string? HmePoseLabel { get; set; }
 
         [JsonPropertyName("safety_status")]
         public string? SafetyStatus { get; set; }
@@ -234,6 +253,9 @@ namespace FallDetection.Streaming.Models
 
         [JsonPropertyName("pose_label")]
         public string PoseLabel { get; set; } = string.Empty;
+
+        [JsonPropertyName("hme_pose_label")]
+        public string? HmePoseLabel { get; set; }
 
         [JsonPropertyName("safety_status")]
         public string SafetyStatus { get; set; } = string.Empty;

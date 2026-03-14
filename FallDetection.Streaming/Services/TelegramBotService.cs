@@ -4,7 +4,6 @@ using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
-using Telegram.Bot.Requests;
 using FallDetection.Streaming.Models;
 
 namespace FallDetection.Streaming.Services
