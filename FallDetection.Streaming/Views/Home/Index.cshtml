@@ -40,14 +40,14 @@
             <!-- Stream comes first after title -->
             <div class="stream-section">
                 <!-- Two-pass rendering: Background img (static) + Overlay canvas (skeletons & safe areas) -->
-                <div style="position: relative; width: 100%; aspect-ratio: 16/9;">
+                 <div style="position: relative; width: 100%; aspect-ratio: 10/7;">
+                    <img id="streamImg" alt="Live Stream"
+                         style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border-radius:12px; border:2px solid var(--theme-border); background:#000; z-index: 1; object-fit: contain; display: none;" />
                     <img id="streamBackgroundImg" alt="Background"
-                         style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border-radius:12px; border:2px solid var(--theme-border); background:#000; z-index: 1; object-fit: cover;" />
+                        style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border-radius:12px; border:2px solid var(--theme-border); background:#000; z-index: 1; object-fit: contain;" />
                     <canvas id="overlayCanvas"
-                            style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2;"></canvas>
-                </div>
-                <!-- Hidden img element for loading video frames (not displayed directly) -->
-                <img id="streamImg" alt="Live Stream" style="display: none;" />
+                           style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2;"></canvas>
+                 </div>
 
                 <div id="clockDisplay" class="clock-display">
                     --:--
