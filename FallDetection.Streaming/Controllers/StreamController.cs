@@ -835,14 +835,27 @@ namespace FallDetection.Streaming.Controllers
                         var status = track.SafetyStatus.ToLower();
 
                         // Send notification for critical statuses ONLY
-                        // Exclude normal/safe/tracking
-                        if (status != "normal" && status != "safe" && status != "tracking")
+                        // Exclude normal
+                        if (status != "normal")
                         {
                             var severity = DetermineSeverity(status);
                             var message = FormatAlertMessage(request.CameraId, track);
                             var subscriptions = _subscriptionManager.GetSubscriptionsForCamera(request.CameraId);
                             var totalSubscribers = subscriptions.Count;
                             var eligibleSubscribers = subscriptions.Count(s => severity >= s.NotificationLevel);
+
+                            // Log every fall detection immediately with full detail (safety_reason is
+                            // excluded from Telegram messages for falls, so log it here explicitly)
+                            if (status == "fall")
+                            {
+                                _logger.LogWarning(
+                                    "🚨 FALL DETECTED | camera={CameraId} track={TrackId} safetyReason={SafetyReason} subs={TotalSubs} eligible={EligibleSubs}",
+                                    request.CameraId,
+                                    track.TrackId,
+                                    string.IsNullOrEmpty(track.SafetyReason) ? "(none)" : track.SafetyReason,
+                                    totalSubscribers,
+                                    eligibleSubscribers);
+                            }
 
                             // Check throttling
                             var state = _cameraService.GetCameraState(request.CameraId);
@@ -859,17 +872,46 @@ namespace FallDetection.Streaming.Controllers
                                 continue;
                             }
 
+                            // Pre-compute throttle reason before ShouldThrottleAndSetAlert consumes it,
+                            // so we can log the exact reason if the notification is suppressed
+                            string throttleReason = "none";
+                            if (state.LastAlertTime > 0)
+                            {
+                                var nowTs = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                                var elapsed = nowTs - state.LastAlertTime;
+                                if (message == state.LastAlertMessage)
+                                {
+                                    if (elapsed < 10) throttleReason = $"same_message (elapsed={elapsed}s, limit=10s)";
+                                }
+                                else
+                                {
+                                    if (elapsed < 3) throttleReason = $"rate_limit (elapsed={elapsed}s, limit=3s)";
+                                }
+                            }
+
                             bool shouldSend = _cameraService.ShouldThrottleAndSetAlert(request.CameraId, message);
 
-                            _logger.LogInformation(
-                                "{Emoji} {Status} | camera={CameraId} track={TrackId} subs={SubscriberCount} eligible={EligibleSubscriberCount} telegram={TelegramAction}",
-                                GetAlertEmoji(status),
-                                status,
-                                request.CameraId,
-                                track.TrackId,
-                                totalSubscribers,
-                                eligibleSubscribers,
-                                shouldSend ? "send" : "skip");
+                            if (status == "fall")
+                            {
+                                _logger.LogWarning(
+                                    "🚨 FALL | camera={CameraId} track={TrackId} telegram={TelegramAction} throttleReason={ThrottleReason}",
+                                    request.CameraId,
+                                    track.TrackId,
+                                    shouldSend ? "send" : "skip",
+                                    shouldSend ? "n/a" : throttleReason);
+                            }
+                            else
+                            {
+                                _logger.LogInformation(
+                                    "{Emoji} {Status} | camera={CameraId} track={TrackId} subs={SubscriberCount} eligible={EligibleSubscriberCount} telegram={TelegramAction}",
+                                    GetAlertEmoji(status),
+                                    status,
+                                    request.CameraId,
+                                    track.TrackId,
+                                    totalSubscribers,
+                                    eligibleSubscribers,
+                                    shouldSend ? "send" : "skip");
+                            }
 
                             if (!shouldSend)
                             {
