@@ -419,3 +419,4 @@ local.settings.json
 report.md
 
 G_pose_enc/
+FallDetection.Streaming/appsettings.json
