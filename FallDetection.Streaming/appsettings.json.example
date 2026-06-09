@@ -10,6 +10,6 @@
     "BotToken": "YOUR_BOT_TOKEN_HERE"
   },
   "Analytics": {
-    "BaseUrl": "http://103.127.136.213:5000/api/analytics"
+    "BaseUrl": "http://194.68.32.97:5000/api/analytics"
   }
 }
