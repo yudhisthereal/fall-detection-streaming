@@ -10,7 +10,7 @@ NC='\033[0m' # No Color
 
 # Default values
 BUILD_ONLY=false
-PROJECT_DIR="/opt/fall-detection-streaming"
+PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_NAME="FallDetection.Streaming"
 SERVICE_NAME="fall-detection-streaming"
 PORT=8000
