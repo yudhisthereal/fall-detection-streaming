@@ -25,15 +25,19 @@ namespace FallDetection.Streaming.Services
         private static readonly BigInteger pinvq = BigInteger.Parse("499967064455987294076532081570894386372");
         private static readonly BigInteger qinvp = BigInteger.Parse("33542671637141449679641257954160235148");
         private static readonly BigInteger n11 = p1 * q1;
-        private static readonly BigInteger gu = 65; // Calculate bit_length() // 2 of u
+        
+        // Calculate gu = bit_length(u) // 2
+        private static readonly BigInteger gu = (u.GetBitLength() / 2);
 
+        // CRT products
         private static readonly BigInteger np1prod = q1 * r * s * t * w;
         private static readonly BigInteger nq1prod = p1 * r * s * t * w;
         private static readonly BigInteger nrprod = p1 * q1 * s * t * w;
         private static readonly BigInteger nsprod = p1 * q1 * r * t * w;
         private static readonly BigInteger ntprod = p1 * q1 * r * s * w;
-        private static readonly BigInteger nwprod = p1 * q1 * r * s * t; // wait let me double check Python lines 28
-        // Actually I'll just hardcode them based on the python source I just verified!
+        private static readonly BigInteger nwprod = p1 * q1 * r * s * t;
+
+        // CRT inverses
         private static readonly BigInteger invnp1 = BigInteger.Parse("205139046479782337030801215788009754117");
         private static readonly BigInteger invnq1 = BigInteger.Parse("429235397156384978572995593851807405098");
         private static readonly BigInteger invnr = BigInteger.Parse("592155359269217457562309991915739180471");
@@ -55,8 +59,10 @@ namespace FallDetection.Streaming.Services
             {
                 rng.GetBytes(bytes);
             }
-            // Ensure positive integer
+            // Ensure positive integer between 1 and 2^32 - 1 (matching Python's randint)
             uint randomUint = BitConverter.ToUInt32(bytes, 0);
+            // Make sure it's at least 1
+            if (randomUint == 0) randomUint = 1;
             return new BigInteger(randomUint);
         }
 
@@ -66,17 +72,15 @@ namespace FallDetection.Streaming.Services
             return r < 0 ? r + b : r;
         }
 
-        private BigInteger Truncate(double num)
+        /// <summary>
+        /// Encrypt with 2 moduli (p1, q1)
+        /// Used for: Encrypting features
+        /// Matches Python _Enc1(m)
+        /// </summary>
+        public string[] _Enc1(BigInteger m)
         {
-            double factor = 100.0;
-            return new BigInteger(Math.Truncate(num * factor));
-        }
-
-        public string[] Enc1Truncated(double num)
-        {
-            BigInteger m = Truncate(num);
             BigInteger g = GenerateRandom32Bit();
-            BigInteger baseVal = g * u + m;
+            BigInteger baseVal = (g * u) + m;
             return new[]
             {
                 Mod(baseVal, p1).ToString(),
@@ -85,25 +89,14 @@ namespace FallDetection.Streaming.Services
         }
 
         /// <summary>
-        /// Encrypts an already scaled integer feature (e.g. camera sends value * 100).
-        /// This avoids double-truncation when upstream has already applied fixed-point scaling.
+        /// Encrypt with 6 moduli (p1, q1, r, s, t, w)
+        /// Used for: Re-encrypting comparison results
+        /// Matches Python _Enc(m)
         /// </summary>
-        public string[] Enc1ScaledInt(double scaledValue)
-        {
-            BigInteger m = new BigInteger(Math.Truncate(scaledValue));
-            BigInteger g = GenerateRandom32Bit();
-            BigInteger baseVal = g * u + m;
-            return new[]
-            {
-                Mod(baseVal, p1).ToString(),
-                Mod(baseVal, q1).ToString()
-            };
-        }
-
-        private string[] Enc(BigInteger m)
+        private string[] _Enc(BigInteger m)
         {
             BigInteger g = GenerateRandom32Bit();
-            BigInteger baseVal = g * u + m;
+            BigInteger baseVal = (g * u) + m;
             return new[]
             {
                 Mod(baseVal, p1).ToString(),
@@ -115,8 +108,30 @@ namespace FallDetection.Streaming.Services
             };
         }
 
-        private BigInteger Decmul(BigInteger c1, BigInteger c2, BigInteger c3, BigInteger c4, BigInteger c5, BigInteger c6)
+        /// <summary>
+        /// Encrypts an already scaled integer feature (e.g. camera sends value * 100).
+        /// This avoids double-truncation when upstream has already applied fixed-point scaling.
+        /// </summary>
+        public string[] Enc1ScaledInt(double scaledValue)
         {
+            BigInteger m = new BigInteger(Math.Truncate(scaledValue));
+            BigInteger g = GenerateRandom32Bit();
+            BigInteger baseVal = (g * u) + m;
+            return new[]
+            {
+                Mod(baseVal, p1).ToString(),
+                Mod(baseVal, q1).ToString()
+            };
+        }
+
+        /// <summary>
+        /// Decrypt from 6 moduli (p1, q1, r, s, t, w)
+        /// Used for: Decrypting final polynomial result
+        /// Matches Python _decmul(c1, c2, c3, c4, c5, c6)
+        /// </summary>
+        private BigInteger _Decmul(BigInteger c1, BigInteger c2, BigInteger c3, BigInteger c4, BigInteger c5, BigInteger c6)
+        {
+            // CRT reconstruction
             BigInteger term1 = Mod(c1, p1) * invnp1 * np1prod;
             BigInteger term2 = Mod(c2, q1) * invnq1 * nq1prod;
             BigInteger term3 = Mod(c3, r) * invnr * nrprod;
@@ -126,23 +141,42 @@ namespace FallDetection.Streaming.Services
 
             BigInteger mout = Mod(term1 + term2 + term3 + term4 + term5 + term6, n1);
 
-            if (mout > n1 / 2)
+            // Python: if mout > n1 // 2: mout = mout - n1
+            if (mout > (n1 / 2))
             {
                 mout = mout - n1;
             }
+            
+            // Python: mout = mout % u
             mout = Mod(mout, u);
             return mout;
         }
 
-        private BigInteger PrivCompCg(BigInteger c111, BigInteger c121)
+        /// <summary>
+        /// Decrypt comparison result from 2 moduli (p1, q1)
+        /// Used for: Decrypting threshold comparison results
+        /// Matches Python _priv_comp_cg(c111, c121)
+        /// </summary>
+        private BigInteger _PrivCompCg(BigInteger c111, BigInteger c121)
         {
+            // CRT reconstruction for 2 moduli
             BigInteger term1 = Mod(c111, p1) * qinvp * q1;
             BigInteger term2 = Mod(c121, q1) * pinvq * p1;
-            BigInteger mout = Mod(Mod(term1 + term2, n11), u);
-
+            BigInteger mout = Mod(term1 + term2, n11);
+            
+            // Python: mout = mout % u
+            mout = Mod(mout, u);
+            
+            // Python: rn = (mout + u) % u
             BigInteger rn = Mod(mout + u, u);
+            
+            // Python: tg = rn.bit_length()
             int tg = (int)rn.GetBitLength();
-
+            
+            // Python comparison logic
+            // if gu > tg: gcomp = 0 (False)
+            // elif gu < tg: gcomp = 1 (True)
+            // else: gcomp = -1 (Undefined)
             BigInteger gcomp = -5;
             if (gu > tg)
             {
@@ -159,33 +193,39 @@ namespace FallDetection.Streaming.Services
             return gcomp;
         }
 
-        private BigInteger PrivComp1Cg(BigInteger c11, BigInteger c12)
+        /// <summary>
+        /// Decrypt encrypted comparison from 2 moduli (p1, q1)
+        /// Used for: Decrypting encrypted vs encrypted comparison results
+        /// Matches Python _priv_comp1_cg(c11, c12)
+        /// </summary>
+        private BigInteger _PrivComp1Cg(BigInteger c11, BigInteger c12)
         {
+            // CRT reconstruction for 2 moduli
             BigInteger term1 = Mod(c11, p1) * qinvp * q1;
             BigInteger term2 = Mod(c12, q1) * pinvq * p1;
             BigInteger mout = Mod(term1 + term2, n11);
-
-            if (mout > n11 / 2)
+            
+            // Python: if mout > n11 // 2: mout = mout - n11
+            if (mout > (n11 / 2))
             {
                 mout = mout - n11;
             }
+            
+            // Python: mout = mout % u
             mout = Mod(mout, u);
-
+            
+            // Python: tg = mout.bit_length()
             int tg = (int)mout.GetBitLength();
-            BigInteger gcomp1 = -5;
+            
+            // Python: if gu > tg: return 0 (False) else return 1 (True)
             if (gu > tg)
             {
-                gcomp1 = 0;
-            }
-            else if (gu < tg)
-            {
-                gcomp1 = 1;
+                return 0;
             }
             else
             {
-                gcomp1 = -1;
+                return 1;
             }
-            return gcomp1;
         }
 
         public async Task<string> ProcessPoseDataAsync(EncryptedPoseFeatures reqFeatures)
@@ -239,76 +279,86 @@ namespace FallDetection.Streaming.Services
                     ir.T30![0], ir.T30[1], ir.T40![0], ir.T40[1], ir.T80![0], ir.T80[1],
                     ir.T60![0], ir.T60[1], ir.Tc![0],  ir.Tc[1],  ir.Tl![0],  ir.Tl[1]);
 
-                // PrivCompCg: decrypt results of encrypted-vs-plaintext-threshold comparisons
-                BigInteger compT30 = PrivCompCg(BigInteger.Parse(ir.T30[0]), BigInteger.Parse(ir.T30[1]));
-                BigInteger compT40 = PrivCompCg(BigInteger.Parse(ir.T40[0]), BigInteger.Parse(ir.T40[1]));
-                BigInteger compT80 = PrivCompCg(BigInteger.Parse(ir.T80[0]), BigInteger.Parse(ir.T80[1]));
-                BigInteger compT60 = PrivCompCg(BigInteger.Parse(ir.T60[0]), BigInteger.Parse(ir.T60[1]));
+                // STEP 2: Decrypt comparison results from Analytics
+                _logger.LogInformation("[HME-SVC] step2 decrypting comparison results");
+                
+                // Decrypt threshold comparisons using _PrivCompCg (matches Python _priv_comp_cg)
+                BigInteger compT30 = _PrivCompCg(BigInteger.Parse(ir.T30[0]), BigInteger.Parse(ir.T30[1]));
+                BigInteger compT40 = _PrivCompCg(BigInteger.Parse(ir.T40[0]), BigInteger.Parse(ir.T40[1]));
+                BigInteger compT80 = _PrivCompCg(BigInteger.Parse(ir.T80[0]), BigInteger.Parse(ir.T80[1]));
+                BigInteger compT60 = _PrivCompCg(BigInteger.Parse(ir.T60[0]), BigInteger.Parse(ir.T60[1]));
 
-                // PrivComp1Cg: decrypt results of encrypted-vs-encrypted comparisons
-                BigInteger compTc = PrivComp1Cg(BigInteger.Parse(ir.Tc[0]), BigInteger.Parse(ir.Tc[1]));
-                BigInteger compTl = PrivComp1Cg(BigInteger.Parse(ir.Tl[0]), BigInteger.Parse(ir.Tl[1]));
+                // Decrypt encrypted comparisons using _PrivComp1Cg (matches Python _priv_comp1_cg)
+                BigInteger compTc = _PrivComp1Cg(BigInteger.Parse(ir.Tc[0]), BigInteger.Parse(ir.Tc[1]));
+                BigInteger compTl = _PrivComp1Cg(BigInteger.Parse(ir.Tl[0]), BigInteger.Parse(ir.Tl[1]));
 
-                // Encrypt all 6 comparison results (6 CRT residues each)
-                // Polynomial column order: T30(a), T40(b), T80(c), TC(d), TL(e), T60(f)
-                string[] encT30 = Enc(compT30);
-                string[] encT40 = Enc(compT40);
-                string[] encT80 = Enc(compT80);
-                string[] encTc  = Enc(compTc);
-                string[] encTl  = Enc(compTl);
-                string[] encT60 = Enc(compT60);
+                _logger.LogInformation(
+                    "[HME-SVC] step2 decrypted: T30={T30}, T40={T40}, T80={T80}, T60={T60}, TC={Tc}, TL={Tl}",
+                    compT30, compT40, compT80, compT60, compTc, compTl);
+
+                // STEP 3: Re-encrypt comparison results using _Enc (6 moduli)
+                // Polynomial column order: a=T30, b=T40, c=T80, d=TC, e=TL, f=T60
+                _logger.LogInformation("[HME-SVC] step3 re-encrypting comparison results with 6 moduli");
+                
+                string[] encT30 = _Enc(compT30);
+                string[] encT40 = _Enc(compT40);
+                string[] encT80 = _Enc(compT80);
+                string[] encTc  = _Enc(compTc);
+                string[] encTl  = _Enc(compTl);
+                string[] encT60 = _Enc(compT60);
 
                 var evalPayload = new EncryptedComparisonResults
                 {
-                    CompA = encT30.ToList(),
-                    CompB = encT40.ToList(),
-                    CompC = encT80.ToList(),
-                    CompD = encTc.ToList(),
-                    CompE = encTl.ToList(),
-                    CompF = encT60.ToList()
+                    CompA = encT30.ToList(),  // a = T30
+                    CompB = encT40.ToList(),  // b = T40
+                    CompC = encT80.ToList(),  // c = T80
+                    CompD = encTc.ToList(),   // d = TC
+                    CompE = encTl.ToList(),   // e = TL
+                    CompF = encT60.ToList()   // f = T60
                 };
 
                 var evalPayloadJson = JsonSerializer.Serialize(evalPayload);
                 _logger.LogInformation(
-                    "[HME-SVC] step2 analytics-request body={Body}",
+                    "[HME-SVC] step3 analytics-request body={Body}",
                     evalPayloadJson);
 
-                var step2Stopwatch = System.Diagnostics.Stopwatch.StartNew();
+                var step3Stopwatch = System.Diagnostics.Stopwatch.StartNew();
                 var evalResResponse = await _httpClient.PostAsJsonAsync($"{_analyticsBaseUrl}/evaluate-polynomial", evalPayload);
-                step2Stopwatch.Stop();
+                step3Stopwatch.Stop();
                 _logger.LogInformation(
-                    "[HME-SVC] step2 evaluate-polynomial status={StatusCode} elapsed_ms={ElapsedMs}",
+                    "[HME-SVC] step3 evaluate-polynomial status={StatusCode} elapsed_ms={ElapsedMs}",
                     (int)evalResResponse.StatusCode,
-                    step2Stopwatch.ElapsedMilliseconds);
+                    step3Stopwatch.ElapsedMilliseconds);
 
                 if (!evalResResponse.IsSuccessStatusCode)
                 {
-                    _logger.LogWarning($"Analytics Step 2 failed with {evalResResponse.StatusCode}");
+                    _logger.LogWarning($"Analytics Step 3 failed with {evalResResponse.StatusCode}");
                     return "None";
                 }
 
                 var evalResJson = await evalResResponse.Content.ReadAsStringAsync();
                 _logger.LogInformation(
-                    "[HME-SVC] step2 analytics-response body={Body}",
+                    "[HME-SVC] step3 analytics-response body={Body}",
                     evalResJson);
                 string finalLabel;
 
-                // Preferred/actual server response shape:
-                // { status: "success", evaluation_result: { polynomial_results: [6 values] } }
+                // Parse response - expect polynomial_results array of 6 values
                 var evalEnvelope = JsonSerializer.Deserialize<AnalyticsStep2Response>(evalResJson);
                 var poly = evalEnvelope?.EvaluationResult?.PolynomialResults;
                 if ((poly?.Length ?? 0) >= 6)
                 {
-                    _logger.LogInformation("[HME-SVC] step2 parsed polynomial_results_len={PolyLen}", poly!.Length);
+                    _logger.LogInformation("[HME-SVC] step3 parsed polynomial_results_len={PolyLen}", poly!.Length);
 
-                    BigInteger classIndex = Decmul(
+                    // STEP 4: Decrypt final polynomial result using _Decmul (matches Python _decmul)
+                    BigInteger classIndex = _Decmul(
                         BigInteger.Parse(poly[0]), BigInteger.Parse(poly[1]),
                         BigInteger.Parse(poly[2]), BigInteger.Parse(poly[3]),
                         BigInteger.Parse(poly[4]), BigInteger.Parse(poly[5])
                     );
 
-                    _logger.LogInformation("[HME-SVC] decrypt class_index={ClassIndex}", classIndex.ToString());
+                    _logger.LogInformation("[HME-SVC] step4 decrypted class_index={ClassIndex}", classIndex.ToString());
 
+                    // Map class index to pose label
                     if (classIndex == 0) finalLabel = "standing";
                     else if (classIndex == 1) finalLabel = "sitting";
                     else if (classIndex == 2) finalLabel = "bending_down";
@@ -322,7 +372,7 @@ namespace FallDetection.Streaming.Services
                     if (evalRes == null || (evalRes.MsbRes?.Length ?? 0) < 6 || (evalRes.LsbRes?.Length ?? 0) < 6)
                     {
                         _logger.LogWarning(
-                            "[HME-SVC] step2 invalid payload polynomial_results_len={PolyLen} msb_len={MsbLen} lsb_len={LsbLen}",
+                            "[HME-SVC] step3 invalid payload polynomial_results_len={PolyLen} msb_len={MsbLen} lsb_len={LsbLen}",
                             poly?.Length ?? 0,
                             evalRes?.MsbRes?.Length ?? 0,
                             evalRes?.LsbRes?.Length ?? 0);
@@ -330,26 +380,26 @@ namespace FallDetection.Streaming.Services
                     }
 
                     _logger.LogInformation(
-                        "[HME-SVC] step2 parsed msb_len={MsbLen} lsb_len={LsbLen}",
+                        "[HME-SVC] step3 parsed msb_len={MsbLen} lsb_len={LsbLen}",
                         evalRes.MsbRes!.Length,
                         evalRes.LsbRes!.Length);
 
-                    BigInteger msb = Decmul(
+                    // Decrypt MSB and LSB separately
+                    BigInteger msb = _Decmul(
                         BigInteger.Parse(evalRes.MsbRes[0]), BigInteger.Parse(evalRes.MsbRes[1]),
                         BigInteger.Parse(evalRes.MsbRes[2]), BigInteger.Parse(evalRes.MsbRes[3]),
                         BigInteger.Parse(evalRes.MsbRes[4]), BigInteger.Parse(evalRes.MsbRes[5])
                     );
 
-                    BigInteger lsb = Decmul(
+                    BigInteger lsb = _Decmul(
                         BigInteger.Parse(evalRes.LsbRes[0]), BigInteger.Parse(evalRes.LsbRes[1]),
                         BigInteger.Parse(evalRes.LsbRes[2]), BigInteger.Parse(evalRes.LsbRes[3]),
                         BigInteger.Parse(evalRes.LsbRes[4]), BigInteger.Parse(evalRes.LsbRes[5])
                     );
 
-                    _logger.LogInformation("[HME-SVC] decrypt bits msb={Msb} lsb={Lsb}", msb.ToString(), lsb.ToString());
+                    _logger.LogInformation("[HME-SVC] step3 decrypt bits msb={Msb} lsb={Lsb}", msb.ToString(), lsb.ToString());
 
-                    // Python reference computes class index as: mout = 2*msb + lsb
-                    // and maps: 0=standing, 1=sitting, 2=bending_down, 3=lying_down
+                    // Python reference maps: 0=standing, 1=sitting, 2=bending_down, 3=lying_down
                     if (msb == 0 && lsb == 0) finalLabel = "standing";
                     else if (msb == 0 && lsb == 1) finalLabel = "sitting";
                     else if (msb == 1 && lsb == 0) finalLabel = "bending_down";
