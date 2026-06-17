@@ -40,6 +40,18 @@ const StreamDisplay = {
     backgroundUpdatePending: false,  // true when set_background command is in flight
     lastBackgroundTimestamp: 0,  // Track when background was last updated
 
+    // REC Overlay
+    recOverlayInterval: null,  // Separate interval for REC blinking
+    REC_OVERLAY_CONFIG: {
+        blinkInterval: 500,  // milliseconds
+        fontSize: 20,
+        padding: 15,
+        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+        borderColor: '#FF0000',
+        textColor: '#FFFFFF',
+        circleColor: '#FF0000'
+    },
+
     // COCO 17 keypoint indices
     KEYPOINT_NAMES: [
         'nose',        // 0
@@ -275,23 +287,116 @@ const StreamDisplay = {
         this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
     },
 
+    renderRecOverlay() {
+        if (!this.overlayCtx || !this.isCameraConnected()) return;
+
+        // Check if record flag is true - use this.cameraState, not StreamDisplay.cameraState
+        if (!this.cameraState.record) {
+            // If record is false, clear the REC overlay area
+            // But we don't want to clear everything, just the REC area
+            // We'll handle this by redrawing the full overlay without REC
+            this.refreshOverlayWithoutRec();
+            return;
+        }
+
+        const config = this.REC_OVERLAY_CONFIG;
+        const ctx = this.overlayCtx;
+
+        const padding = config.padding;
+        const x = padding;
+        const y = padding;
+
+        const text = '● REC';
+        const fontSize = config.fontSize;
+        ctx.font = `bold ${fontSize}px sans-serif`;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+
+        const metrics = ctx.measureText(text);
+        const textWidth = metrics.width;
+        const textHeight = fontSize * 1.2;
+        const boxPadding = 8;
+        const boxWidth = textWidth + boxPadding * 2;
+        const boxHeight = textHeight + boxPadding * 2;
+        const radius = 6;
+
+        // Clear just the REC area before redrawing
+        ctx.clearRect(x - 5, y - 5, boxWidth + 10, boxHeight + 10);
+
+        // Draw background
+        ctx.fillStyle = config.backgroundColor;
+        ctx.beginPath();
+        ctx.moveTo(x + radius, y);
+        ctx.lineTo(x + boxWidth - radius, y);
+        ctx.quadraticCurveTo(x + boxWidth, y, x + boxWidth, y + radius);
+        ctx.lineTo(x + boxWidth, y + boxHeight - radius);
+        ctx.quadraticCurveTo(x + boxWidth, y + boxHeight, x + boxWidth - radius, y + boxHeight);
+        ctx.lineTo(x + radius, y + boxHeight);
+        ctx.quadraticCurveTo(x, y + boxHeight, x, y + boxHeight - radius);
+        ctx.lineTo(x, y + radius);
+        ctx.quadraticCurveTo(x, y, x + radius, y);
+        ctx.closePath();
+        ctx.fill();
+
+        // Draw border
+        ctx.strokeStyle = config.borderColor;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, boxWidth, boxHeight);
+
+        // Blinking effect
+        const blink = Math.floor(Date.now() / config.blinkInterval) % 2 === 0;
+        
+        if (blink) {
+            // Red circle
+            const circleRadius = 6;
+            const circleX = x + boxPadding + circleRadius;
+            const circleY = y + boxPadding + (fontSize / 2);
+            ctx.fillStyle = config.circleColor;
+            ctx.beginPath();
+            ctx.arc(circleX, circleY, circleRadius, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Text after circle
+            const textX = x + boxPadding + circleRadius * 2 + 6;
+            ctx.fillStyle = config.textColor;
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            ctx.font = `bold ${fontSize}px sans-serif`;
+            ctx.fillText('REC', textX, y + boxPadding);
+        } else {
+            // Dimmed state (no circle, dimmed text)
+            const textX = x + boxPadding;
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            ctx.font = `bold ${fontSize}px sans-serif`;
+            ctx.fillText('● REC', textX, y + boxPadding);
+        }
+    },
+
     //OVERLAY PASS: Clear and redraw overlays ONLY when new data arrives
     // This is called ONLY when fetchTrackingData or fetchSafeAreas returns new data
     refreshOverlay() {
+        this.renderOverlay(true);
+    },
+
+    refreshOverlayWithoutRec() {
+        this.renderOverlay(false);
+    },
+
+    renderOverlay(includeRec = true) {
         if (!this.overlayCtx || !this.overlayCanvas) return;
-
-        console.log('[StreamDisplay] Refreshing overlay - Cached tracking tracks:', Object.keys(this.cachedTrackingData || {}).length,
-            '| Bed areas:', (EditableAreasManager.cache.bedAreas || []).length,
-            '| Floor areas:', (EditableAreasManager.cache.floorAreas || []).length,
-            '| Couch areas:', (EditableAreasManager.cache.couchAreas || []).length,
-            '| Bench areas:', (EditableAreasManager.cache.benchAreas || []).length,
-            '| Chair areas:', (EditableAreasManager.cache.chairAreas || []).length);
-
-        // Clear overlay canvas BEFORE redrawing overlays
-        // This is safe because we only call this when we have new data
+        
+        // If camera is disconnected, freeze everything
+        if (!this.isCameraConnected()) {
+            console.log('[StreamDisplay] Camera disconnected - overlay frozen');
+            return;
+        }
+        
+        // Clear overlay canvas
         this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
-
-        // Render areas first (behind skeletons) - read directly from EditableAreasManager.cache
+        
+        // Render areas first (behind skeletons)
         if (this.showBedAreas && EditableAreasManager.cache.bedAreas && EditableAreasManager.cache.bedAreas.length > 0) {
             this.renderBedAreas(EditableAreasManager.cache.bedAreas);
         }
@@ -307,10 +412,15 @@ const StreamDisplay = {
         if (this.showChairAreas && EditableAreasManager.cache.chairAreas && EditableAreasManager.cache.chairAreas.length > 0) {
             this.renderChairAreas(EditableAreasManager.cache.chairAreas);
         }
-
+        
         // Render skeletons on top
         if (this.cachedTrackingData) {
             this.renderSkeletons(this.cachedTrackingData);
+        }
+        
+        // Render REC overlay if requested
+        if (includeRec) {
+            this.renderRecOverlay();
         }
     },
 
@@ -460,7 +570,6 @@ const StreamDisplay = {
         this.overlayCtx.textBaseline = 'top';
         this.overlayCtx.fillText(poseLabel, boxX + padding, boxY + padding);
     },
-
 
     renderBedAreas(bedAreas) {
         if (!bedAreas || bedAreas.length === 0) {
@@ -682,8 +791,18 @@ const StreamDisplay = {
         const oldState = { ...this.cameraState };
         this.cameraState = { ...state };
 
+        // Log record flag changes for debugging
+        if (oldState.record !== this.cameraState.record) {
+            console.log(`[StreamDisplay] RECORD FLAG CHANGED: ${oldState.record} -> ${this.cameraState.record}`);
+            // Force refresh REC overlay immediately when record flag changes
+            if (this.cameraState.record) {
+                this.renderRecOverlay();
+            } else {
+                this.refreshOverlayWithoutRec();
+            }
+        }
+
         // Check if show_safe_areas is enabled
-        const newShowSafeAreas = this.cameraState.show_safe_areas === true;
         const newShowBedAreas = this.cameraState.show_bed_areas === true;
         const newShowFloorAreas = this.cameraState.show_floor_areas === true;
         const newShowCouchAreas = this.cameraState.show_couch_areas === true;
@@ -693,35 +812,30 @@ const StreamDisplay = {
         if (newShowBedAreas !== this.showBedAreas) {
             this.showBedAreas = newShowBedAreas;
             console.log(`[StreamDisplay] show_bed_areas: ${this.showBedAreas}`);
-            // Refresh overlay when showBedAreas flag changes
             this.refreshOverlay();
         }
 
         if (newShowFloorAreas !== this.showFloorAreas) {
             this.showFloorAreas = newShowFloorAreas;
             console.log(`[StreamDisplay] show_floor_areas: ${this.showFloorAreas}`);
-            // Refresh overlay when showFloorAreas flag changes
             this.refreshOverlay();
         }
 
         if (newShowCouchAreas !== this.showCouchAreas) {
             this.showCouchAreas = newShowCouchAreas;
             console.log(`[StreamDisplay] show_couch_areas: ${this.showCouchAreas}`);
-            // Refresh overlay when showCouchAreas flag changes
             this.refreshOverlay();
         }
 
         if (newShowBenchAreas !== this.showBenchAreas) {
             this.showBenchAreas = newShowBenchAreas;
             console.log(`[StreamDisplay] show_bench_areas: ${this.showBenchAreas}`);
-            // Refresh overlay when showBenchAreas flag changes
             this.refreshOverlay();
         }
 
         if (newShowChairAreas !== this.showChairAreas) {
             this.showChairAreas = newShowChairAreas;
             console.log(`[StreamDisplay] show_chair_areas: ${this.showChairAreas}`);
-            // Refresh overlay when showChairAreas flag changes
             this.refreshOverlay();
         }
 
@@ -744,7 +858,6 @@ const StreamDisplay = {
             if (oldShowRaw === true && newShowRaw === false) {
                 this.currentBackgroundMode = true;
                 console.log('[StreamDisplay] Entering background mode - fetching background image');
-                // Clear any pending flag to ensure we can fetch the new background
                 this.backgroundUpdatePending = false;
                 this.fetchBackgroundImage();
             }
@@ -756,9 +869,6 @@ const StreamDisplay = {
         }
 
         // Handle auto-update background interval
-        // Only auto-update if:
-        // 1. auto_update_bg flag is TRUE
-        // 2. We are in Background Mode (show_raw is FALSE) - no need to update invisible background
         const isBackgroundMode = !newShowRaw;
         const isAutoUpdateEnabled = this.cameraState.auto_update_bg === true;
         const shouldAutoUpdate = isBackgroundMode && isAutoUpdateEnabled;
@@ -782,7 +892,7 @@ const StreamDisplay = {
             return;
         } else if (!AppState.cameraConnectionStatus[AppState.currentCameraId]?.connected) {
             // console.log('[StreamDisplay:fetchTrackingData] Camera disconnected - skipping fetch & clearing overlay');
-            this.clearForDisconnect();
+            // this.clearForDisconnect();
             return;
         }
 
@@ -813,6 +923,11 @@ const StreamDisplay = {
     // Centralized fetch for all area types using EditableAreasManager
     // Sync areas from EditableAreasManager cache to streamDisplay cache
     // This is called periodically and when camera state changes
+
+    isCameraConnected() {
+        if (!AppState.currentCameraId) return false;
+        return AppState.cameraConnectionStatus[AppState.currentCameraId]?.connected === true;
+    },
 
     // Fetch camera state to get control flags
     async fetchCameraState() {
@@ -860,7 +975,6 @@ const StreamDisplay = {
         });
 
         // Tracking data: fetch frequently (10 FPS)
-        // Overlay redraw still happens only when data actually changed
         this.trackingRefreshInterval = setInterval(() => {
             this.fetchTrackingData();
         }, 100);
@@ -870,8 +984,19 @@ const StreamDisplay = {
             this.fetchCameraState();
         }, 1000);
 
+        // REC overlay: Update blinking every 250ms for smooth animation
+        this.recOverlayInterval = setInterval(() => {
+            // Only update REC overlay if record flag is true
+            if (this.cameraState.record) {
+                this.renderRecOverlay();
+            } else {
+                // If record flag is false, ensure REC is cleared
+                this.refreshOverlayWithoutRec();
+            }
+        }, 250);
+
         this.isRunning = true;
-        console.log('[StreamDisplay] Static background img + overlay canvas rendering started - tracking: 10 FPS, camera-state: 1 FPS (overlay redraw only on data change)');
+        console.log('[StreamDisplay] Static background img + overlay canvas rendering started - tracking: 10 FPS, camera-state: 1 FPS, REC: 4 FPS');
     },
 
     stop() {
@@ -887,6 +1012,11 @@ const StreamDisplay = {
             this.cameraStateRefreshInterval = null;
         }
 
+        if (this.recOverlayInterval) {
+            clearInterval(this.recOverlayInterval);
+            this.recOverlayInterval = null;
+        }
+
         // Clear overlay canvas only (NOT the background img)
         if (this.overlayCtx) {
             this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
@@ -900,6 +1030,9 @@ const StreamDisplay = {
         this.cachedCouchAreas = null;
         this.cachedBenchAreas = null;
         this.cachedChairAreas = null;
+
+        // Reset camera state
+        this.cameraState = {};
 
         this.isRunning = false;
         console.log('[StreamDisplay] Static background img + overlay canvas rendering stopped');
