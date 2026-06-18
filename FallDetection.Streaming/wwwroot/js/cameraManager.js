@@ -214,24 +214,11 @@ const CameraManager = {
             }
         }
 
-        // Update SignalR group
-        // if (SignalRManager.connection) {
-        //     try {
-        //         await SignalRManager.leaveCameraStream(AppState.currentCameraId);
-        //         await SignalRManager.joinCameraStream(cameraId);
-        //     } catch (err) {
-        //         console.error("SignalR group switch error:", err);
-        //     }
-        // }
-
         // Reset WebRTC for new camera
         if (window.peerConnection) {
             window.peerConnection.close();
             window.peerConnection = null;
         }
-
-        // Clear ICE candidates queue for new camera
-        // SignalRManager.iceCandidatesQueue = [];
 
         StreamController.stopHTTPStream();
 
@@ -243,6 +230,11 @@ const CameraManager = {
         AppState.wasDisconnected = false;
         const onlineState = cameraInfo ? cameraInfo.online : false;
         ConnectionStatus.updateConnectionStatusDebounced(cameraId, onlineState);
+        
+        // Notify StreamDisplay about camera switch
+        if (window.StreamDisplay) {
+            window.StreamDisplay.onCameraSwitched(cameraId);
+        }
     },
 
     async getAvailableCameras() {

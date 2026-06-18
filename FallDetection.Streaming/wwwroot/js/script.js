@@ -254,7 +254,7 @@ window.confirmBackground = function () {
 
                         // Fetch the new background
                         if (window.StreamDisplay && window.StreamDisplay.fetchBackgroundImage) {
-                            await window.StreamDisplay.fetchBackgroundImage();
+                            await window.StreamDisplay.fetchBackgroundImage(true, true);
 
                             // Success!
                             if (popupStatus) {

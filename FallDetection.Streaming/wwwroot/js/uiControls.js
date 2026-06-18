@@ -120,7 +120,6 @@ const UIControls = {
     },
 
     updateClockDisplay: function () {
-        console.log('[updateClockDisplay] Called - isConnected:', AppState.isConnected, 'currentCameraId:', AppState.currentCameraId, 'timezone select exists:', !!DOMElements.timezoneSelect, 'choicesInstance exists:', !!this.choicesInstance);
         if (!DOMElements.clockDisplay) return;
 
         if (!AppState.isConnected || !AppState.currentCameraId) {
@@ -139,11 +138,8 @@ const UIControls = {
         }
         if (!timezone) timezone = 'UTC';
 
-        console.log('[updateClockDisplay] Timezone retrieved:', timezone, 'from source:', this.choicesInstance ? 'choicesInstance' : (DOMElements.timezoneSelect ? 'select element' : 'default'));
-
         try {
             const now = new Date();
-            console.log('[updateClockDisplay] Attempting to format - timezone:', timezone, 'current date:', now.toISOString());
             const timeString = new Intl.DateTimeFormat('en-GB', {
                 timeZone: timezone,
                 hour: '2-digit',
@@ -156,7 +152,6 @@ const UIControls = {
             console.error('[updateClockDisplay] Formatting FAILED - timezone:', timezone, 'error:', e.message, e.stack);
             DOMElements.clockDisplay.textContent = "--:--";
         }
-        console.log('[updateClockDisplay] Final clock text set to:', DOMElements.clockDisplay.textContent);
     },
 
     updateFromFlags(flags) {

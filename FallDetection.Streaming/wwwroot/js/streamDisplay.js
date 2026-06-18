@@ -39,6 +39,10 @@ const StreamDisplay = {
     currentBackgroundMode: false,  // true = background mode, false = raw mode
     backgroundUpdatePending: false,  // true when set_background command is in flight
     lastBackgroundTimestamp: 0,  // Track when background was last updated
+    lastCameraId: null,  // Track which camera the current background is from
+    
+    // Per-camera background cache - stores actual image data URLs
+    backgroundCache: new Map(),  // { cameraId: imageDataUrl }
 
     // REC Overlay
     recOverlayInterval: null,  // Separate interval for REC blinking
@@ -174,35 +178,95 @@ const StreamDisplay = {
         console.log('[StreamDisplay] Background placeholder set');
     },
 
+    // Convert blob to data URL for caching
+    blobToDataURL(blob) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
+    },
+
+    // Display cached background for a camera (if available)
+    displayCachedBackground(cameraId) {
+        if (!this.backgroundImg || !cameraId) return false;
+        
+        const cachedData = this.backgroundCache.get(cameraId);
+        if (cachedData) {
+            console.log(`[StreamDisplay] Displaying cached background for camera ${cameraId}`);
+            this.backgroundImg.src = cachedData;
+            this.lastCameraId = cameraId;
+            this.lastBackgroundTimestamp = Date.now();
+            return true;
+        }
+        return false;
+    },
+
     // Fetch background image and update it with retry logic
-    async fetchBackgroundImage() {
-        if (!AppState.currentCameraId) {
+    async fetchBackgroundImage(forceRefresh = false, bypassCache = false) {
+        const currentCameraId = AppState.currentCameraId;
+        if (!currentCameraId) {
             console.warn('[StreamDisplay] No camera ID, cannot fetch background');
             return;
         }
 
-        if (this.backgroundUpdatePending) {
+        // If bypassCache is true, remove any existing cached version
+        if (bypassCache && this.backgroundCache.has(currentCameraId)) {
+            this.backgroundCache.delete(currentCameraId);
+            console.log(`[StreamDisplay] Bypassed cache for camera ${currentCameraId}`);
+        }
+
+        // Check if we're already fetching for this camera
+        if (this.backgroundUpdatePending && !forceRefresh) {
             console.log('[StreamDisplay] Background update already in progress, skipping');
             return;
         }
 
+        // Check if we already have a cached background for this camera and it's recent
+        if (!forceRefresh && !bypassCache && this.backgroundCache.has(currentCameraId)) {
+            // Display cached background immediately
+            this.displayCachedBackground(currentCameraId);
+            // Still fetch in background to refresh
+        }
+
         const timestamp = Date.now();
-        const streamUrl = `${STREAMING_HTTP_URL}/api/stream/background?camera_id=${AppState.currentCameraId}&t=${timestamp}`;
+        const streamUrl = `${STREAMING_HTTP_URL}/api/stream/background?camera_id=${currentCameraId}&t=${timestamp}`;
 
         console.log('[StreamDisplay] Fetching background image from:', streamUrl);
-        console.log('[StreamDisplay] Current backgroundImg.src:', this.backgroundImg?.src?.substring(0, 100) + '...');
         this.backgroundUpdatePending = true;
+        
+        // Capture which camera we're fetching for - important for race condition prevention
+        const requestedCameraId = currentCameraId;
 
-        // Preload the image to verify it loads before updating
-        const tempImg = new Image();
-
-        tempImg.onload = () => {
-            console.log('[StreamDisplay] Background image loaded successfully, updating display');
-            this.updateBackgroundImage(streamUrl);
-        };
-
-        tempImg.onerror = () => {
-            console.error('[StreamDisplay] Failed to load background image, will retry...');
+        try {
+            // Use fetch to get the image as blob for proper caching
+            const response = await fetch(streamUrl);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            const blob = await response.blob();
+            
+            // Check if we're still on the same camera (prevent race condition)
+            if (requestedCameraId !== AppState.currentCameraId) {
+                console.log(`[StreamDisplay] Camera changed from ${requestedCameraId} to ${AppState.currentCameraId}, discarding stale background`);
+                this.backgroundUpdatePending = false;
+                return;
+            }
+            
+            // Convert blob to data URL for caching
+            const dataUrl = await this.blobToDataURL(blob);
+            
+            // Cache the actual image data
+            this.backgroundCache.set(requestedCameraId, dataUrl);
+            
+            // Update the display
+            this.updateBackgroundImage(dataUrl);
+            
+        } catch (error) {
+            console.error('[StreamDisplay] Failed to fetch background image:', error);
             this.backgroundUpdatePending = false;
 
             if (window.LogPanel) {
@@ -213,24 +277,26 @@ const StreamDisplay = {
                 );
             }
 
-            // Retry after 2 seconds
-            if (this.isRunning) {
+            // Retry after 2 seconds if still in background mode and still on same camera
+            if (this.isRunning && this.currentBackgroundMode) {
                 setTimeout(() => {
-                    if (this.currentBackgroundMode) {
+                    // Only retry if we're still on the same camera
+                    if (requestedCameraId === AppState.currentCameraId) {
                         console.log('[StreamDisplay] Retrying background fetch...');
-                        this.fetchBackgroundImage();
+                        this.fetchBackgroundImage(true);
+                    } else {
+                        console.log(`[StreamDisplay] Camera changed, not retrying for ${requestedCameraId}`);
                     }
                 }, 2000);
             }
-        };
-
-        tempImg.src = streamUrl;
+        }
     },
 
     // Update background image - ONLY called in authorized cases:
     // 1. Initial connection, once the first valid background frame is available
     // 2. Entering background mode
     // 3. When set_background === true completes its full server–camera–server acknowledgment flow
+    // 4. Camera switch with cached or fresh background
     updateBackgroundImage(imageSrc) {
         if (!this.backgroundImg || !imageSrc) {
             console.warn('[StreamDisplay] Cannot update background - element or source missing');
@@ -243,6 +309,7 @@ const StreamDisplay = {
         const tempImg = new Image();
         tempImg.onload = () => {
             this.backgroundImg.src = imageSrc;
+            this.lastCameraId = AppState.currentCameraId;
             this.lastBackgroundTimestamp = Date.now();
             this.backgroundUpdatePending = false;
             console.log('[StreamDisplay] Background image updated successfully');
@@ -282,7 +349,6 @@ const StreamDisplay = {
     clearForDisconnect() {
         if (!this.overlayCtx || !this.overlayCanvas) return;
 
-        // console.log('[StreamDisplay] Clearing overlay due to disconnection');
         this.cachedTrackingData = null;
         this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
     },
@@ -886,13 +952,48 @@ const StreamDisplay = {
         }
     },
 
+    // Handle camera switch - called from CameraManager
+    onCameraSwitched(cameraId) {
+        console.log(`[StreamDisplay] Camera switched to ${cameraId}`);
+        
+        // Reset background update pending flag for new camera
+        this.backgroundUpdatePending = false;
+        
+        // Check if we have a cached background for this camera
+        if (this.backgroundCache.has(cameraId)) {
+            console.log(`[StreamDisplay] Using cached background for ${cameraId}`);
+            this.displayCachedBackground(cameraId);
+        } else {
+            console.log(`[StreamDisplay] No cached background for ${cameraId}, showing placeholder`);
+            this.setBackgroundPlaceholder();
+        }
+        
+        // Fetch fresh background in background
+        if (this.currentBackgroundMode) {
+            console.log(`[StreamDisplay] Fetching fresh background for ${cameraId}`);
+            this.fetchBackgroundImage(true);
+        }
+        
+        // Reset overlay data for new camera
+        this.cachedTrackingData = null;
+        this.cachedSafeAreas = null;
+        this.cachedBedAreas = null;
+        this.cachedFloorAreas = null;
+        this.cachedCouchAreas = null;
+        this.cachedBenchAreas = null;
+        this.cachedChairAreas = null;
+        
+        // Clear overlay
+        if (this.overlayCtx) {
+            this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
+        }
+    },
+
     async fetchTrackingData() {
         if (!AppState.currentCameraId) {
             console.warn('[StreamDisplay:fetchTrackingData] No camera ID set');
             return;
         } else if (!AppState.cameraConnectionStatus[AppState.currentCameraId]?.connected) {
-            // console.log('[StreamDisplay:fetchTrackingData] Camera disconnected - skipping fetch & clearing overlay');
-            // this.clearForDisconnect();
             return;
         }
 
@@ -916,13 +1017,8 @@ const StreamDisplay = {
             }
         } catch (error) {
             console.error('[StreamDisplay:fetchTrackingData] Error fetching tracking data:', error);
-            // On error, DO NOT clear overlay - cached data persists visually
         }
     },
-
-    // Centralized fetch for all area types using EditableAreasManager
-    // Sync areas from EditableAreasManager cache to streamDisplay cache
-    // This is called periodically and when camera state changes
 
     isCameraConnected() {
         if (!AppState.currentCameraId) return false;
@@ -1017,6 +1113,11 @@ const StreamDisplay = {
             this.recOverlayInterval = null;
         }
 
+        if (this.backgroundAutoRefreshInterval) {
+            clearInterval(this.backgroundAutoRefreshInterval);
+            this.backgroundAutoRefreshInterval = null;
+        }
+
         // Clear overlay canvas only (NOT the background img)
         if (this.overlayCtx) {
             this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
@@ -1033,6 +1134,8 @@ const StreamDisplay = {
 
         // Reset camera state
         this.cameraState = {};
+        
+        // Don't clear background cache - keep for future switches
 
         this.isRunning = false;
         console.log('[StreamDisplay] Static background img + overlay canvas rendering stopped');
@@ -1071,6 +1174,7 @@ const StreamDisplay = {
         this.showCouchAreas = false;
         this.showBenchAreas = false;
         this.showChairAreas = false;
+        this.backgroundCache.clear();
         console.log('[StreamDisplay] Destroyed and cleaned up');
     }
 };
