@@ -162,9 +162,6 @@ function startPeriodicSync() {
         AppState.availableCameras.forEach(camera => {
             ConnectionStatus.checkCameraConnection(camera.camera_id);
         });
-        if (AppState.currentCameraId) {
-            ConnectionStatus.checkCameraConnection(AppState.currentCameraId);
-        }
     }, CONNECTION_POLL_INTERVAL_MS);
 }
 
