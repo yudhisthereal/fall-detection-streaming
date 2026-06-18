@@ -1,71 +1,94 @@
 // uiControls.js - UI Controls management
 
 const UIControls = {
-    setupTimezoneControl: function () {
-        if (DOMElements.timezoneSelect) {
-            // Populate common timezones if empty
-            if (DOMElements.timezoneSelect.options.length <= 1) {
-                const timezones = [
-                    "UTC", "Asia/Bangkok", "Asia/Jakarta", "America/New_York", "America/Los_Angeles", "Europe/London", "Europe/Paris", "Asia/Tokyo", "Australia/Sydney"
-                ];
-                try {
-                    const allTimezones = Intl.supportedValuesOf('timeZone');
-                    if (allTimezones && allTimezones.length > 0) {
-                        timezones.length = 0;
-                        timezones.push(...allTimezones);
-                    }
-                } catch (e) { console.warn("Intl.supportedValuesOf not supported, using defaults"); }
+    choicesInstance: null, // Store Choices.js instance
 
-                DOMElements.timezoneSelect.innerHTML = '<option value="">Select a timezone...</option>';
-                timezones.forEach(tz => {
-                    const option = document.createElement('option');
-                    option.value = tz;
-                    option.textContent = tz;
-                    DOMElements.timezoneSelect.appendChild(option);
-                });
+    setupTimezoneControl: function () {
+        if (!DOMElements.timezoneSelect) return;
+
+        console.log('Options before population:', DOMElements.timezoneSelect.options.length);
+
+        // Populate common timezones if empty
+        if (DOMElements.timezoneSelect.options.length <= 1) {
+            console.log('Populating timezones...');
+            const timezones = [
+                "UTC", "Asia/Bangkok", "Asia/Jakarta", "America/New_York", "America/Los_Angeles", 
+                "Europe/London", "Europe/Paris", "Asia/Tokyo", "Australia/Sydney"
+            ];
+            try {
+                const allTimezones = Intl.supportedValuesOf('timeZone');
+                if (allTimezones && allTimezones.length > 0) {
+                    timezones.length = 0;
+                    timezones.push(...allTimezones);
+                }
+            } catch (e) { 
+                console.warn("Intl.supportedValuesOf not supported, using defaults"); 
             }
 
-            // Initialize Tom Select
-            if (window.TomSelect && !this.tomSelect) {
-                this.tomSelect = new TomSelect(DOMElements.timezoneSelect, {
-                    create: false,
-                    sortField: {
-                        field: "text",
-                        direction: "asc"
-                    },
-                    onChange: (value) => {
-                        if (value && AppState.isConnected && AppState.currentCameraId) {
-                            CommandManager.sendCommand('set_timezone', value);
-                            this.updateClockDisplay();
-                            // Fix: Blur the input after selection to release focus
-                            if (this.tomSelect && this.tomSelect.control_input) {
-                                this.tomSelect.blur();
-                            }
-                        }
-                    },
-                    // Fix: ensure blur on onItemAdd as well to be safe
-                    onItemAdd: () => {
-                        if (this.tomSelect) {
-                            this.tomSelect.blur();
+            DOMElements.timezoneSelect.innerHTML = '<option value="">Select a timezone...</option>';
+            timezones.forEach(tz => {
+                const option = document.createElement('option');
+                option.value = tz;
+                option.textContent = tz;
+                DOMElements.timezoneSelect.appendChild(option);
+            });
+            console.log('Options after population:', DOMElements.timezoneSelect.options.length);
+        }
+
+        // Initialize Choices.js
+        if (window.Choices && !this.choicesInstance) {
+            try {
+                console.log('Initializing Choices.js with options:', DOMElements.timezoneSelect.options.length);
+
+                // Build choices data from select options
+                const options = Array.from(DOMElements.timezoneSelect.options);
+                const choicesData = options
+                    .filter(opt => opt.value !== '') // Skip the placeholder
+                    .map(opt => ({
+                        value: opt.value,
+                        label: opt.textContent
+                    }));
+
+                console.log('Choices data prepared:', choicesData.length);
+
+                this.choicesInstance = new Choices(DOMElements.timezoneSelect, {
+                    searchEnabled: true,
+                    searchPlaceholderValue: 'Type to search...',
+                    searchFloor: 0,
+                    placeholder: true,
+                    placeholderValue: 'Select a timezone...',
+                    shouldSort: false,
+                    position: 'bottom',
+                    itemSelectText: '',
+                    renderChoiceLimit: -1,
+                    addItems: false,
+                    removeItems: false,
+                    duplicateItemsAllowed: false,
+                    noResultsText: 'No timezones found',
+                    noChoicesText: 'No timezones available',
+                    allowHTML: false
+                });
+
+                this.choicesInstance.clearChoices();
+                this.choicesInstance.setChoices(choicesData, 'value', 'label', true);
+
+                console.log('Choices set manually, count:', choicesData.length);
+
+                // Handle change events
+                DOMElements.timezoneSelect.addEventListener('change', (e) => {
+                    const value = e.detail ? e.detail.value : DOMElements.timezoneSelect.value;
+                    if (value && AppState.isConnected && AppState.currentCameraId) {
+                        CommandManager.sendCommand('set_timezone', value);
+                        this.updateClockDisplay();
+                        if (this.choicesInstance) {
+                            this.choicesInstance.hideDropdown();
                         }
                     }
                 });
 
-                // Add keydown listener to the TomSelect control input for Enter key
-                if (this.tomSelect.control_input) {
-                    this.tomSelect.control_input.addEventListener('keydown', (e) => {
-                        if (e.key === 'Enter') {
-                            e.preventDefault(); // Prevent "new line"
-                            if (this.tomSelect.dropdown_content.querySelector('.active')) {
-                                // Provide time for selection to register
-                                setTimeout(() => {
-                                    this.tomSelect.blur();
-                                }, 10);
-                            }
-                        }
-                    });
-                }
-            } else if (!this.tomSelect) {
+            } catch (error) {
+                console.error('Failed to initialize Choices.js:', error);
+                // Fallback to native select
                 DOMElements.timezoneSelect.onchange = () => {
                     const value = DOMElements.timezoneSelect.value;
                     if (value && AppState.isConnected && AppState.currentCameraId) {
@@ -74,7 +97,19 @@ const UIControls = {
                     }
                 };
             }
+        } else if (!this.choicesInstance) {
+            console.warn('Choices.js not loaded or already initialized');
+            // Fallback if Choices.js is not loaded
+            DOMElements.timezoneSelect.onchange = () => {
+                const value = DOMElements.timezoneSelect.value;
+                if (value && AppState.isConnected && AppState.currentCameraId) {
+                    CommandManager.sendCommand('set_timezone', value);
+                    this.updateClockDisplay();
+                }
+            };
         }
+
+        console.log('[setupTimezoneControl] Choices initialized, current value:', this.choicesInstance.getValue(), 'all choices:', this.choicesInstance._store.choices);
         this.startClock();
     },
 
@@ -85,6 +120,7 @@ const UIControls = {
     },
 
     updateClockDisplay: function () {
+        console.log('[updateClockDisplay] Called - isConnected:', AppState.isConnected, 'currentCameraId:', AppState.currentCameraId, 'timezone select exists:', !!DOMElements.timezoneSelect, 'choicesInstance exists:', !!this.choicesInstance);
         if (!DOMElements.clockDisplay) return;
 
         if (!AppState.isConnected || !AppState.currentCameraId) {
@@ -95,15 +131,19 @@ const UIControls = {
         DOMElements.clockDisplay.style.display = 'inline-block';
 
         let timezone = 'UTC';
-        if (this.tomSelect) {
-            timezone = this.tomSelect.getValue();
+        if (this.choicesInstance) {
+            const val = this.choicesInstance.getValue();
+            timezone = (val && typeof val === 'object' && val.value) ? val.value : val;
         } else if (DOMElements.timezoneSelect) {
             timezone = DOMElements.timezoneSelect.value;
         }
         if (!timezone) timezone = 'UTC';
 
+        console.log('[updateClockDisplay] Timezone retrieved:', timezone, 'from source:', this.choicesInstance ? 'choicesInstance' : (DOMElements.timezoneSelect ? 'select element' : 'default'));
+
         try {
             const now = new Date();
+            console.log('[updateClockDisplay] Attempting to format - timezone:', timezone, 'current date:', now.toISOString());
             const timeString = new Intl.DateTimeFormat('en-GB', {
                 timeZone: timezone,
                 hour: '2-digit',
@@ -113,74 +153,103 @@ const UIControls = {
             }).format(now);
             DOMElements.clockDisplay.textContent = timeString;
         } catch (e) {
+            console.error('[updateClockDisplay] Formatting FAILED - timezone:', timezone, 'error:', e.message, e.stack);
             DOMElements.clockDisplay.textContent = "--:--";
         }
+        console.log('[updateClockDisplay] Final clock text set to:', DOMElements.clockDisplay.textContent);
     },
 
     updateFromFlags(flags) {
         if (!flags) return;
+        console.log('[updateFromFlags] Received flags with timezone:', flags.timezone, 'current choices value:', this.choicesInstance?.getValue());
 
         // Timezone
         if (typeof flags.timezone === 'string') {
-            if (this.tomSelect) {
-                this.tomSelect.setValue(flags.timezone, true);
+            if (this.choicesInstance) {
+                try {
+                    this.choicesInstance.setChoiceByValue(flags.timezone);
+                } catch (e) {
+                    console.warn('Could not set timezone via Choices:', e);
+                    if (DOMElements.timezoneSelect) {
+                        DOMElements.timezoneSelect.value = flags.timezone;
+                    }
+                }
             } else if (DOMElements.timezoneSelect) {
                 DOMElements.timezoneSelect.value = flags.timezone;
             }
             this.updateClockDisplay();
         }
 
-        if (typeof flags.record === 'boolean' && DOMElements.toggleRecord) {
-            DOMElements.toggleRecord.checked = flags.record;
+        if (DOMElements.toggleRecord) {
+            if (typeof flags.record === 'boolean') {
+                DOMElements.toggleRecord.checked = flags.record;
+            }
             DOMElements.toggleRecord.disabled = !AppState.isConnected;
         }
-        if (typeof flags.show_raw === 'boolean' && DOMElements.toggleRaw) {
-            DOMElements.toggleRaw.checked = flags.show_raw;
+        if (DOMElements.toggleRaw) {
+            if (typeof flags.show_raw === 'boolean') {
+                DOMElements.toggleRaw.checked = flags.show_raw;
+            }
             DOMElements.toggleRaw.disabled = !AppState.isConnected;
         }
-        if (typeof flags.auto_update_bg === 'boolean' && DOMElements.autoUpdateBg) {
-            DOMElements.autoUpdateBg.checked = flags.auto_update_bg;
+        if (DOMElements.autoUpdateBg) {
+            if (typeof flags.auto_update_bg === 'boolean') {
+                DOMElements.autoUpdateBg.checked = flags.auto_update_bg;
+            }
             DOMElements.autoUpdateBg.disabled = !AppState.isConnected;
         }
-        if (typeof flags.show_safe_areas === 'boolean' && DOMElements.showSafeArea) {
-            DOMElements.showSafeArea.checked = flags.show_safe_areas;
+        if (DOMElements.showSafeArea) {
+            if (typeof flags.show_safe_areas === 'boolean') {
+                DOMElements.showSafeArea.checked = flags.show_safe_areas;
+            }
             DOMElements.showSafeArea.disabled = !AppState.isConnected;
         }
-        if (typeof flags.show_bed_areas === 'boolean' && DOMElements.showBedAreas) {
-            DOMElements.showBedAreas.checked = flags.show_bed_areas;
+        if (DOMElements.showBedAreas) {
+            if (typeof flags.show_bed_areas === 'boolean') {
+                DOMElements.showBedAreas.checked = flags.show_bed_areas;
+            }
             DOMElements.showBedAreas.disabled = !AppState.isConnected;
         }
-        if (typeof flags.show_floor_areas === 'boolean' && DOMElements.showFloorAreas) {
-            DOMElements.showFloorAreas.checked = flags.show_floor_areas;
+        if (DOMElements.showFloorAreas) {
+            if (typeof flags.show_floor_areas === 'boolean') {
+                DOMElements.showFloorAreas.checked = flags.show_floor_areas;
+            }
             DOMElements.showFloorAreas.disabled = !AppState.isConnected;
         }
-        if (typeof flags.show_couch_areas === 'boolean' && DOMElements.showCouchAreas) {
-            DOMElements.showCouchAreas.checked = flags.show_couch_areas;
+        if (DOMElements.showCouchAreas) {
+            if (typeof flags.show_couch_areas === 'boolean') {
+                DOMElements.showCouchAreas.checked = flags.show_couch_areas;
+            }
             DOMElements.showCouchAreas.disabled = !AppState.isConnected;
         }
-        if (typeof flags.show_bench_areas === 'boolean' && DOMElements.showBenchAreas) {
-            DOMElements.showBenchAreas.checked = flags.show_bench_areas;
+        if (DOMElements.showBenchAreas) {
+            if (typeof flags.show_bench_areas === 'boolean') {
+                DOMElements.showBenchAreas.checked = flags.show_bench_areas;
+            }
             DOMElements.showBenchAreas.disabled = !AppState.isConnected;
         }
-        if (typeof flags.show_chair_areas === 'boolean' && DOMElements.showChairAreas) {
-            DOMElements.showChairAreas.checked = flags.show_chair_areas;
+        if (DOMElements.showChairAreas) {
+            if (typeof flags.show_chair_areas === 'boolean') {
+                DOMElements.showChairAreas.checked = flags.show_chair_areas;
+            }
             DOMElements.showChairAreas.disabled = !AppState.isConnected;
         }
-        if (typeof flags.use_safety_check === 'boolean' && DOMElements.useSafetyCheck) {
-            DOMElements.useSafetyCheck.checked = flags.use_safety_check;
+        if (DOMElements.useSafetyCheck) {
+            if (typeof flags.use_safety_check === 'boolean') {
+                DOMElements.useSafetyCheck.checked = flags.use_safety_check;
+            }
             DOMElements.useSafetyCheck.disabled = !AppState.isConnected;
         }
-        // if (typeof flags.hme === 'boolean' && DOMElements.toggleHME) {
-        //     DOMElements.toggleHME.checked = flags.hme;
-        //     DOMElements.toggleHME.disabled = !AppState.isConnected;
-        // }
-        if (typeof flags.fall_algorithm === 'number' && DOMElements.fallAlgorithmSelect) {
-            DOMElements.fallAlgorithmSelect.value = flags.fall_algorithm;
+        if (DOMElements.fallAlgorithmSelect) {
+            if (typeof flags.fall_algorithm === 'number') {
+                DOMElements.fallAlgorithmSelect.value = flags.fall_algorithm;
+            }
             DOMElements.fallAlgorithmSelect.disabled = !AppState.isConnected;
         }
-
-        if (typeof flags.check_method === 'number' && DOMElements.safetyCheckMethod) {
-            DOMElements.safetyCheckMethod.value = flags.check_method;
+        if (DOMElements.safetyCheckMethod) {
+            if (typeof flags.check_method === 'number') {
+                DOMElements.safetyCheckMethod.value = flags.check_method;
+            }
             DOMElements.safetyCheckMethod.disabled = !AppState.isConnected;
         }
 
@@ -188,29 +257,39 @@ const UIControls = {
             DOMElements.editSleepBtn.disabled = !AppState.isConnected;
         }
 
-        const elements = [
-            DOMElements.toggleRecord,
-            DOMElements.toggleRaw,
-            DOMElements.autoUpdateBg,
-            DOMElements.showSafeArea,
-            DOMElements.showBedAreas,
-            DOMElements.showFloorAreas,
-            DOMElements.showCouchAreas,
-            DOMElements.showBenchAreas,
-            DOMElements.showChairAreas,
-            DOMElements.useSafetyCheck,
-            // DOMElements.toggleHME,
-            DOMElements.fallAlgorithmSelect,
-            DOMElements.safetyCheckMethod,
-            DOMElements.setBackgroundBtn,
-            DOMElements.editAreas
-        ];
+        // FIX: Use Choices.js API for enable/disable
+        if (DOMElements.timezoneSelect) {
+            if (this.choicesInstance) {
+                if (AppState.isConnected) {
+                    this.choicesInstance.enable();
+                } else {
+                    this.choicesInstance.disable();
+                }
+            } else {
+                // Fallback if Choices.js isn't initialized
+                DOMElements.timezoneSelect.disabled = !AppState.isConnected;
+            }
+        }
 
+        if (DOMElements.setBackgroundBtn) {
+            DOMElements.setBackgroundBtn.disabled = !AppState.isConnected;
+        }
+
+        if (DOMElements.editAreas) {
+            DOMElements.editAreas.disabled = !AppState.isConnected;
+        }
     },
 
     getCurrentTimezone() {
-        if (this.tomSelect) return this.tomSelect.getValue() || 'UTC';
-        if (DOMElements.timezoneSelect) return DOMElements.timezoneSelect.value || 'UTC';
+        if (this.choicesInstance) {
+            const val = this.choicesInstance.getValue();
+            const timezone = (val && typeof val === 'object' && val.value) ? val.value : val;
+            return timezone && typeof timezone === 'string' ? timezone : 'UTC';
+        }
+        if (DOMElements.timezoneSelect) {
+            const val = DOMElements.timezoneSelect.value;
+            return val && typeof val === 'string' ? val : 'UTC';
+        }
         return 'UTC';
     },
 
@@ -218,7 +297,7 @@ const UIControls = {
         if (!state) return;
 
         const tz = this.getCurrentTimezone();
-        const shortTz = tz.split('/').pop().replace(/_/g, ' '); // simple readable fallback
+        const shortTz = tz.split('/').pop().replace(/_/g, ' ');
 
         if (DOMElements.displayMaxSleep) {
             const val = state.max_sleep_duration || 0;
@@ -243,20 +322,6 @@ const UIControls = {
         }
 
         const tolerance = state.tolerance || 30;
-        let tolStr = "";
-        if (tolerance >= 60) {
-            const hrs = tolerance / 60;
-            tolStr = `(± ${Number.isInteger(hrs) ? hrs : hrs.toFixed(1)}hr)`;
-        } else {
-            tolStr = `(± ${tolerance}m)`;
-        }
-
-        if (DOMElements.displayBedtimeTolerance) {
-            DOMElements.displayBedtimeTolerance.textContent = state.bedtime ? tolStr : "";
-        }
-        if (DOMElements.displayWakeupTolerance) {
-            DOMElements.displayWakeupTolerance.textContent = state.wakeup_time ? tolStr : "";
-        }
 
         // Update popup inputs
         if (DOMElements.sleepTolerance) {
@@ -309,7 +374,7 @@ const UIControls = {
         }
 
         if (DOMElements.confirmTitle) DOMElements.confirmTitle.textContent = title;
-        if (DOMElements.confirmMessage) DOMElements.confirmMessage.innerHTML = message; // Use innerHTML for flexibility
+        if (DOMElements.confirmMessage) DOMElements.confirmMessage.innerHTML = message;
 
         DOMHelpers.showPopup(DOMElements.confirmPopup);
 
@@ -362,9 +427,9 @@ const UIControls = {
                 }
 
                 // Update stream display (background vs live)
-                if (window.StreamController) {
-                    window.StreamController.setShowBackground(!showRaw);
-                }
+                // if (window.StreamController) {
+                //     window.StreamController.setShowBackground(!showRaw);
+                // }
             };
         }
 
@@ -499,11 +564,6 @@ const UIControls = {
                 }
             };
         }
-        if (DOMElements.useSafetyCheck) {
-            DOMElements.useSafetyCheck.onchange = () => {
-                CommandManager.sendCommand("toggle_safety_check", DOMElements.useSafetyCheck.checked);
-            };
-        }
 
         // Safety Check Method Select
         if (DOMElements.safetyCheckMethod) {
@@ -512,13 +572,6 @@ const UIControls = {
                 CommandManager.sendCommand("set_safety_check_method", method);
             };
         }
-
-        // Toggle HME
-        // if (DOMElements.toggleHME) {
-        //     DOMElements.toggleHME.onchange = () => {
-        //         CommandManager.sendCommand("toggle_hme", DOMElements.toggleHME.checked);
-        //     };
-        // }
 
         // Fall Algorithm Select
         if (DOMElements.fallAlgorithmSelect) {
@@ -544,11 +597,11 @@ const UIControls = {
 
                     if (!showRaw) {
                         NotificationSystem.show("Please enable 'Show Raw' first", "warning");
-                        return; // EXIT EARLY - Do not show popup
+                        return;
                     }
 
                     // Fetch current frame directly from server
-                    const endpoint = 'frame'; // Always 'frame' since we force showRaw=true check above
+                    const endpoint = 'frame';
                     const timestamp = Date.now();
                     const streamUrl = `${STREAMING_HTTP_URL}/api/stream/${endpoint}?camera_id=${AppState.currentCameraId}&t=${timestamp}`;
 
@@ -585,8 +638,6 @@ const UIControls = {
                     return;
                 }
 
-                // Populate inputs with current displayed values (or from internal state if we had it directly)
-                // Best to trust the inputs which we update when popup is closed
                 DOMHelpers.showPopup(DOMElements.sleepConfigPopup);
             };
         }
@@ -597,6 +648,7 @@ const UIControls = {
                 DOMHelpers.hidePopup(DOMElements.sleepConfigPopup);
             };
         }
+
         // Toggle Custom Tolerance Input
         if (DOMElements.sleepTolerance && DOMElements.customSleepTolerance) {
             DOMElements.sleepTolerance.onchange = (e) => {
@@ -653,8 +705,7 @@ const UIControls = {
 
                 CommandManager.sendCommand('set_sleep_config', sleepConfig);
 
-                // Instantly update the display so it reflects the new user setting 
-                // without waiting for the next explicit page load/camera fetch
+                // Instantly update the display
                 UIControls.updateSleepDisplay(sleepConfig);
 
                 if (window.LogPanel) {
@@ -682,4 +733,3 @@ const UIControls = {
 
 // Export
 window.UIControls = UIControls;
-

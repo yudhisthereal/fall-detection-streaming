@@ -14,7 +14,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
 async function initializeApplication() {
     // Initialize SignalR
-    await SignalRManager.initialize();
+    // await SignalRManager.initialize();
 
     // Start flag sync worker
     startFlagSyncWorker();
@@ -117,9 +117,10 @@ function startFlagSyncWorker() {
                 const flags = await CommandManager.fetchCameraState(AppState.currentCameraId);
                 if (flags) {
                     // Send flag update via SignalR if connected
-                    if (SignalRManager.isConnected()) {
-                        await SignalRManager.updateFlags(flags);
-                    }
+                    // if (SignalRManager.isConnected()) {
+                    //     await SignalRManager.updateFlags(flags);
+                    // }
+                    console.log("SIGNALR REMOVED");
                 }
             } catch (error) {
                 console.error("Flag sync error:", error);
@@ -179,7 +180,7 @@ function cleanup() {
     StreamController.stopHTTPStream();
 
     // Disconnect SignalR
-    SignalRManager.disconnect();
+    // SignalRManager.disconnect();
 }
 
 // ============================================
