@@ -237,24 +237,17 @@ namespace FallDetection.Streaming.Services
         {
             lock (_registryLock)
             {
-                // Check if camera with this IP already exists
-                foreach (var (camId, camData) in _cameraRegistry)
-                {
-                    if (camData.IpAddress == ipAddress)
-                    {
-                        return new
-                        {
-                            camera_id = camId,
-                            camera_name = camData.CameraName,
-                            status = "registered"
-                        };
-                    }
-                }
-
-                // If camera_id provided and exists, return it
+                // If camera_id provided and exists, return it (check by ID only)
                 if (!string.IsNullOrEmpty(cameraId) && _cameraRegistry.ContainsKey(cameraId))
                 {
                     var camData = _cameraRegistry[cameraId];
+                    // Update the IP if it changed (camera might have moved networks)
+                    if (camData.IpAddress != ipAddress)
+                    {
+                        camData.IpAddress = ipAddress;
+                        SaveCameraRegistry();
+                        Console.WriteLine($"Updated IP for camera {cameraId} from {camData.IpAddress} to {ipAddress}");
+                    }
                     return new
                     {
                         camera_id = cameraId,
@@ -263,7 +256,31 @@ namespace FallDetection.Streaming.Services
                     };
                 }
 
-                // Generate new camera ID if not provided
+                // Check if there's a pending registration with this camera ID
+                if (!string.IsNullOrEmpty(cameraId) && _pendingRegistrations.Values.Any(p => p.CameraId == cameraId))
+                {
+                    return new
+                    {
+                        camera_id = cameraId,
+                        status = "pending",
+                        message = "Registration pending user approval"
+                    };
+                }
+
+                // If cameraId is provided but not found, or no cameraId provided,
+                // check if this IP has a pending registration
+                if (_pendingRegistrations.ContainsKey(ipAddress))
+                {
+                    var pendingData = _pendingRegistrations[ipAddress];
+                    return new
+                    {
+                        camera_id = pendingData.CameraId,
+                        status = "pending",
+                        message = "Registration pending user approval"
+                    };
+                }
+
+                // Generate new camera ID
                 var newCameraId = cameraId ?? GetNextCameraId();
 
                 // Store as pending registration
@@ -275,10 +292,7 @@ namespace FallDetection.Streaming.Services
                     Status = "pending"
                 };
 
-                // Increment pending counter
                 _pendingCounter++;
-
-                // Save pending registrations to file
                 SavePendingRegistrations();
 
                 Console.WriteLine($"New camera registration pending from {ipAddress}, camera ID: {newCameraId}");
