@@ -43,6 +43,11 @@ const CameraManager = {
     refreshCameraDropdownStatus() {
         if (!DOMElements.cameraSelect) return;
 
+        if (this.isDropdownActive()) {
+            console.debug('[CameraManager] Skipping status refresh - dropdown is active');
+            return;
+        }
+
         const currentValue = DOMElements.cameraSelect.value;
         
         // Update each option based on current connection status
@@ -133,6 +138,14 @@ const CameraManager = {
     updateCameraSelect(cameras) {
         if (!DOMElements.cameraSelect) return;
 
+        // Don't rebuild if dropdown is active (mobile menu is open)
+        if (this.isDropdownActive()) {
+            console.debug('[CameraManager] Skipping rebuild - dropdown is active');
+            // Just refresh statuses instead
+            this.refreshCameraDropdownStatus();
+            return;
+        }
+
         const previousCameraId = AppState.currentCameraId;
         const currentValue = DOMElements.cameraSelect.value;
 
@@ -169,6 +182,26 @@ const CameraManager = {
 
         // Handle camera switching
         this.handleCameraSwitch(previousCameraId, selectedCamera?.camera_id);
+    },
+
+    /**
+     * Check if dropdown is currently active (open on mobile or focused)
+     */
+    isDropdownActive() {
+        if (!DOMElements.cameraSelect) return false;
+        
+        // Check if the select has focus (works for both desktop and mobile)
+        if (document.activeElement === DOMElements.cameraSelect) {
+            return true;
+        }
+        
+        // For mobile: check if the select is in the process of opening
+        // The actual open state is hard to detect, but we can use a flag
+        if (DOMElements.cameraSelect.dataset.active === 'true') {
+            return true;
+        }
+        
+        return false;
     },
 
     updateCameraInfoDisplay(camerasData) {

@@ -264,6 +264,11 @@ const ConnectionStatus = {
     updateCameraDropdownStatus(cameraId, connected) {
         if (!DOMElements.cameraSelect) return;
 
+        if (CameraManager.isDropdownActive()) {
+            console.debug('[CameraManager] Skipping status refresh - dropdown is active');
+            return;
+        }
+
         for (let option of DOMElements.cameraSelect.options) {
             if (option.value === cameraId) {
                 const timeAgo = Math.round(AppState.cameraConnectionStatus[cameraId]?.ageSeconds || 0);

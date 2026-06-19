@@ -24,6 +24,21 @@ async function initializeApplication() {
 
     // Setup camera selection handler
     if (DOMElements.cameraSelect) {
+        // Track dropdown focus state
+        DOMElements.cameraSelect.addEventListener('focus', function() {
+            this.dataset.active = 'true';
+            console.debug('[CameraManager] Dropdown focused');
+        });
+        
+        DOMElements.cameraSelect.addEventListener('blur', function() {
+            // Small delay to let any click/selection complete
+            setTimeout(() => {
+                this.dataset.active = 'false';
+                console.debug('[CameraManager] Dropdown blurred');
+            }, 200);
+        });
+        
+        // Original change handler
         DOMElements.cameraSelect.onchange = () => {
             const cameraId = DOMElements.cameraSelect.value;
             const selectedOption = DOMElements.cameraSelect.options[DOMElements.cameraSelect.selectedIndex];
