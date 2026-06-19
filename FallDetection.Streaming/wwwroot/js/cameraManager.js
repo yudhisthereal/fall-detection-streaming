@@ -65,6 +65,20 @@ const CameraManager = {
         }
     },
 
+    async fetchAndUpdateSleepDisplay(cameraId) {
+        try {
+            if (!cameraId || cameraId === "camera_000") return;
+            
+            const state = await CommandManager.fetchCameraState(cameraId);
+            if (state && window.UIControls) {
+                UIControls.updateSleepDisplay(state);
+                console.log(`[CameraManager] Updated sleep display for ${cameraId}`);
+            }
+        } catch (error) {
+            console.error('[CameraManager] Failed to fetch sleep display:', error);
+        }
+    },
+
     async switchCamera(cameraId) {
         const cameraInfo = this.findCamera(cameraId);
         
@@ -95,6 +109,8 @@ const CameraManager = {
         if (window.StreamDisplay) {
             window.StreamDisplay.onCameraSwitched(cameraId);
         }
+
+        this.fetchAndUpdateSleepDisplay(cameraId);
     },
 
     async getAvailableCameras() {
@@ -279,8 +295,7 @@ const CameraManager = {
         AppState.currentCameraId = camera.camera_id;
         AppState.currentCameraName = camera.camera_name || camera.camera_id;
         AppState.currentCameraStatus = camera.registered ? "registered" : "pending";
-        
-        // Connection status is now ONLY updated by PollingScheduler
+        this.fetchAndUpdateSleepDisplay(camera.camera_id);
     },
 
     handleCameraSwitch(previousCameraId, newCameraId) {

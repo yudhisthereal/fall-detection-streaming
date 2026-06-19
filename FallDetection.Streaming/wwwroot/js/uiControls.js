@@ -316,9 +316,24 @@ const UIControls = {
             DOMElements.displayWakeup.textContent = state.wakeup_time ? `${state.wakeup_time} ${shortTz}` : "--:--";
         }
 
+        if (!this.isSleepPopupOpen()) {
+            this.updateSleepPopupForm(state);
+        }
+
+        if (DOMElements.editSleepBtn) {
+            DOMElements.editSleepBtn.disabled = !AppState.isConnected;
+        }
+    },
+
+        /**
+     * Update sleep popup form fields
+     * Called when opening the popup or when state changes and popup is not open
+     */
+    updateSleepPopupForm(state) {
+        if (!state) return;
+
         const tolerance = state.tolerance || 30;
 
-        // Update popup inputs
         if (DOMElements.sleepTolerance) {
             const standardOptions = ["30", "60", "90", "120", "180"];
             if (standardOptions.includes(tolerance.toString())) {
@@ -339,10 +354,37 @@ const UIControls = {
         if (DOMElements.wakeupTime) {
             DOMElements.wakeupTime.value = state.wakeup_time || '';
         }
+    },
 
-        if (DOMElements.editSleepBtn) {
-            DOMElements.editSleepBtn.disabled = !AppState.isConnected;
+    /**
+     * Check if sleep popup is currently open
+     */
+    isSleepPopupOpen() {
+        if (!DOMElements.sleepConfigPopup) return false;
+        return DOMElements.sleepConfigPopup.style.display !== 'none';
+    },
+
+    /**
+     * Open sleep config popup and populate with current values
+     * Called when Edit Sleep Schedule button is clicked
+     */
+    openSleepPopup() {
+        if (!AppState.currentCameraId) {
+            NotificationSystem.show('No camera selected', 'warning');
+            return;
         }
+
+        // Fetch latest state before opening
+        CommandManager.fetchCameraState(AppState.currentCameraId).then(state => {
+            if (state) {
+                // Populate the form with current values
+                this.updateSleepPopupForm(state);
+                DOMHelpers.showPopup(DOMElements.sleepConfigPopup);
+            }
+        }).catch(err => {
+            console.error('[UIControls] Failed to fetch sleep state:', err);
+            NotificationSystem.show('Failed to load sleep settings', 'error');
+        });
     },
 
     updateAlgorithmSelection(algorithmValue, updateCamera = true) {

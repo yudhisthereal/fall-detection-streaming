@@ -210,14 +210,6 @@ const ConnectionStatus = {
                     }
                 }
 
-                if (typeof CommandManager !== 'undefined' && CommandManager.fetchCameraState) {
-                    CommandManager.fetchCameraState(timerCameraId).then(state => {
-                        if (state && typeof UIControls !== 'undefined' && UIControls.updateSleepDisplay) {
-                            UIControls.updateSleepDisplay(state);
-                        }
-                    }).catch(err => console.error('[ConnectionStatus] Error fetching state on reconnect:', err));
-                }
-
                 if (typeof EditableAreasManager !== 'undefined' && EditableAreasManager.fetchAllAreas) {
                     EditableAreasManager.fetchAllAreas().then(() => {
                         if (typeof StreamDisplay !== 'undefined' && StreamDisplay.refreshOverlay) {
