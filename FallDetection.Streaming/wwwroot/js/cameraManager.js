@@ -1,237 +1,97 @@
 // cameraManager.js - Camera management operations
 
 const CameraManager = {
+    // ============================================
+    // PUBLIC API
+    // ============================================
+    
     async loadCameraList(showLoading = true) {
         try {
             if (showLoading && DOMElements.cameraInfoSpan) {
                 DOMElements.cameraInfoSpan.textContent = 'Loading cameras...';
             }
 
-            // Load cameras and pending registrations simultaneously
-            const [camerasResponse, pendingResponse] = await Promise.all([
-                fetch(`${STREAMING_HTTP_URL}/api/stream/cameras`),
-                fetch(`${STREAMING_HTTP_URL}/api/stream/pending`)
-            ]);
+            const camerasResponse = await fetch(`${STREAMING_HTTP_URL}/api/stream/cameras`);
 
-            if (camerasResponse.ok && pendingResponse.ok) {
-                const camerasData = await camerasResponse.json();
-                const pendingData = await pendingResponse.json();
-
-                // Update available cameras
-                AppState.availableCameras = camerasData.cameras || [];
-
-                // Update pending registrations
-                AppState.pendingRegistrations = pendingData.pending || [];
-                console.log(`Synced pending registrations: ${AppState.pendingRegistrations.length}`);
-
-                this.updateCameraSelect(AppState.availableCameras);
-
-                if (DOMElements.cameraInfoSpan) {
-                    const connectedCount = camerasData.connected_count || 0;
-                    DOMElements.cameraInfoSpan.textContent = `${connectedCount}/${camerasData.count} camera(s) connected`;
-                    DOMElements.cameraInfoSpan.style.color = connectedCount > 0 ? '#4CAF50' : '#ff4444';
-                }
-
-                // Update connection status for all cameras
-                AppState.availableCameras.forEach(camera => {
-                    ConnectionStatus.updateConnectionStatusDebounced(
-                        camera.camera_id,
-                        camera.online,
-                        camera.age_seconds
-                    );
-                });
-
-                // Update registration button
-                DOMHelpers.updatePendingButton(AppState.pendingRegistrations.length);
-
-                console.log(`Synced: ${AppState.availableCameras.length} cameras, ${AppState.pendingRegistrations.length} pending`);
-                return true;
-            } else {
-                throw new Error(`HTTP error: cameras=${camerasResponse.status}, pending=${pendingResponse.status}`);
+            if (!camerasResponse.ok) {
+                throw new Error(`HTTP ${camerasResponse.status}`);
             }
+
+            const camerasData = await camerasResponse.json();
+            
+            // Update metadata only - NO connection status
+            AppState.availableCameras = camerasData.cameras || [];
+            
+            // Update UI components
+            this.updateCameraSelect(AppState.availableCameras);
+            this.updateCameraInfoDisplay(camerasData);
+            
+            console.log(`[CameraManager] Synced ${AppState.availableCameras.length} cameras`);
+            return true;
+            
         } catch (error) {
-            console.error('Failed to sync camera data:', error);
-            if (DOMElements.cameraInfoSpan) {
-                DOMElements.cameraInfoSpan.textContent = 'Connection error';
-                DOMElements.cameraInfoSpan.style.color = '#ff4444';
-            }
+            console.error('[CameraManager] Failed to sync camera data:', error);
+            this.showErrorState('Connection error');
             return false;
         }
     },
 
-    async loadPendingRegistrations() {
-        try {
-            const response = await fetch(`${STREAMING_HTTP_URL}/api/stream/pending`);
-            if (response.ok) {
-                const data = await response.json();
-                AppState.pendingRegistrations = data.pending || [];
-                console.log(`Loaded ${AppState.pendingRegistrations.length} pending registrations:`, AppState.pendingRegistrations);
-                DOMHelpers.updatePendingButton(AppState.pendingRegistrations.length);
-                return AppState.pendingRegistrations;
-            } else {
-                console.error(`Failed to load pending registrations: HTTP ${response.status}`);
-            }
-        } catch (error) {
-            console.error('Failed to load pending registrations:', error);
-        }
-        return [];
-    },
-
-    updateCameraSelect(cameras) {
+    /**
+     * Refresh dropdown status icons without rebuilding the entire select
+     * Uses current connection state from AppState.cameraConnectionStatus
+     */
+    refreshCameraDropdownStatus() {
         if (!DOMElements.cameraSelect) return;
 
         const currentValue = DOMElements.cameraSelect.value;
-        const previousCameraId = AppState.currentCameraId;
-
-        console.log(`Updating camera list. Previous camera: ${previousCameraId}, Current selection: ${currentValue}`);
-
-        DOMElements.cameraSelect.innerHTML = '<option value="" disabled>Select a camera</option>';
-
-        if (!cameras || cameras.length === 0) {
-            const option = document.createElement('option');
-            option.value = "camera_000";
-            option.textContent = "No cameras available";
-            DOMElements.cameraSelect.appendChild(option);
-            DOMElements.cameraSelect.value = "camera_000";
-
-            if (previousCameraId && previousCameraId !== "camera_000") {
-                console.log(`No cameras available now, was on ${previousCameraId}. Stopping stream.`);
-                AppState.currentCameraId = "camera_000";
-                AppState.currentCameraName = "No Camera";
-                StreamController.stopHTTPStream();
-            }
-            return;
+        
+        // Update each option based on current connection status
+        for (let option of DOMElements.cameraSelect.options) {
+            if (this.isSkippableOption(option)) continue;
+            
+            const cameraId = option.value;
+            const cameraInfo = this.findCamera(cameraId);
+            if (!cameraInfo) continue;
+            
+            const isConnected = AppState.cameraConnectionStatus[cameraId]?.connected === true;
+            const ageSeconds = AppState.cameraConnectionStatus[cameraId]?.ageSeconds || cameraInfo.age_seconds || 0;
+            
+            this.updateOptionDisplay(option, cameraInfo.camera_name, isConnected, ageSeconds);
         }
-
-        // Separate registered and unregistered cameras
-        const registeredCameras = [];
-        const unregisteredCameras = [];
-
-        cameras.forEach(camera => {
-            if (camera.registered) {
-                registeredCameras.push(camera);
-            } else {
-                unregisteredCameras.push(camera);
-            }
-        });
-
-        // Add registered cameras first
-        if (registeredCameras.length > 0) {
-            const group = document.createElement('optgroup');
-            group.label = "📹 Registered Cameras";
-            registeredCameras.forEach(camera => {
-                const option = document.createElement('option');
-                option.value = camera.camera_id;
-
-                const timeAgo = Math.round(camera.age_seconds || 0);
-                const status = camera.online ? '✓' : '✗';
-                const statusText = camera.online ? 'Connected' : 'Disconnected';
-
-                option.textContent = `${camera.camera_name} ${status}`;
-                option.title = `${statusText}, ${timeAgo}s ago`;
-                option.style.color = camera.online ? '#4CAF50' : '#ff4444';
-
-                group.appendChild(option);
-            });
-            DOMElements.cameraSelect.appendChild(group);
-        }
-
-        // Add unregistered cameras
-        if (unregisteredCameras.length > 0) {
-            const group = document.createElement('optgroup');
-            group.label = "⏳ Pending Registration";
-            unregisteredCameras.forEach(camera => {
-                const option = document.createElement('option');
-                option.value = camera.camera_id;
-
-                const timeAgo = Math.round(camera.age_seconds || 0);
-                const status = camera.online ? '⚠️' : '✗';
-
-                option.textContent = `${camera.camera_name} ${status}`;
-                option.title = `Awaiting approval, ${timeAgo}s ago`;
-                option.style.color = '#FF9800';
-                option.disabled = true;
-
-                group.appendChild(option);
-            });
-            DOMElements.cameraSelect.appendChild(group);
-        }
-
-        // Determine new camera ID
-        let newCameraId = currentValue;
-        let selectedCamera = null;
-
-        if (currentValue && cameras.some(cam => cam.camera_id === currentValue)) {
+        
+        // Restore selection
+        if (currentValue) {
             DOMElements.cameraSelect.value = currentValue;
-            newCameraId = currentValue;
-            selectedCamera = cameras.find(cam => cam.camera_id === currentValue);
-        } else if (registeredCameras.length > 0) {
-            DOMElements.cameraSelect.value = registeredCameras[0].camera_id;
-            newCameraId = registeredCameras[0].camera_id;
-            selectedCamera = registeredCameras[0];
-        } else if (unregisteredCameras.length > 0) {
-            DOMElements.cameraSelect.value = unregisteredCameras[0].camera_id;
-            newCameraId = unregisteredCameras[0].camera_id;
-            selectedCamera = unregisteredCameras[0];
-        }
-
-        // Update camera info
-        if (selectedCamera) {
-            AppState.currentCameraId = newCameraId;
-            AppState.currentCameraName = selectedCamera.camera_name || selectedCamera.camera_id;
-            AppState.currentCameraStatus = selectedCamera.registered ? "registered" : "pending";
-            ConnectionStatus.updateConnectionStatusDebounced(
-                AppState.currentCameraId,
-                selectedCamera.online,
-                selectedCamera.age_seconds
-            );
-        }
-
-        // Only start stream if camera actually changed
-        if (previousCameraId !== newCameraId && newCameraId && newCameraId !== "camera_000") {
-            console.log(`Camera changed from ${previousCameraId} to ${newCameraId}. Starting stream.`);
-            this.switchCamera(newCameraId);
-        } else if (newCameraId && newCameraId !== "camera_000") {
-            console.log(`Camera unchanged (${newCameraId}).`);
         }
     },
 
     async switchCamera(cameraId) {
+        const cameraInfo = this.findCamera(cameraId);
+        
+        // Update state
         AppState.currentCameraId = cameraId;
-        const cameraInfo = AppState.availableCameras.find(cam => cam.camera_id === cameraId);
-        if (cameraInfo) {
-            AppState.currentCameraName = cameraInfo.camera_name || cameraInfo.camera_id;
-            AppState.currentCameraStatus = cameraInfo.registered ? "registered" : "pending";
-
-            // Log camera switch
-            if (window.LogPanel) {
-                const connectionStatus = cameraInfo.online ? 'Connected' : 'Disconnected';
-                LogPanel.add(
-                    `📷 Switched to ${cameraInfo.camera_name || cameraId} (${connectionStatus})`,
-                    'info',
-                    'Connection'
-                );
-            }
-        }
-
-        // Reset WebRTC for new camera
-        if (window.peerConnection) {
-            window.peerConnection.close();
-            window.peerConnection = null;
-        }
-
+        AppState.currentCameraName = cameraInfo?.camera_name || cameraId;
+        AppState.currentCameraStatus = cameraInfo?.registered ? "registered" : "pending";
+        
+        // Log the switch
+        this.logCameraSwitch(cameraInfo, cameraId);
+        
+        // Clean up old connection
+        this.cleanupOldConnection();
+        
+        // Initialize new stream
         StreamController.stopHTTPStream();
-
-        // Initialize HTTP stream directly (no WebRTC fallback)
         StreamController.initializeStream();
-
-        // Reset connection stability for new camera
+        
+        // Reset connection stability
         AppState.isConnectionStable = false;
         AppState.wasDisconnected = false;
-        const onlineState = cameraInfo ? cameraInfo.online : false;
-        ConnectionStatus.updateConnectionStatusDebounced(cameraId, onlineState);
         
-        // Notify StreamDisplay about camera switch
+        // Update connection status (silent to avoid UI flicker)
+        const onlineState = cameraInfo?.online || false;
+        ConnectionStatus.updateConnectionStatusDebounced(cameraId, onlineState, null, true);
+        
+        // Notify other components
         if (window.StreamDisplay) {
             window.StreamDisplay.onCameraSwitched(cameraId);
         }
@@ -245,9 +105,238 @@ const CameraManager = {
                 return data.cameras || [];
             }
         } catch (error) {
-            console.error('Failed to get available cameras:', error);
+            console.error('[CameraManager] Failed to get available cameras:', error);
         }
         return [];
+    },
+
+    // ============================================
+    // UI UPDATE METHODS
+    // ============================================
+    
+    updateCameraSelect(cameras) {
+        if (!DOMElements.cameraSelect) return;
+
+        const previousCameraId = AppState.currentCameraId;
+        const currentValue = DOMElements.cameraSelect.value;
+
+        console.log(`[CameraManager] Updating dropdown. Previous: ${previousCameraId}, Current selection: ${currentValue}`);
+
+        // Rebuild the select
+        DOMElements.cameraSelect.innerHTML = '<option value="" disabled>Select a camera</option>';
+
+        if (!cameras || cameras.length === 0) {
+            this.addNoCamerasOption();
+            this.handleNoCamerasAvailable(previousCameraId);
+            return;
+        }
+
+        // Group cameras by registration status
+        const { registered, unregistered } = this.groupCamerasByStatus(cameras);
+
+        // Add optgroups
+        this.addRegisteredCameras(registered);
+        this.addUnregisteredCameras(unregistered);
+
+        // Select the appropriate camera
+        const selectedCamera = this.selectAppropriateCamera(
+            cameras,
+            currentValue,
+            registered,
+            unregistered
+        );
+
+        // Update state if camera changed
+        if (selectedCamera) {
+            this.updateCurrentCameraState(selectedCamera);
+        }
+
+        // Handle camera switching
+        this.handleCameraSwitch(previousCameraId, selectedCamera?.camera_id);
+    },
+
+    updateCameraInfoDisplay(camerasData) {
+        if (!DOMElements.cameraInfoSpan) return;
+        
+        const connectedCount = camerasData.connected_count || 0;
+        const totalCount = camerasData.count || AppState.availableCameras.length;
+        
+        DOMElements.cameraInfoSpan.textContent = `${connectedCount}/${totalCount} camera(s) connected`;
+        DOMElements.cameraInfoSpan.style.color = connectedCount > 0 ? '#4CAF50' : '#ff4444';
+    },
+
+    // ============================================
+    // PRIVATE HELPER METHODS
+    // ============================================
+    
+    findCamera(cameraId) {
+        return AppState.availableCameras.find(cam => cam.camera_id === cameraId);
+    },
+
+    isSkippableOption(option) {
+        return !option.value || option.value === "" || option.disabled;
+    },
+
+    updateOptionDisplay(option, cameraName, isConnected, ageSeconds) {
+        const statusIcon = isConnected ? '✓' : '✗';
+        const statusText = isConnected ? 'Connected' : 'Disconnected';
+        const timeAgo = Math.round(ageSeconds);
+        
+        // Remove existing status icon
+        const baseName = option.textContent.replace(/ [✓✗⚠️]$/, '');
+        
+        option.textContent = `${baseName || cameraName} ${statusIcon}`;
+        option.title = `${statusText}, ${timeAgo}s ago`;
+        option.style.color = isConnected ? '#4CAF50' : '#ff4444';
+    },
+
+    groupCamerasByStatus(cameras) {
+        const registered = [];
+        const unregistered = [];
+        
+        cameras.forEach(camera => {
+            if (camera.registered) {
+                registered.push(camera);
+            } else {
+                unregistered.push(camera);
+            }
+        });
+        
+        return { registered, unregistered };
+    },
+
+    addRegisteredCameras(registeredCameras) {
+        if (registeredCameras.length === 0) return;
+        
+        const group = document.createElement('optgroup');
+        group.label = "📹 Registered Cameras";
+        
+        registeredCameras.forEach(camera => {
+            const option = this.createCameraOption(camera, true);
+            group.appendChild(option);
+        });
+        
+        DOMElements.cameraSelect.appendChild(group);
+    },
+
+    addUnregisteredCameras(unregisteredCameras) {
+        if (unregisteredCameras.length === 0) return;
+        
+        const group = document.createElement('optgroup');
+        group.label = "⏳ Pending Registration";
+        
+        unregisteredCameras.forEach(camera => {
+            const option = this.createCameraOption(camera, false);
+            group.appendChild(option);
+        });
+        
+        DOMElements.cameraSelect.appendChild(group);
+    },
+
+    createCameraOption(camera, isRegistered) {
+        const option = document.createElement('option');
+        option.value = camera.camera_id;
+        
+        const isConnected = isRegistered && camera.online;
+        const statusIcon = isRegistered ? (isConnected ? '✓' : '✗') : '⚠️';
+        const statusText = isRegistered ? (isConnected ? 'Connected' : 'Disconnected') : 'Awaiting approval';
+        const timeAgo = Math.round(camera.age_seconds || 0);
+        
+        option.textContent = `${camera.camera_name} ${statusIcon}`;
+        option.title = `${statusText}, ${timeAgo}s ago`;
+        option.style.color = isRegistered ? (isConnected ? '#4CAF50' : '#ff4444') : '#FF9800';
+        
+        if (!isRegistered) {
+            option.disabled = true;
+        }
+        
+        return option;
+    },
+
+    selectAppropriateCamera(cameras, currentValue, registered, unregistered) {
+        // Try to keep current selection if still valid
+        if (currentValue && cameras.some(cam => cam.camera_id === currentValue)) {
+            DOMElements.cameraSelect.value = currentValue;
+            return this.findCamera(currentValue);
+        }
+        
+        // Prefer registered cameras
+        if (registered.length > 0) {
+            DOMElements.cameraSelect.value = registered[0].camera_id;
+            return registered[0];
+        }
+        
+        // Fallback to unregistered
+        if (unregistered.length > 0) {
+            DOMElements.cameraSelect.value = unregistered[0].camera_id;
+            return unregistered[0];
+        }
+        
+        return null;
+    },
+
+    updateCurrentCameraState(camera) {
+        AppState.currentCameraId = camera.camera_id;
+        AppState.currentCameraName = camera.camera_name || camera.camera_id;
+        AppState.currentCameraStatus = camera.registered ? "registered" : "pending";
+        
+        // Connection status is now ONLY updated by PollingScheduler
+    },
+
+    handleCameraSwitch(previousCameraId, newCameraId) {
+        if (!newCameraId || newCameraId === "camera_000") return;
+        
+        if (previousCameraId !== newCameraId) {
+            console.log(`[CameraManager] Camera changed from ${previousCameraId} to ${newCameraId}. Starting stream.`);
+            this.switchCamera(newCameraId);
+        } else {
+            console.log(`[CameraManager] Camera unchanged (${newCameraId}).`);
+        }
+    },
+
+    addNoCamerasOption() {
+        const option = document.createElement('option');
+        option.value = "camera_000";
+        option.textContent = "No cameras available";
+        DOMElements.cameraSelect.appendChild(option);
+        DOMElements.cameraSelect.value = "camera_000";
+    },
+
+    handleNoCamerasAvailable(previousCameraId) {
+        if (previousCameraId && previousCameraId !== "camera_000") {
+            console.log('[CameraManager] No cameras available. Stopping stream.');
+            AppState.currentCameraId = "camera_000";
+            AppState.currentCameraName = "No Camera";
+            StreamController.stopHTTPStream();
+        }
+    },
+
+    showErrorState(message) {
+        if (DOMElements.cameraInfoSpan) {
+            DOMElements.cameraInfoSpan.textContent = message;
+            DOMElements.cameraInfoSpan.style.color = '#ff4444';
+        }
+    },
+
+    logCameraSwitch(cameraInfo, cameraId) {
+        if (!window.LogPanel) return;
+        
+        const connectionStatus = cameraInfo?.online ? 'Connected' : 'Disconnected';
+        const cameraName = cameraInfo?.camera_name || cameraId;
+        
+        LogPanel.add(
+            `📷 Switched to ${cameraName} (${connectionStatus})`,
+            'info',
+            'Connection'
+        );
+    },
+
+    cleanupOldConnection() {
+        // Reset WebRTC if present
+        if (window.peerConnection) {
+            window.peerConnection.close();
+            window.peerConnection = null;
+        }
     }
 };
 

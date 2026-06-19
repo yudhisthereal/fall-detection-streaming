@@ -90,8 +90,16 @@ async function initializeApplication() {
         CommandManager.fetchCameraState(AppState.currentCameraId);
         EditableAreaEditor.loadAreasForCamera(AppState.currentCameraId);
     }
-    // Start periodic sync timers
+    
+    // Start periodic sync systems
     startPeriodicSync();
+
+    if (window.PendingManager) {
+        PendingManager.startPolling();
+        console.log('[script.js] PendingManager started');
+    } else {
+        console.error('[script.js] PendingManager not found!');
+    }
 
     // Cleanup on page unload
     window.addEventListener('beforeunload', cleanup);
@@ -138,31 +146,26 @@ function startFlagSyncWorker() {
 // PERIODIC SYNC
 // ============================================
 
+// ============================================
+// PERIODIC SYNC - Now separated into two systems
+// ============================================
+
 function startPeriodicSync() {
-    const CONNECTION_POLL_INTERVAL_MS = 1000;
+    // Pending Registrations started in initializeApplication()
 
-    // Log that connection monitoring is starting
-    if (window.LogPanel) {
-        LogPanel.add(
-            `🔄 Starting connection monitoring - Polling every ${CONNECTION_POLL_INTERVAL_MS}ms (disconnect grace: ${Math.round(ConnectionStatus.DISCONNECT_GRACE_MS / 1000)}s continuous no ping)`,
-            'info',
-            'Connection'
-        );
+    // Polling Scheduler for camera connection status updates
+    if (window.PollingScheduler) {
+        PollingScheduler.start();
+        
+        console.log(`[script.js] PollingScheduler started (interval: ${PollingScheduler.POLL_INTERVAL_MS}ms, batch: ${PollingScheduler.BATCH_SIZE})`);
     } else {
-        console.log(`🔄 Starting connection monitoring - Polling every ${CONNECTION_POLL_INTERVAL_MS}ms (disconnect grace: ${Math.round(ConnectionStatus.DISCONNECT_GRACE_MS / 1000)}s continuous no ping)`)
+        console.error('[script.js] PollingScheduler not found!');
     }
-
-    // Sync camera list every 5 seconds
+    
+    // Camera list sync (separate from connection status)
     AppState.cameraListTimer = setInterval(() => {
         CameraManager.loadCameraList();
     }, 5000);
-
-    // Check camera connections at a moderate rate to tolerate slower networks
-    AppState.cameraStatusTimer = setInterval(() => {
-        AppState.availableCameras.forEach(camera => {
-            ConnectionStatus.checkCameraConnection(camera.camera_id);
-        });
-    }, CONNECTION_POLL_INTERVAL_MS);
 }
 
 // ============================================
@@ -173,11 +176,20 @@ function cleanup() {
     // Stop all timers
     AppState.clearTimers();
 
+    // Stop PollingScheduler
+    if (window.PollingScheduler) {
+        PollingScheduler.stop();
+        console.log('[script.js] PollingScheduler stopped');
+    }
+
+    // Stop PendingManager
+    if (window.PendingManager) {
+        PendingManager.stopPolling();
+        console.log('[script.js] PendingManager stopped');
+    }
+
     // Stop HTTP stream
     StreamController.stopHTTPStream();
-
-    // Disconnect SignalR
-    // SignalRManager.disconnect();
 }
 
 // ============================================

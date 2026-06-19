@@ -40,9 +40,9 @@ const ConnectionStatus = {
                 statusFailures: 0,
                 failureWindowStart: null,
                 lastPingSeenAt: 0,
-                intentionalDisconnect: false,
-                intentionalDisconnectTimestamp: null,
-                wasDisconnected: false
+                wasDisconnected: false,
+                pollInProgress: false,
+                pollGeneration: 0,
             };
         }
         return this.cameraStates[cameraId];
@@ -62,31 +62,10 @@ const ConnectionStatus = {
         const state = this.getCameraState(cameraId);
         state.statusFailures = 0;
         state.failureWindowStart = null;
-        state.intentionalDisconnect = false;
-        state.intentionalDisconnectTimestamp = null;
-    },
-
-    markCameraIntentionallyDisconnected(cameraId) {
-        const state = this.getCameraState(cameraId);
-        state.intentionalDisconnect = true;
-        state.intentionalDisconnectTimestamp = Date.now();
-        
-        if (cameraId === AppState.currentCameraId) {
-            this.updateConnectionStatusDebounced(cameraId, false, null, false);
-        }
     },
 
     updateConnectionStatusDebounced(cameraId, connected, ageSeconds = null, silent = false) {
         const state = this.getCameraState(cameraId);
-
-        if (state.intentionalDisconnect && connected) {
-            const timeSinceIntentional = Date.now() - (state.intentionalDisconnectTimestamp || 0);
-            if (timeSinceIntentional < 2000) {
-                return;
-            }
-            state.intentionalDisconnect = false;
-            state.intentionalDisconnectTimestamp = null;
-        }
 
         if (state.statusUpdateInProgress) {
             state.pendingConnectionState = { cameraId, connected, ageSeconds, silent };
@@ -127,11 +106,6 @@ const ConnectionStatus = {
 
     updateConnectionStatusImmediate(cameraId, connected, ageSeconds = null, silent = false) {
         const state = this.getCameraState(cameraId);
-
-        if (state.intentionalDisconnect && !connected) {
-            state.intentionalDisconnect = false;
-            state.intentionalDisconnectTimestamp = null;
-        }
 
         AppState.cameraConnectionStatus[cameraId] = {
             connected: connected,
@@ -316,10 +290,22 @@ const ConnectionStatus = {
 
     async checkCameraConnection(cameraId) {
         const state = this.getCameraState(cameraId);
+
+        if (state.pollInProgress) {
+            console.debug(`[ConnectionStatus] Skipping ${cameraId} - poll already in progress`);
+            return AppState.cameraConnectionStatus[cameraId]?.connected === true;
+        }
         
+        state.pollInProgress = true;
+        const pollGeneration = ++state.pollGeneration;
+
         try {
             const statusResponse = await fetchWithTimeout(STREAMING_HTTP_URL + '/api/stream/camera-status?camera_id=' + cameraId, 3500);
-            const pendingResponse = await fetchWithTimeout(STREAMING_HTTP_URL + '/api/stream/pending', 3500);
+
+            if (pollGeneration !== state.pollGeneration) {
+                console.debug(`[ConnectionStatus] Stale response for ${cameraId}, ignoring`);
+                return AppState.cameraConnectionStatus[cameraId]?.connected === true;
+            }
 
             this.resetFailureState(cameraId);
 
@@ -330,7 +316,7 @@ const ConnectionStatus = {
                 const currentlyConnected = AppState.cameraConnectionStatus[cameraId]?.connected === true;
                 const reportedConnected = data.connected === true;
 
-                if (!reportedConnected && state.intentionalDisconnect) {
+                if (!reportedConnected) {
                     this.updateConnectionStatusDebounced(cameraId, false, data.age_seconds, false);
                     return false;
                 }
@@ -347,9 +333,7 @@ const ConnectionStatus = {
                     const noPingMsFromLocal = lastPingSeenAt > 0 ? now - lastPingSeenAt : null;
                     const effectiveNoPingMs = noPingMsFromServer ?? noPingMsFromLocal ?? Number.POSITIVE_INFINITY;
                     
-                    const graceMs = state.intentionalDisconnect 
-                        ? Math.min(this.DISCONNECT_GRACE_MS, 1000)
-                        : this.DISCONNECT_GRACE_MS;
+                    const graceMs = this.DISCONNECT_GRACE_MS;
                     
                     const shouldRemainConnected = currentlyConnected && effectiveNoPingMs < graceMs;
 
@@ -357,14 +341,6 @@ const ConnectionStatus = {
                         this.updateConnectionStatusDebounced(cameraId, true, data.age_seconds, true);
                     } else {
                         this.updateConnectionStatusDebounced(cameraId, false, data.age_seconds, false);
-                    }
-                }
-
-                if (pendingResponse.ok) {
-                    const pendingData = await pendingResponse.json();
-                    AppState.pendingRegistrations = pendingData.pending || [];
-                    if (typeof DOMHelpers !== 'undefined' && DOMHelpers.updatePendingButton) {
-                        DOMHelpers.updatePendingButton(AppState.pendingRegistrations.length);
                     }
                 }
                 return AppState.cameraConnectionStatus[cameraId]?.connected === true;
@@ -376,6 +352,8 @@ const ConnectionStatus = {
             console.warn('[ConnectionStatus] Error checking connection for ' + cameraId + ':', error.message);
             this.handleFetchFailure(cameraId, null, error.message);
             return AppState.isConnected;
+        } finally {
+            state.pollInProgress = false;
         }
     },
 
@@ -397,15 +375,10 @@ const ConnectionStatus = {
         );
 
         const currentlyConnected = AppState.cameraConnectionStatus[cameraId]?.connected === true;
-        const isIntentional = !!state.intentionalDisconnect;
-        const requiredWindowMs = isIntentional 
-            ? Math.min(this.DISCONNECT_GRACE_MS, 1000)
-            : this.DISCONNECT_GRACE_MS;
+        const requiredWindowMs = this.DISCONNECT_GRACE_MS;
 
         if (currentlyConnected && failureWindowMs >= requiredWindowMs) {
-            const disconnectReason = isIntentional
-                ? 'Camera intentionally turned off'
-                : httpStatus
+            const disconnectReason = httpStatus
                     ? `Server returned HTTP ${httpStatus} for ${failureCount} consecutive polls`
                     : errorMessage?.includes('timeout')
                         ? `Server timed out for ${failureCount} consecutive polls`
@@ -466,3 +439,4 @@ const ConnectionStatus = {
 
 // Export
 window.ConnectionStatus = ConnectionStatus;
+window.fetchWithTimeout = fetchWithTimeout;
