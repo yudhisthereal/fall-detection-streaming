@@ -3,6 +3,15 @@
 const UIControls = {
     choicesInstance: null, // Store Choices.js instance
 
+    ensureAlwaysEnabledButtons() {
+        if (DOMElements.pendingRegBtn) {
+            DOMElements.pendingRegBtn.disabled = false;
+        }
+        if (DOMElements.manageCamerasBtn) {
+            DOMElements.manageCamerasBtn.disabled = false;
+        }
+    },
+
     setupTimezoneControl: function () {
         if (!DOMElements.timezoneSelect) return;
 
@@ -273,6 +282,9 @@ const UIControls = {
         if (DOMElements.editAreas) {
             DOMElements.editAreas.disabled = !AppState.isConnected;
         }
+
+        // These controls are administrative and must always remain clickable
+        this.ensureAlwaysEnabledButtons();
     },
 
     getCurrentTimezone() {
@@ -431,6 +443,7 @@ const UIControls = {
     },
 
     setupControlHandlers() {
+        this.ensureAlwaysEnabledButtons();
         this.setupTimezoneControl();
         // Toggle Record
         if (DOMElements.toggleRecord) {

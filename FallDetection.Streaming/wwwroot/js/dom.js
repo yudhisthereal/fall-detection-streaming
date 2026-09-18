@@ -112,6 +112,8 @@ const DOMHelpers = {
     // Update button with count
     updatePendingButton(count) {
         if (DOMElements.pendingRegBtn) {
+            DOMElements.pendingRegBtn.disabled = false;
+
             if (count > 0) {
                 DOMElements.pendingRegBtn.style.display = 'inline-block';
                 DOMElements.pendingRegCount.textContent = count;

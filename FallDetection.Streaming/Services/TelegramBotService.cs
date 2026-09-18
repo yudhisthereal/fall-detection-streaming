@@ -34,6 +34,8 @@ namespace FallDetection.Streaming.Services
 
         public async Task Start()
         {
+            await _botClient.DeleteWebhookAsync(cancellationToken: _cts.Token);
+            
             var receiverOptions = new ReceiverOptions
             {
                 AllowedUpdates = Array.Empty<UpdateType>() // Receive all update types

@@ -2,7 +2,7 @@
 
 const CameraRegistration = {
     async showPopup() {
-        await CameraManager.loadPendingRegistrations();
+        await PendingManager.loadPendingRegistrations();
 
         const popup = document.getElementById('registrationPopup');
         const listDiv = document.getElementById('registrationList');
