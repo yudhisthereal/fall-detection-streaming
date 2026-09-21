@@ -240,6 +240,41 @@ namespace FallDetection.Streaming.Controllers
             return 0;
         }
 
+        private double SafeConvertToDouble(object? value)
+        {
+            if (value == null)
+                return 0;
+
+            if (value is double doubleValue)
+                return doubleValue;
+
+            if (value is float floatValue)
+                return floatValue;
+
+            if (value is int intValue)
+                return intValue;
+
+            if (value is long longValue)
+                return longValue;
+
+            if (value is JsonElement jsonElement)
+            {
+                return jsonElement.ValueKind switch
+                {
+                    JsonValueKind.Number => jsonElement.GetDouble(),
+                    JsonValueKind.String => double.TryParse(jsonElement.GetString(), out var result) ? result : 0,
+                    _ => 0
+                };
+            }
+
+            if (value is string stringValue)
+            {
+                return double.TryParse(stringValue, out var result) ? result : 0;
+            }
+
+            return 0;
+        }
+
         [HttpPost("command")]
         public IActionResult SendCommand([FromBody] StreamCommand command)
         {
@@ -350,6 +385,21 @@ namespace FallDetection.Streaming.Controllers
                         case "toggle_safety_check":
                             cameraState.ControlFlags["use_safety_check"] = SafeConvertToBool(command.Value);
                             _cameraService.UpdateCameraState(command.CameraId, cameraState);
+                            break;
+                        case "set_fall_thres":
+                            var fallThreshold = SafeConvertToDouble(command.Value);
+                            if (fallThreshold > 0 && fallThreshold <= 1)
+                            {
+                                var previousValue = cameraState.ControlFlagsFloat.TryGetValue("fall_thres", out var previousFallThreshold)
+                                    ? previousFallThreshold
+                                    : 0.3;
+
+                                if (Math.Abs(previousValue - fallThreshold) > 0.000001)
+                                {
+                                    cameraState.ControlFlagsFloat["fall_thres"] = fallThreshold;
+                                    _cameraService.UpdateCameraState(command.CameraId, cameraState);
+                                }
+                            }
                             break;
                         case "set_fall_algorithm":
                             var algorithm = SafeConvertToInt(command.Value);
@@ -469,6 +519,10 @@ namespace FallDetection.Streaming.Controllers
                         response[flag.Key] = flag.Value;
                     }
                     foreach (var flag in state.ControlFlagsInt)
+                    {
+                        response[flag.Key] = flag.Value;
+                    }
+                    foreach (var flag in state.ControlFlagsFloat)
                     {
                         response[flag.Key] = flag.Value;
                     }

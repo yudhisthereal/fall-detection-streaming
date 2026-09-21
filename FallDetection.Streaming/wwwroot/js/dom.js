@@ -17,6 +17,8 @@ const DOMElements = {
     showChairAreas: document.getElementById('showChairAreas'),
     useSafetyCheck: document.getElementById('useSafetyCheck'),
     safetyCheckMethod: document.getElementById('safetyCheckMethod'),
+    fallSensitivityRange: document.getElementById('fallSensitivityRange'),
+    fallSensitivityValue: document.getElementById('fallSensitivityValue'),
     // toggleHME: document.getElementById('toggleHME'),
     fallAlgorithmSelect: document.getElementById('fallAlgorithmSelect'),
 

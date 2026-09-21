@@ -2,6 +2,37 @@
 
 const UIControls = {
     choicesInstance: null, // Store Choices.js instance
+    lastKnownFallThreshold: 0.3,
+
+    normalizeFallSensitivity(value) {
+        const numericValue = Number(value);
+        if (!Number.isFinite(numericValue)) return 0.3;
+        const clamped = Math.min(1, Math.max(0.1, numericValue));
+        return Number(clamped.toFixed(1));
+    },
+
+    syncFallSensitivityFromThreshold(threshold, updateCamera = false) {
+        const safeThreshold = typeof threshold === 'number' && Number.isFinite(threshold)
+            ? Math.min(1, Math.max(0, threshold))
+            : 0.3;
+        const sensitivity = this.normalizeFallSensitivity(1 - safeThreshold);
+
+        if (DOMElements.fallSensitivityRange) {
+            DOMElements.fallSensitivityRange.value = sensitivity;
+        }
+        if (DOMElements.fallSensitivityValue) {
+            DOMElements.fallSensitivityValue.textContent = sensitivity.toFixed(1);
+        }
+
+        this.lastKnownFallThreshold = Number(safeThreshold.toFixed(3));
+
+        if (updateCamera && AppState.isConnected && AppState.currentCameraId) {
+            const thresholdValue = Number(this.lastKnownFallThreshold.toFixed(3));
+            if (Math.abs(thresholdValue - safeThreshold) > 0.000001) {
+                this.lastKnownFallThreshold = thresholdValue;
+            }
+        }
+    },
 
     ensureAlwaysEnabledButtons() {
         if (DOMElements.pendingRegBtn) {
@@ -255,6 +286,18 @@ const UIControls = {
                 DOMElements.safetyCheckMethod.value = flags.check_method;
             }
             DOMElements.safetyCheckMethod.disabled = !AppState.isConnected;
+        }
+
+        if (DOMElements.fallSensitivityRange || DOMElements.fallSensitivityValue) {
+            const thresholdValue = typeof flags.fall_thres === 'number'
+                ? flags.fall_thres
+                : typeof flags.fall_sensitivity === 'number'
+                    ? 1 - flags.fall_sensitivity
+                    : null;
+
+            if (thresholdValue !== null) {
+                this.syncFallSensitivityFromThreshold(thresholdValue, false);
+            }
         }
 
         if (DOMElements.editSleepBtn) {
@@ -629,6 +672,33 @@ const UIControls = {
                 const algorithm = parseInt(DOMElements.fallAlgorithmSelect.value);
                 CommandManager.sendCommand("set_fall_algorithm", algorithm);
             };
+        }
+
+        // Fall sensitivity slider
+        if (DOMElements.fallSensitivityRange) {
+            const handleFallSensitivityChange = () => {
+                const sensitivity = Number.parseFloat(DOMElements.fallSensitivityRange.value) || 0.5;
+                const threshold = Number((1 - sensitivity).toFixed(3));
+                const normalizedSensitivity = this.normalizeFallSensitivity(sensitivity);
+
+                if (DOMElements.fallSensitivityValue) {
+                    DOMElements.fallSensitivityValue.textContent = normalizedSensitivity.toFixed(1);
+                }
+
+                if (!AppState.isConnected || !AppState.currentCameraId) {
+                    return;
+                }
+
+                if (Math.abs(this.lastKnownFallThreshold - threshold) < 0.000001) {
+                    return;
+                }
+
+                this.lastKnownFallThreshold = threshold;
+                CommandManager.sendCommand('set_fall_thres', threshold);
+            };
+
+            DOMElements.fallSensitivityRange.oninput = handleFallSensitivityChange;
+            DOMElements.fallSensitivityRange.onchange = handleFallSensitivityChange;
         }
 
         // Set Background Button

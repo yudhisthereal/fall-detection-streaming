@@ -8,7 +8,7 @@ const VALID_COMMANDS = [
     'toggle_record', 'toggle_raw', 'set_background', 'auto_update_bg',
     'toggle_safe_areas_display', 'toggle_bed_areas_display', 'toggle_floor_areas_display',
     'toggle_couch_areas_display', 'toggle_bench_areas_display', 'toggle_chair_areas_display',
-    'toggle_safety_check', 'set_fall_algorithm', 'toggle_hme',
+    'toggle_safety_check', 'set_fall_algorithm', 'set_fall_thres', 'toggle_hme',
     'update_editable_areas', 'set_safety_check_method', 'set_sleep_config', 'set_timezone'
 ];
 
@@ -27,6 +27,7 @@ const COMMAND_VALIDATORS = {
     'toggle_safety_check': (v) => typeof v === 'boolean',
     'toggle_hme': (v) => typeof v === 'boolean',
     'set_fall_algorithm': (v) => typeof v === 'number' && v >= 1 && v <= 3,
+    'set_fall_thres': (v) => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 1,
     'update_editable_areas': (v) => Array.isArray(v),
     'set_sleep_config': (v) => typeof v === 'object' && v !== null
 };

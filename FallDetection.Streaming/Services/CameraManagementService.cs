@@ -581,6 +581,7 @@ namespace FallDetection.Streaming.Services
                     {
                         ControlFlags = new Dictionary<string, bool>(state.ControlFlags),
                         ControlFlagsInt = new Dictionary<string, int>(state.ControlFlagsInt),
+                        ControlFlagsFloat = new Dictionary<string, double>(state.ControlFlagsFloat),
                         EditableAreas = state.EditableAreas.Select(a => new AreaPolygon { AreaType = a.AreaType, Coordinates = new List<List<double>>(a.Coordinates), Name = a.Name }).ToList(),
                         IpAddress = state.IpAddress,
                         LastSeen = state.LastSeen,
@@ -941,6 +942,10 @@ namespace FallDetection.Streaming.Services
                     {
                         ["fall_algorithm"] = 1, // BBOX Only
                         ["check_method"] = 3 // Torso + Head
+                    },
+                    ControlFlagsFloat = new Dictionary<string, double>
+                    {
+                        ["fall_thres"] = 0.5
                     },
                     EditableAreas = new List<AreaPolygon>(),
                     IsRegistered = true,

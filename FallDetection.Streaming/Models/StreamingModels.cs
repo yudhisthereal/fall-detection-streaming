@@ -32,6 +32,7 @@ namespace FallDetection.Streaming.Models
     {
         public Dictionary<string, bool> ControlFlags { get; set; } = new();
         public Dictionary<string, int> ControlFlagsInt { get; set; } = new();
+        public Dictionary<string, double> ControlFlagsFloat { get; set; } = new();
 
         [JsonPropertyName("max_sleep_duration")]
         public int MaxSleepDuration { get; set; }
