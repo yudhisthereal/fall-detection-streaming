@@ -87,9 +87,6 @@
 
                 <input type="checkbox" id="toggleRaw">
                 <label for="toggleRaw" class="toggle-label">Show Raw</label>
-
-                <!-- <input type="checkbox" id="autoUpdateBg">
-                <label for="autoUpdateBg" class="toggle-label">Auto-update BG</label> -->
             </div>
             <div class="control-group">
                 <label>Safety Check Method:
@@ -113,6 +110,12 @@
                 </label>
                 <button id="setBackgroundBtn" class="btn btn-primary" title="Set current frame as background">📸 Set BG</button>
                 <button id="editAreas" class="btn btn-secondary" title="Edit zones">🛡️ Edit Areas</button>
+            </div>
+            <div class="control-group">
+                <label>Fall Sensitivity:
+                    <input type="range" id="fallSensitivityRange" min="0.1" max="1.0" step="0.1" value="0.5" oninput="document.getElementById('fallSensitivityValue').innerText = this.value">
+                </label>
+                <span id="fallSensitivityValue">0.5</span>
             </div>
             <!-- Area Display Section -->
             <div class="control-group">
@@ -256,8 +259,18 @@
 
     <!-- Camera Management Popup -->
     <div id="managementPopup" class="popup" style="width: min(600px, 95vw);">
+        <h3>📷 Manage Cameras</h3>
         <div id="managementList" class="management-list">
-            <!-- List of registered cameras will be inserted here -->
+            <!-- Dynamic camera card template container expectation for JS generation: 
+                 Each card rendered by cameraManagement.js should include a toggle element like:
+                 <div class="camera-card">
+                     ... existing card details ...
+                     <div class="control-group">
+                         <input type="checkbox" class="toggleCameraActive" data-camera-id="camera_000" checked>
+                         <label class="toggle-label">Active</label>
+                     </div>
+                 </div>
+            -->
         </div>
         <div class="popup-buttons" style="margin-top: 20px;">
             <button onclick="hideManagementPopup()" class="btn btn-secondary" style="width: 100%;">Close</button>

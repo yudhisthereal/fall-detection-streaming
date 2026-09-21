@@ -31,7 +31,14 @@ const CameraManagement = {
                                     <span>🕐 Last seen: ${lastSeen}</span>
                                 </div>
                             </div>
-                            <button onclick="CameraManagement.forgetCamera('${camera.camera_id}')" class="forget-btn" style="background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); padding: 8px 15px; font-size: 0.9em;">Forget</button>
+                            <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 8px;">
+                                <button onclick="CameraManagement.forgetCamera('${camera.camera_id}')" class="forget-btn" style="background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); padding: 8px 15px; font-size: 0.9em;">Forget</button>
+                                <!-- Recreating the visual style safely without the layout-breaking width/padding/flex properties -->
+                                <div style="display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: rgba(255, 255, 255, 0.05); border-radius: 6px; border: 1px solid var(--theme-border);">
+                                    <input type="checkbox" id="toggleActive_${camera.camera_id}" ${camera.active !== false ? 'checked' : ''} onchange="CameraManagement.toggleCameraActive('${camera.camera_id}', this.checked)">
+                                    <label for="toggleActive_${camera.camera_id}" class="toggle-label" style="font-size: 0.85em; margin: 0; user-select: none; -webkit-user-select: none;">Active</label>
+                                </div>
+                            </div>
                         `;
 
                         listDiv.appendChild(camDiv);
